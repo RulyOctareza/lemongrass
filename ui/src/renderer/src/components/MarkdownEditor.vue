@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { Editor, EditorContent, mergeAttributes } from '@tiptap/vue-3'
+import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { Editor, EditorContent, Node, mergeAttributes } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import { Markdown } from 'tiptap-markdown'
+import { Find, findState, setFindQuery, stepFind } from '../editorFind'
 
 const props = defineProps<{
   modelValue: string
@@ -17,6 +18,12 @@ const emit = defineEmits<{
 }>()
 
 const editor = shallowRef<Editor>()
+const findOpen = ref(false)
+const findQuery = ref('')
+const findCount = ref(0)
+const findCurrent = ref(0)
+const findInput = ref<HTMLInputElement>()
+let lastMarkdown = ''
 const imageNotice = ref('')
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -46,6 +53,20 @@ const ScratchpadImage = Image.extend({
         src: resolveImageSrc(String(HTMLAttributes.src ?? ''))
       })
     ]
+  }
+})
+
+const LiteralText = Node.create({
+  name: 'text',
+  group: 'inline',
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: { text(text: string, escape: boolean): void }, node: { text?: string }) {
+          state.text(node.text ?? '', false)
+        }
+      }
+    }
   }
 })
 
@@ -132,6 +153,53 @@ function getMarkdown(e: { storage: unknown }): string {
   return (e.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()
 }
 
+function syncFind(): void {
+  if (!editor.value) return
+  const find = findState(editor.value)
+  findCount.value = find.matches.length
+  findCurrent.value = find.current
+}
+
+async function openFind(): Promise<void> {
+  if (!editor.value) return
+  const { from, to } = editor.value.state.selection
+  const selected = editor.value.state.doc.textBetween(from, to)
+  if (selected && !selected.includes('\n')) findQuery.value = selected
+  findOpen.value = true
+  await nextTick()
+  findInput.value?.select()
+  setFindQuery(editor.value, findQuery.value)
+}
+
+function closeFind(): void {
+  findOpen.value = false
+  if (!editor.value) return
+  setFindQuery(editor.value, '')
+  editor.value.commands.focus()
+}
+
+function onFindInput(): void {
+  if (editor.value) setFindQuery(editor.value, findQuery.value)
+}
+
+function onFindKeydown(event: KeyboardEvent): void {
+  if (!editor.value) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    stepFind(editor.value, event.shiftKey ? -1 : 1)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    closeFind()
+  }
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'f') {
+    event.preventDefault()
+    void openFind()
+  }
+}
+
 function focusFromBlank(event: MouseEvent): void {
   if ((event.target as HTMLElement).closest('.ProseMirror')) return
   editor.value?.commands.focus('end')
@@ -140,7 +208,13 @@ function focusFromBlank(event: MouseEvent): void {
 onMounted(() => {
   editor.value = new Editor({
     content: props.modelValue,
-    extensions: [StarterKit, ScratchpadImage, Markdown],
+    extensions: [
+      StarterKit.configure({ text: false }),
+      LiteralText,
+      ScratchpadImage,
+      Markdown.configure({ html: false }),
+      Find
+    ],
     editorProps: {
       handlePaste: (_view, event) => {
         const files = imageFiles(event.clipboardData?.files)
@@ -159,8 +233,15 @@ onMounted(() => {
         return true
       }
     },
+    onCreate: ({ editor }) => {
+      lastMarkdown = getMarkdown(editor)
+    },
+    onTransaction: syncFind,
     onUpdate: ({ editor }) => {
-      emit('update:modelValue', getMarkdown(editor))
+      const markdown = getMarkdown(editor)
+      if (markdown.trimEnd() === lastMarkdown.trimEnd()) return
+      lastMarkdown = markdown
+      emit('update:modelValue', markdown)
     }
   })
 })
@@ -170,20 +251,21 @@ onBeforeUnmount(() => {
   editor.value?.destroy()
 })
 
-// Only fires on a real external change (switching files) -- not on every
-// keystroke, since onUpdate above already reflects those back out.
 watch(
   () => props.modelValue,
   (value) => {
-    if (editor.value && value !== getMarkdown(editor.value)) {
-      editor.value.commands.setContent(value, { emitUpdate: false })
-    }
+    const current = editor.value
+    if (!current || value === lastMarkdown) return
+    const { from, to } = current.state.selection
+    current.commands.setContent(value, { emitUpdate: false })
+    current.commands.setTextSelection({ from, to })
+    lastMarkdown = getMarkdown(current)
   }
 )
 </script>
 
 <template>
-  <div class="markdown-editor">
+  <div class="markdown-editor" @keydown="onKeydown">
     <div v-if="editor" class="toolbar">
       <button
         class="tool"
@@ -252,6 +334,37 @@ watch(
       >
         &ldquo;
       </button>
+    </div>
+    <div v-if="findOpen" class="find">
+      <input
+        ref="findInput"
+        v-model="findQuery"
+        class="find-input"
+        placeholder="Find"
+        spellcheck="false"
+        @input="onFindInput"
+        @keydown="onFindKeydown"
+      />
+      <span class="find-count">
+        {{ findCount ? `${findCurrent + 1} of ${findCount}` : findQuery ? 'No matches' : '' }}
+      </span>
+      <button
+        class="tool"
+        title="Previous (Shift+Enter)"
+        :disabled="!findCount"
+        @click="editor && stepFind(editor, -1)"
+      >
+        &uarr;
+      </button>
+      <button
+        class="tool"
+        title="Next (Enter)"
+        :disabled="!findCount"
+        @click="editor && stepFind(editor, 1)"
+      >
+        &darr;
+      </button>
+      <button class="tool" title="Close (Esc)" @click="closeFind">&times;</button>
     </div>
     <p v-if="imageNotice" class="notice">{{ imageNotice }}</p>
     <EditorContent
@@ -339,6 +452,55 @@ watch(
   border-bottom: 1px solid var(--color-border-default);
   color: var(--color-fg-secondary);
   font-size: var(--text-xs);
+}
+
+.find {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-surface-1);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.find-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  outline: none;
+}
+
+.find-input:focus {
+  border-color: var(--color-amber);
+}
+
+.find-count {
+  flex-shrink: 0;
+  color: var(--color-fg-secondary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.content :deep(.find-match) {
+  background: var(--color-amber-muted);
+  border-radius: 2px;
+}
+
+.content :deep(.find-match.current) {
+  background: var(--color-amber);
+  color: var(--color-surface-1);
 }
 
 .content {

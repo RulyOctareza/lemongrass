@@ -228,7 +228,12 @@ async function loadDoc(project: ProjectRef, path: string, force = false): Promis
   const existing = workspace.docs[path]
   if (existing?.status === 'ready' && !force) return
   if (existing?.status === 'ready' && existing.editable) {
-    if ((await window.api.biblio.read(project.path, path)) === null) markMissing(project, path)
+    const raw = await window.api.biblio.read(project.path, path)
+    if (raw === null) markMissing(project, path)
+    else if (raw !== existing.baseline && !docSaveTimers.has(`${project.id}:${path}`)) {
+      existing.content = raw
+      existing.baseline = raw
+    }
     return
   }
 
@@ -283,13 +288,14 @@ async function flushDoc(project: ProjectRef, path: string): Promise<void> {
     return
   }
 
+  if (current.content === current.baseline) return
   const ok = await window.api.biblio.write(project.path, path, current.content)
   if (ok) current.baseline = current.content
 }
 
 export function editDoc(project: ProjectRef, path: string, value: string): void {
   const doc = workspaces[project.id]?.docs[path]
-  if (!doc) return
+  if (!doc || doc.content === value) return
   doc.content = value
   const key = `${project.id}:${path}`
   clearTimeout(docSaveTimers.get(key))
