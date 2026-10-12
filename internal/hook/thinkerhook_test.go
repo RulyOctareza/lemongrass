@@ -146,6 +146,7 @@ func TestFoundationalRulesStillApplyToThinkers(t *testing.T) {
 }
 
 func TestSessionStartSendsLawsAndTheStartLineAndResetsMarks(t *testing.T) {
+	t.Setenv(lawsInPromptEnv, "")
 	store, _ := storeWithGroup(t, []string{"lgrass-connector"})
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "biblio", "laws"), 0o755)

@@ -231,6 +231,7 @@ func projectWithLaws(t *testing.T) string {
 }
 
 func TestSessionStartDeliversLaws(t *testing.T) {
+	t.Setenv(lawsInPromptEnv, "")
 	result := hookSessionStart(openHookTestStore(t), hookEvent{SessionID: "s", SessionSource: "startup"}, projectWithLaws(t))
 	if !strings.Contains(result.AdditionalContext, "# Laws summary") {
 		t.Errorf("context = %q, want the laws summary", result.AdditionalContext)
