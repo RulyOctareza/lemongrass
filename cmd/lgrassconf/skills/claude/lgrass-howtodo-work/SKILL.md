@@ -7,6 +7,8 @@ description: Use at the start of any task, before reading source, planning or ed
 
 Read `biblio/books/toc.md` and open every book whose name or tags relate to the task, then the chapters whose names fit. Do this before reading source. Say which books you read. Go to the code only for what no book covers, and where code and a book disagree, the code wins and the chapter is corrected at closing.
 
+If a PRD was already given, check it against the books and the current code before acting on it. When something in it is stale, stop and tell the user what is stale before planning, asking or building.
+
 ## 2. Plan first
 
 Show the plan in chat and write it to the task's scratchpad directory in the same turn: `biblio/scratchpad/<task-slug>/prd.md` with Problem, Expectation, Objective and Plans. Write every Plans item as `- [ ]`. A small task gets a short PRD, not none.
