@@ -15,6 +15,9 @@ const (
 // A mark that a tab has loaded a skill.
 func SkillMark(skill string) string { return "skill:" + skill }
 
+// A mark that a tab has read the close instructions for a scratchpad task.
+func TaskCloseMark(slug string) string { return "task-close:" + slug }
+
 func (s *Store) MarkReady(tabID, kind string) error {
 	_, err := s.db.Exec(`
 		INSERT INTO lg_ready_marks (project_id, tab_id, kind, marked_at) VALUES (?, ?, ?, ?)

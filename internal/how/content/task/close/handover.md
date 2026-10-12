@@ -1,0 +1,1 @@
+**Handover, in the same action as the archive move.** Set the Status of `biblio/handover/{handover}` to "Done, implemented <date>", move it into `biblio/handover/archive/`, drop the `{slug}` row from `biblio/handover/whiteboard.md` and renumber the rest, and delete the task's `type: project` memory file and its `MEMORY.md` line. Memory writes need `lgrass sign i-write-memory`.

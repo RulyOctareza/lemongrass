@@ -51,6 +51,11 @@ func FormatMemoryFeedbackDeny() string {
 		"For a pointer, run `lgrass sign " + MemoryWriteWord + "` and retry."
 }
 
+func FormatTaskCloseDeny(slug string) string {
+	return "lgrass: " + slug + " is being archived before its close instructions were read in this session. " +
+		"Run `lgrass how task close " + slug + "`, follow its steps, then archive."
+}
+
 func FormatPlanModeDeny() string {
 	return "lgrass: EnterPlanMode is banned in a bibliothek project. Plan the bibliothek way instead: work it out in biblio/scratchpad/<task-slug>/ (prd.md/plan.md), then present the plan directly in this response and wait for explicit confirmation before changing anything."
 }

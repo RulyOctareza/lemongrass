@@ -203,6 +203,12 @@ func hookPreToolUse(store *session.Store, payload hookEvent, projectPath string)
 		}
 	}
 
+	if hasBiblio(projectPath) {
+		if deny := closeGateDeny(store, payload); deny != "" {
+			return newHookResult("PreToolUse", "deny", []string{deny})
+		}
+	}
+
 	var parts []string
 
 	if isFileEdit(payload) {

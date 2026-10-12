@@ -1,0 +1,1 @@
+**Out of scope, ask the user.** Collect only what the Objective excludes and what is written down as deferred or undecided. For each, first ask whether it should be tracked at all, and create nothing until the user answers. If a task covers the same domain, offer to add it to that task's PRD instead of a new task.

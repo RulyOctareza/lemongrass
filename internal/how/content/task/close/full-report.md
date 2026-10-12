@@ -1,0 +1,1 @@
+**Report.** Start with "Full close", then one line per action taken: checks, claims corrected, chapter and toc line, laws, archive, references fixed, and out-of-scope items with the user's answers. No closing commentary and no remaining-risks section.

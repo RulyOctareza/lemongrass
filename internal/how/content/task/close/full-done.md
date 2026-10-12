@@ -1,0 +1,1 @@
+**Done.** Every Objective item is confirmed by evidence. Every Plans item is `[x]` and the code shows it: a mark the code does not support is cleared and counts as unfinished, and finished work left unmarked gets marked. The project's checks pass. A doubt you cannot settle means refuse.
