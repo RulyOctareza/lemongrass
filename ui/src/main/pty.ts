@@ -5,6 +5,7 @@ import * as pty from 'node-pty'
 import { randomUUID } from 'crypto'
 import { registerTab } from './tabSessions'
 import { orientationArgs, type OrientationRole } from './orientation'
+import { startupTrimArgs, startupTrimEnv } from './startupTrim'
 
 // Every shell spawns an agent binary directly, never a login shell. Codex
 // receives repeated Ctrl+C during a graceful tab or app shutdown, so it can
@@ -69,6 +70,7 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
     const id = randomUUID()
     const args = [
       ...orientationArgs(opts.command, opts.orientation ?? 'tab', homedir()),
+      ...startupTrimArgs(opts.command, homedir()),
       ...(opts.args ?? [])
     ]
     const configDir = accountConfigDir(opts)
@@ -80,6 +82,7 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
       cwd: opts.cwd ?? homedir(),
       env: {
         ...(process.env as Record<string, string>),
+        ...startupTrimEnv(opts.command),
         ...(opts.tabId ? { LGRASS_TAB_ID: opts.tabId } : {}),
         ...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {})
       }

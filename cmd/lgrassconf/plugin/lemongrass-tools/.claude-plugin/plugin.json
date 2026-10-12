@@ -1,0 +1,5 @@
+{
+  "name": "lemongrass-tools",
+  "version": "0.1.0",
+  "description": "Moves built-in tools a lemongrass tab rarely needs behind ToolSearch"
+}

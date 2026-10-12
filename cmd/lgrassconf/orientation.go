@@ -30,6 +30,6 @@ func (k *keeper) loadOrientation() []skillFile {
 }
 
 func (k *keeper) managedFiles() []skillFile {
-	files := make([]skillFile, 0, len(k.skills)+len(k.orientation))
-	return append(append(files, k.skills...), k.orientation...)
+	files := make([]skillFile, 0, len(k.skills)+len(k.orientation)+len(k.plugin))
+	return append(append(append(files, k.skills...), k.orientation...), k.plugin...)
 }

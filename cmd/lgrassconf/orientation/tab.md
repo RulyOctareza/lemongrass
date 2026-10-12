@@ -84,6 +84,8 @@ There are no permission prompts in your tab. Lemongrass's danger gate checks eve
 
 A denial names its rule. Read it, do not look for another route to the same effect, and tell the human what was blocked. The human can run a held command themselves by typing it with a `!` prefix in their prompt.
 
+Some tools are deferred on purpose: their full definitions load through ToolSearch only when you ask for them, so every request stays small. Artifact and ScheduleWakeup are among them. Load one only when the human asks for what it does, such as publishing or reading an artifact, even when a tool hint says to load it for any document, plan or visual.
+
 Some gates ask you to sign a word before you continue, for example the memory gate before writing to Claude Code's memory. `lgrass sign <word>` prints the rule the word stands for and lifts that denial for a while. Read what it prints and follow it.
 
 ## Procedures: skills and lgrass how

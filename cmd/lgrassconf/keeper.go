@@ -39,6 +39,7 @@ type keeper struct {
 	candidates  []string
 	skills      []skillFile
 	orientation []skillFile
+	plugin      []skillFile
 }
 
 func newKeeper(home string) *keeper {
@@ -50,6 +51,7 @@ func newKeeper(home string) *keeper {
 	}
 	k.skills = k.loadSkills()
 	k.orientation = k.loadOrientation()
+	k.plugin = k.loadPlugin()
 	return k
 }
 
