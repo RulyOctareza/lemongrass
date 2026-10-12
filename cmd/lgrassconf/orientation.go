@@ -4,6 +4,8 @@ import (
 	"embed"
 	"io/fs"
 	"path/filepath"
+
+	"github.com/faizalv/lemongrass/internal/bibliothek"
 )
 
 //go:embed orientation
@@ -13,8 +15,15 @@ func (k *keeper) orientationDir() string {
 	return filepath.Join(k.home, ".lemongrass", "orientation")
 }
 
+const bibliothekHeading = "\n# The bibliothek convention\n\n"
+
+// Each installed orientation is followed by bibliothek's text, so a tab never loads the skill.
 func (k *keeper) loadOrientation() []skillFile {
 	entries, err := fs.ReadDir(orientationFS, "orientation")
+	if err != nil {
+		panic(err)
+	}
+	convention, err := bibliothek.Prompt()
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +33,8 @@ func (k *keeper) loadOrientation() []skillFile {
 		if err != nil {
 			panic(err)
 		}
-		files = append(files, skillFile{root: k.orientationDir(), path: filepath.Join(k.orientationDir(), e.Name()), content: data})
+		content := append(append(data, bibliothekHeading...), convention...)
+		files = append(files, skillFile{root: k.orientationDir(), path: filepath.Join(k.orientationDir(), e.Name()), content: content})
 	}
 	return files
 }

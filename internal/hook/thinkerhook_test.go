@@ -117,28 +117,20 @@ func TestDisbandingFreesTheThinkers(t *testing.T) {
 	}
 }
 
-func TestBibliothekGateIsOptionalForAThinkerUnlessRequired(t *testing.T) {
+func TestBibliothekIsNeverRequiredOfAClaudeThinker(t *testing.T) {
 	store, _ := storeWithGroup(t, []string{"bibliothek"})
 	dir := projectWithBiblio(t)
 	store.MarkReady(gateTabClaude, session.SkillMark("lgrass-howtobe-thinker"))
-	store.MarkReady(gateTabClaude, session.SkillMark("bibliothek"))
-
-	// The required thinker has not signed the bibliothek gate, so it is denied for that.
-	result := hookPreToolUse(store, preTool(gateTabClaude, "Bash", map[string]string{"command": "ls"}), dir)
-	if result.PermissionDecision != "deny" || !strings.Contains(result.PermissionDecisionReason, "invoke the bibliothek skill first") {
-		t.Errorf("a thinker that must use bibliothek was not held to the gate: %+v", result)
+	if result := hookPreToolUse(store, preTool(gateTabClaude, "Bash", map[string]string{"command": "ls"}), dir); result.PermissionDecision == "deny" {
+		t.Errorf("a Claude thinker was held to load bibliothek: %s", result.PermissionDecisionReason)
 	}
+}
 
-	// The tester requires no bibliothek, so the same call passes the bibliothek gate.
-	store.MarkReady(gateTabCodex, session.SkillMark("lgrass-howtobe-thinker"))
-	event := preTool(gateTabCodex, "Bash", map[string]string{"command": "ls"})
-	event.EnforceBibliothek = true
-	if result := hookPreToolUse(store, event, dir); result.PermissionDecision == "deny" {
-		t.Errorf("a thinker without the bibliothek requirement was held to its gate: %s", result.PermissionDecisionReason)
-	}
-	// A plain tab is still held to it.
-	if result := hookPreToolUse(store, preTool(gateTabOutside, "Bash", map[string]string{"command": "ls"}), dir); result.PermissionDecision != "deny" {
-		t.Error("a plain tab escaped the bibliothek gate")
+func TestPlainTabNeedsNoBibliothekSkill(t *testing.T) {
+	store, _ := storeWithGroup(t, nil)
+	dir := projectWithBiblio(t)
+	if result := hookPreToolUse(store, preTool(gateTabOutside, "Bash", map[string]string{"command": "ls"}), dir); result.PermissionDecision == "deny" {
+		t.Errorf("a plain tab was denied: %s", result.PermissionDecisionReason)
 	}
 }
 

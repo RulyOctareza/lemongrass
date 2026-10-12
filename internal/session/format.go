@@ -39,10 +39,6 @@ func FormatNudge(liveness []SessionStatus) string {
 	return b.String()
 }
 
-func FormatBibliothekDeny() string {
-	return "lgrass: invoke the bibliothek skill first (Skill tool, skill \"bibliothek\"), then retry."
-}
-
 // This only formats the message, the caller owns the sign/TTL check.
 func FormatMemoryFeedbackDeny() string {
 	return "lgrass: STOP. This call writes into Claude Code memory, which holds one-line pointers only. " +

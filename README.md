@@ -32,7 +32,7 @@ Claude Code tabs start with `--dangerously-skip-permissions`, so an agent does n
 
 A `SessionStart` hook delivers the project's laws summary and gates tool calls behind required skills. Sessions in the same project know about each other, and the hook warns when two tabs touch the same file.
 
-The convention behind this is [bibliothek](https://github.com/faizalv/bibliothek): a skill plus a `biblio/{scratchpad,laws,handover,books}/` folder layout, developed in its own repository and usable without Lemongrass. The app shows that folder as a tree and reader beside the terminal panes. The scratchpad is editable in a WYSIWYG editor that autosaves, enforced on the server side. The other folders are read-only.
+The convention behind this is [bibliothek](https://github.com/faizalv/bibliothek): a skill plus a `biblio/{scratchpad,laws,handover,books}/` folder layout, developed in its own repository and usable without Lemongrass. Lemongrass pins it as a git submodule and puts its text into the system prompt of every Claude tab, so Claude tabs never load it as a skill. The app shows that folder as a tree and reader beside the terminal panes. The scratchpad is editable in a WYSIWYG editor that autosaves, enforced on the server side. The other folders are read-only.
 
 ### Real terminals, controlled by structured events
 
@@ -76,13 +76,12 @@ The Go code is one module at the repo root, and `ui/` is the second toolchain be
 
 ## Skills
 
-`lgrassconf` installs these for Claude Code and Codex and keeps them current. Bibliothek is installed separately from its own repository.
+`lgrassconf` installs these for Claude Code and Codex and keeps them current. Bibliothek is not among them: Claude tabs get it in their system prompt, and a Codex tab or a Claude session outside Lemongrass uses it only if it is installed separately from its own repository.
 
 | Skill | What it teaches an agent |
 |---|---|
-| `lgrass-connector` | Run a database query or an HTTP call through an existing channel, so the real credential never enters the session. |
 | `lgrass-howtobe-leader` | Lead a workgroup: declare it, brief each thinker, ask each for a plan, and stay responsible for the result. |
-| `lgrass-howtobe-thinker` | Work inside a workgroup: post a plan, wait for the leader's go, and talk with the leader and the other members. |
+| `lgrass-howtobe-thinker` | Work inside a workgroup: post a plan, wait for the leader's go, and talk with the leader and the other thinkers. |
 | `lgrass-howtobe-keeper` | Keep `biblio/` and the code in agreement: clean the whiteboard, dangling handovers and tasks, correct books against the code, and tidy `toc.md`. |
 | `lgrass-howtodo-work` | Work a task end to end: read the related books, plan first, keep the PRD marked as work happens, wait for the user only before code, then close. |
 | `lgrass-howtodo-taskclosing` | Close a finished task: verify it is done and the checks pass, compare git with the stated facts, update the books and `toc.md`, archive, and sweep stale references. |
@@ -94,7 +93,7 @@ The Go code is one module at the repo root, and `ui/` is the second toolchain be
 make build-linux
 ```
 
-Cross-compiles `lgrass`, `lgrassd` and `lgrassconf` for `linux/amd64` and `linux/arm64` into `dist/`, then builds and packages the Electron app for Linux. This is the one entrypoint above both toolchains. `ui/`'s own `npm run build:linux` builds only the Electron half and expects `dist/` to exist already, so use the root `make` target. `make verify` compiles every Go package without writing a binary into the source tree. It builds AppImage, snap, deb and rpm, so it needs `dpkg` and `snapcraft` on the host.
+Cross-compiles `lgrass`, `lgrassd` and `lgrassconf` for `linux/amd64` and `linux/arm64` into `dist/`, then builds and packages the Electron app for Linux. This is the one entrypoint above both toolchains. `ui/`'s own `npm run build:linux` builds only the Electron half and expects `dist/` to exist already, so use the root `make` target. `make verify` compiles every Go package without writing a binary into the source tree. Every Go target first checks out the bibliothek submodule, and `make bibliothek-update` moves its pin to bibliothek's latest commit. It builds AppImage, snap, deb and rpm, so it needs `dpkg` and `snapcraft` on the host.
 
 ```
 make build-rpm

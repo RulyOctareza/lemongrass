@@ -13,6 +13,8 @@ const (
 
 	// Every thinker loads this skill.
 	ThinkerSkill = "lgrass-howtobe-thinker"
+	// BibliothekSkill is never required of a Claude thinker, whose system prompt already carries it.
+	BibliothekSkill = "bibliothek"
 )
 
 type Group struct {
@@ -289,13 +291,13 @@ func (s *Store) Labels(tabIDs []string) map[string]string {
 func (m Member) RequiredSkills() []string {
 	out := []string{ThinkerSkill}
 	for _, name := range m.Skills {
-		if !containsString(out, name) {
+		if !containsString(out, name) && !CarriedInPrompt(m.Vendor, name) {
 			out = append(out, name)
 		}
 	}
 	return out
 }
 
-func (m Member) Requires(skill string) bool {
-	return containsString(m.RequiredSkills(), skill)
+func CarriedInPrompt(vendor, skill string) bool {
+	return vendor == "claude" && skill == BibliothekSkill
 }

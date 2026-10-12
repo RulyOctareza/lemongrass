@@ -151,7 +151,13 @@ func containsString(list []string, v string) bool {
 
 // Every skill a thinker must load: the thinker skill first, then the ones the leader listed.
 func (c Thinker) RequiredSkills() []string {
-	return append([]string{ThinkerSkill}, c.Skills...)
+	out := []string{ThinkerSkill}
+	for _, name := range c.Skills {
+		if !session.CarriedInPrompt(c.Vendor, name) {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 var skillDirs = map[string]string{"claude": ".claude", "codex": ".codex"}

@@ -26,13 +26,13 @@ func fakeHome(t *testing.T) (*keeper, string) {
 	return k, lgrass
 }
 
-func connectorSkillPath(k *keeper, v vendor) string {
-	return filepath.Join(k.skillsRoot(v), "lgrass-connector", "SKILL.md")
+func leaderSkillPath(k *keeper, v vendor) string {
+	return filepath.Join(k.skillsRoot(v), "lgrass-howtobe-leader", "SKILL.md")
 }
 
-func embeddedConnectorSkill(t *testing.T, v vendor) string {
+func embeddedLeaderSkill(t *testing.T, v vendor) string {
 	t.Helper()
-	data, err := skillsFS.ReadFile(v.embedRoot + "/lgrass-connector/SKILL.md")
+	data, err := skillsFS.ReadFile(v.embedRoot + "/lgrass-howtobe-leader/SKILL.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestNoLgrassBinaryRegistersNoHooks(t *testing.T) {
 		t.Error("settings written although no lgrassd binary exists")
 	}
 	for _, v := range vendors {
-		if _, err := os.Stat(connectorSkillPath(k, v)); err != nil {
+		if _, err := os.Stat(leaderSkillPath(k, v)); err != nil {
 			t.Errorf("%s skill should still be installed: %v", v.configDir, err)
 		}
 	}
@@ -102,18 +102,18 @@ func TestEachVendorGetsItsOwnSkillContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, v := range vendors {
-		got, err := os.ReadFile(connectorSkillPath(k, v))
+		got, err := os.ReadFile(leaderSkillPath(k, v))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(got) != embeddedConnectorSkill(t, v) {
+		if string(got) != embeddedLeaderSkill(t, v) {
 			t.Errorf("%s skill differs from its embedded copy", v.configDir)
 		}
 	}
-	if !strings.Contains(embeddedConnectorSkill(t, claude), "allowed-tools: Bash(lgrass *)") {
+	if !strings.Contains(embeddedLeaderSkill(t, claude), "allowed-tools: Bash(lgrass *)") {
 		t.Error("Claude skill lost its allowed-tools header")
 	}
-	if strings.Contains(embeddedConnectorSkill(t, codex), "allowed-tools") {
+	if strings.Contains(embeddedLeaderSkill(t, codex), "allowed-tools") {
 		t.Error("Codex skill carries a Claude-only header")
 	}
 }
@@ -124,7 +124,7 @@ func TestEveryVendorInstallsEverySkill(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, v := range vendors {
-		for _, name := range []string{"lgrass-connector", "lgrass-howtobe-keeper", "lgrass-howtodo-taskclosing", "lgrass-howtodo-work", "lgrass-howtodo-newlaws", "lgrass-howtobe-thinker"} {
+		for _, name := range []string{"lgrass-howtobe-leader", "lgrass-howtobe-keeper", "lgrass-howtodo-taskclosing", "lgrass-howtodo-work", "lgrass-howtodo-newlaws", "lgrass-howtobe-thinker"} {
 			if _, err := os.Stat(filepath.Join(k.skillsRoot(v), name, "SKILL.md")); err != nil {
 				t.Errorf("%s skill %s missing: %v", v.configDir, name, err)
 			}
@@ -158,8 +158,8 @@ func TestLegacySkillIsRemoved(t *testing.T) {
 				t.Errorf("%s legacy %s SKILL.md still present", v.configDir, name)
 			}
 		}
-		if _, err := os.Stat(connectorSkillPath(k, v)); err != nil {
-			t.Errorf("%s connector skill missing: %v", v.configDir, err)
+		if _, err := os.Stat(leaderSkillPath(k, v)); err != nil {
+			t.Errorf("%s leader skill missing: %v", v.configDir, err)
 		}
 	}
 	for _, name := range legacySkillNames {
@@ -203,12 +203,12 @@ func TestWatcherHealsDriftWithoutAnyOtherProcess(t *testing.T) {
 	}
 	waitFor(t, "matcher healed after drift", healthy)
 
-	if err := os.RemoveAll(filepath.Dir(connectorSkillPath(k, claude))); err != nil {
+	if err := os.RemoveAll(filepath.Dir(leaderSkillPath(k, claude))); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "skill restored after deletion", func() bool {
-		data, err := os.ReadFile(connectorSkillPath(k, claude))
-		return err == nil && string(data) == embeddedConnectorSkill(t, claude)
+		data, err := os.ReadFile(leaderSkillPath(k, claude))
+		return err == nil && string(data) == embeddedLeaderSkill(t, claude)
 	})
 	waitFor(t, "Codex hooks registered", func() bool {
 		data, err := os.ReadFile(k.codexHooksPath())
@@ -224,7 +224,7 @@ func TestWatcherRegistersHooksWhenLgrassAppears(t *testing.T) {
 	go func() { k.run(ctx); close(done) }()
 	defer func() { cancel(); <-done }()
 
-	waitFor(t, "skill installed", func() bool { _, err := os.Stat(connectorSkillPath(k, claude)); return err == nil })
+	waitFor(t, "skill installed", func() bool { _, err := os.Stat(leaderSkillPath(k, claude)); return err == nil })
 	if _, err := os.Stat(k.claudeSettingsPath()); err == nil {
 		t.Fatal("settings written before the binary existed")
 	}

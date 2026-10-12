@@ -68,9 +68,6 @@ func TestMemoryFeedbackDenyCoversBashUntilSigned(t *testing.T) {
 	store := openHookTestStore(t)
 	_, projectPath := memoryGateFixture(t)
 	memDir, _ := claudeMemoryDir(projectPath)
-	if err := store.Sign("session-a", bibliothekWord); err != nil {
-		t.Fatal(err)
-	}
 	payload := hookEvent{
 		SessionID:         "session-a",
 		ToolName:          "Bash",

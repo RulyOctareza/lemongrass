@@ -75,7 +75,7 @@ func TestSignHelpRequested(t *testing.T) {
 }
 
 func TestSignUsageNamesNoRegisteredWord(t *testing.T) {
-	for _, id := range []string{session.BibliothekWord, session.MemoryWriteWord} {
+	for _, id := range []string{session.MemoryWriteWord} {
 		if strings.Contains(signUsage, id) {
 			t.Errorf("signUsage names the registered word %q", id)
 		}

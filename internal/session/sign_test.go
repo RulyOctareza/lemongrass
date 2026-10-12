@@ -6,7 +6,7 @@ import (
 )
 
 func TestResolveSignableBuiltins(t *testing.T) {
-	for _, id := range []string{BibliothekWord, MemoryWriteWord} {
+	for _, id := range []string{MemoryWriteWord} {
 		got, ok, err := ResolveSignable(t.TempDir(), id)
 		if err != nil || !ok {
 			t.Fatalf("ResolveSignable(%q) = ok %v, err %v, want a registered word", id, ok, err)
@@ -40,8 +40,7 @@ func TestResolveSignableUsesEveryRegisteredSource(t *testing.T) {
 
 func TestDeniesStayShort(t *testing.T) {
 	for name, msg := range map[string]string{
-		"memory":     FormatMemoryFeedbackDeny(),
-		"bibliothek": FormatBibliothekDeny(),
+		"memory": FormatMemoryFeedbackDeny(),
 	} {
 		if len(strings.Fields(msg)) > 60 {
 			t.Errorf("%s deny has %d words, want at most 60", name, len(strings.Fields(msg)))

@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/faizalv/lemongrass/internal/bibliothek"
 )
 
 func embeddedOrientation(t *testing.T, name string) string {
@@ -14,7 +17,31 @@ func embeddedOrientation(t *testing.T, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(data)
+	convention, err := bibliothek.Prompt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data) + bibliothekHeading + string(convention)
+}
+
+func TestOrientationCarriesBibliothekWithoutTheTrigger(t *testing.T) {
+	k, _ := fakeHome(t)
+	if err := k.reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"tab.md", "thinker.md"} {
+		data, err := os.ReadFile(filepath.Join(k.orientationDir(), name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		if !strings.Contains(text, "# The bibliothek convention") || !strings.Contains(text, "## Tier 2") {
+			t.Errorf("%s does not carry bibliothek", name)
+		}
+		if strings.Contains(text, "MANDATORY: invoke bibliothek") || strings.Contains(text, "name: bibliothek") {
+			t.Errorf("%s carries the autoload trigger or the skill frontmatter", name)
+		}
+	}
 }
 
 func TestOrientationIsInstalledForTabsAndThinkers(t *testing.T) {

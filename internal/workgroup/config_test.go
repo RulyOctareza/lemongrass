@@ -96,13 +96,17 @@ func TestParseRejectsInvalidConfigs(t *testing.T) {
 }
 
 func TestSkillsAreDedupedAndTheThinkerSkillIsImplicit(t *testing.T) {
-	cfg, err := Parse([]byte("name: t\nthinkers:\n  - {label: a, vendor: claude, prompt: x, skills: [lgrass-connector, lgrass-howtobe-thinker, bibliothek, lgrass-connector]}"), t.TempDir())
+	cfg, err := Parse([]byte("name: t\nthinkers:\n  - {label: a, vendor: codex, prompt: x, skills: [lgrass-connector, lgrass-howtobe-thinker, bibliothek, lgrass-connector]}"), t.TempDir())
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
 	c := cfg.Thinkers[0]
 	if got := c.RequiredSkills(); len(got) != 3 || got[0] != "lgrass-howtobe-thinker" || got[1] != "lgrass-connector" || got[2] != "bibliothek" {
 		t.Errorf("RequiredSkills = %v, want the thinker skill first then the listed ones once each", got)
+	}
+	claude, _ := Parse([]byte("name: t\nthinkers:\n  - {label: a, vendor: claude, prompt: x, skills: [bibliothek, lgrass-howtodo-work]}"), t.TempDir())
+	if got := claude.Thinkers[0].RequiredSkills(); len(got) != 2 || got[1] != "lgrass-howtodo-work" {
+		t.Errorf("RequiredSkills of a Claude thinker = %v, want bibliothek left out since its prompt carries it", got)
 	}
 	plain, _ := Parse([]byte("name: t\nthinkers:\n  - {label: a, vendor: claude, prompt: x}"), t.TempDir())
 	if got := plain.Thinkers[0].RequiredSkills(); len(got) != 1 || got[0] != "lgrass-howtobe-thinker" {

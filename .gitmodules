@@ -1,0 +1,3 @@
+[submodule "internal/bibliothek/repo"]
+	path = internal/bibliothek/repo
+	url = https://github.com/faizalv/bibliothek.git

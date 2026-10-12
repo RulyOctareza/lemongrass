@@ -1,9 +1,6 @@
 package session
 
-const (
-	BibliothekWord  = "bibliothek"
-	MemoryWriteWord = "i-write-memory"
-)
+const MemoryWriteWord = "i-write-memory"
 
 // Signable is a word `lgrass sign` accepts, with the pledge printed back once it is signed.
 type Signable struct {
@@ -34,10 +31,6 @@ func ResolveSignable(projectPath, id string) (Signable, bool, error) {
 
 func builtinSignables(string) ([]Signable, error) {
 	return []Signable{
-		{
-			ID:     BibliothekWord,
-			Pledge: "I follow bibliothek: facts, rules and task status go where it says, not into memory or chat.",
-		},
 		{
 			ID:     MemoryWriteWord,
 			Pledge: "Memory holds one-line pointers only. I will not write a standing rule, a feedback entry or knowledge into it. Those go in biblio/laws/ or biblio/books/.",
