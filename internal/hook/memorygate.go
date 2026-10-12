@@ -29,6 +29,9 @@ var (
 	claudeConfigDirName     = regexp.MustCompile(`^\.claude(-[a-z0-9-]+)?$`)
 	claudeProjectsInCommand = regexp.MustCompile(`\.claude(-[a-z0-9-]+)?/projects`)
 	shellDevNullRedirect    = regexp.MustCompile(`\d*>&?\s*/dev/null`)
+	shellFdDuplication      = regexp.MustCompile(`\d*>&\d+`)
+	shellSegmentSeparator   = regexp.MustCompile(`&&|\|\||[;|&\n]`)
+	findWriteAction         = regexp.MustCompile(`\s-(delete|exec|execdir|ok|okdir|fprint|fprint0|fprintf|fls)\b`)
 	shellWriteIndicator     = regexp.MustCompile(`>|<<|\btee\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i|--in-place|\b(cp|mv|install|dd|truncate|rm|ln|touch|patch|rsync|ed|ex|vi|vim|nano|emacs|curl|wget|python[0-9.]*|node|ruby|perl|php|deno|bun)\b|\b(sh|bash|zsh)\s+-c\b|\beval\b`)
 )
 
@@ -96,21 +99,57 @@ func isClaudeMemoryPath(p, cwd, home, projectMemDir string) bool {
 	return len(parts) >= 4 && claudeConfigDirName.MatchString(parts[0]) && parts[1] == "projects" && parts[3] == "memory"
 }
 
-// A shell command counts when it names a memory directory, or runs from inside one, and contains something that can write. Plain reads (cat, ls, grep, head) pass.
+// A shell command counts when it names a memory directory, or runs from inside one, and contains something that can write. A command whose every segment naming a memory directory is a plain read (cat, ls, grep, head) passes, whatever its other segments write.
 func shellTouchesClaudeMemory(payload hookEvent, home, projectMemDir string) bool {
 	var in shellToolInput
 	if err := json.Unmarshal(payload.ToolInput, &in); err != nil || in.Command == "" {
 		return false
 	}
-	if !shellWriteIndicator.MatchString(shellDevNullRedirect.ReplaceAllString(in.Command, "")) {
+	stripped := shellDevNullRedirect.ReplaceAllString(in.Command, "")
+	if !shellWriteIndicator.MatchString(stripped) && !findWriteAction.MatchString(stripped) {
 		return false
 	}
 	if payload.Cwd != "" && isClaudeMemoryPath(filepath.Join(payload.Cwd, "x"), "", home, projectMemDir) {
 		return true
 	}
 	cmd := strings.ReplaceAll(in.Command, "\\", "")
+	if !namesClaudeMemory(cmd, projectMemDir) {
+		return false
+	}
+	return !memoryOnlyRead(cmd, projectMemDir)
+}
+
+func namesClaudeMemory(cmd, projectMemDir string) bool {
 	return claudeProjectsInCommand.MatchString(cmd) && strings.Contains(cmd, "memory") ||
 		projectMemDir != "" && strings.Contains(cmd, strings.TrimSuffix(projectMemDir, string(filepath.Separator)))
+}
+
+// memoryOnlyRead reports whether every segment that names a memory directory is a plain read with no write in it, so a cd, loop or variable assignment that carries the path into another segment never passes.
+func memoryOnlyRead(cmd, projectMemDir string) bool {
+	cmd = shellFdDuplication.ReplaceAllString(shellDevNullRedirect.ReplaceAllString(cmd, ""), "")
+	for _, seg := range shellSegmentSeparator.Split(cmd, -1) {
+		if namesClaudeMemory(seg, projectMemDir) && !isPlainReadSegment(seg) {
+			return false
+		}
+	}
+	return true
+}
+
+func isPlainReadSegment(seg string) bool {
+	if shellWriteIndicator.MatchString(seg) {
+		return false
+	}
+	fields := strings.Fields(seg)
+	if len(fields) == 0 {
+		return false
+	}
+	switch fields[0] {
+	case "cat", "ls", "grep", "rg", "head", "tail", "wc", "stat", "file":
+		return true
+	case "find":
+		return !findWriteAction.MatchString(seg)
+	}
+	return false
 }
 
 // claudeMemoryDir mirrors Claude Code's own project-slug algorithm: the resolved absolute project path with every path separator replaced by "-". projectPath must already be symlink-resolved, which project.Resolve guarantees.

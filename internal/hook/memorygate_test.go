@@ -53,6 +53,15 @@ func TestTouchesClaudeMemoryAcrossRoutes(t *testing.T) {
 		{"bash read with devnull", "Bash", `{"command":"ls ` + memDir + ` 2>/dev/null"}`, "", false},
 		{"write outside memory", "Write", `{"file_path":"` + filepath.Join(projectPath, "main.go") + `"}`, "", false},
 		{"bash unrelated write", "Bash", `{"command":"echo hi > /tmp/a.txt"}`, "", false},
+		{"bash write elsewhere then grep memory", "Bash", `{"command":"printf '%s\\n' x >> biblio/scratchpad/t/activities.md && mv biblio/scratchpad/t biblio/scratchpad/archive/ && grep -rln t biblio --include=*.md --exclude-dir=archive; grep -rn t ` + filepath.Join(home, ".claude", "projects", "-p", "memory") + ` 2>/dev/null | head -3; ls biblio/scratchpad/archive | grep t"}`, "", false},
+		{"bash grep memory piped with write elsewhere", "Bash", `{"command":"grep x ` + memDir + ` 2>&1 | head; echo hi > /tmp/a.txt"}`, "", false},
+		{"bash find memory then write elsewhere", "Bash", `{"command":"find ` + memDir + ` -name '*.md' && touch /tmp/a"}`, "", false},
+		{"bash cd memory then write", "Bash", `{"command":"cd ` + memDir + ` && echo hi > a.md"}`, "", true},
+		{"bash loop over memory", "Bash", `{"command":"for f in ` + memDir + `*; do rm $f; done"}`, "", true},
+		{"bash variable holding memory", "Bash", `{"command":"M=` + memDir + `; echo hi > $M/a.md"}`, "", true},
+		{"bash grep memory redirected", "Bash", `{"command":"grep x ` + memDir + ` > /tmp/out"}`, "", true},
+		{"bash find memory delete", "Bash", `{"command":"find ` + memDir + ` -name '*.md' -delete"}`, "", true},
+		{"bash find memory exec", "Bash", `{"command":"find ` + memDir + ` -exec cp /tmp/a {} \\;"}`, "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
