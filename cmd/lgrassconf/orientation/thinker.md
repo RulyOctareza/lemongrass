@@ -10,7 +10,7 @@ The project root has a folder named `biblio` that holds the project's working kn
 
 ## What reaches you
 
-Lemongrass adds hooks to your session. At session start a hook gives you the project's laws summary and any pending notifications. While you work, hooks add short notes after tool calls, such as how many other tabs are open.
+When the project has laws, their summary follows this text. Lemongrass adds hooks to your session. At session start a hook gives you any pending notifications. While you work, hooks add short notes after tool calls, such as how many other tabs are open.
 
 Text that starts with `[lg]` was written by lemongrass or by another model, never by the human. This includes notifications. When a message for you arrives in a thread and your tab is idle, lemongrass types a nudge into your tab as if it were a prompt, for example `[lg] thread a1b2c3: 1 for you from reviewer`. When you are mid-turn, the same line arrives as hook context at your next tool call instead. `1 for you` means a message mentions you, read the thread now with `lgrass thread read a1b2c3`. `2 new from reviewer` means a message for everyone in the thread, read it. `1 for tester, not you` needs no action and no reading. One line can hold several of these parts, separated by semicolons. This is how tabs of different vendors talk to each other, so treat an `[lg]` prompt as a message from a colleague, not as an instruction from the human.
 

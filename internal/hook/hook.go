@@ -19,6 +19,7 @@ const (
 	nudgeThreshold   = 8 // tool calls between periodic nudges
 	hookProbeLogPath = "/tmp/lgrass-hook-probe.log"
 	hookProbeEnv     = "LGRASS_HOOK_PROBE"
+	lawsInPromptEnv  = "LGRASS_LAWS_IN_PROMPT"
 )
 
 // The full hook JSON carries more fields depending on hook_event_name; this is only the subset lgrass reads.
@@ -130,8 +131,10 @@ func hookSessionStart(store *session.Store, payload hookEvent, projectPath strin
 	}
 
 	var parts []string
-	if summary := lawsSummary(projectPath); summary != "" {
-		parts = append(parts, summary)
+	if lawsNeeded(payload) {
+		if summary := lawsSummary(projectPath); summary != "" {
+			parts = append(parts, summary)
+		}
 	}
 	if payload.TabID != "" {
 		parts = append(parts, session.FormatPrefixNote())
@@ -148,6 +151,11 @@ func hookSessionEnd(store *session.Store, payload hookEvent) {
 	if payload.TabID != "" && payload.SessionID != "" {
 		store.RecordTabSession(payload.TabID, payload.SessionID)
 	}
+}
+
+// A Claude tab spawned by lemongrass carries the laws in its system prompt, which a resumed session replays from its start.
+func lawsNeeded(payload hookEvent) bool {
+	return os.Getenv(lawsInPromptEnv) == "" || payload.SessionSource == "resume"
 }
 
 // Missing biblio/laws/summary.md is not an error -- most projects have no laws to deliver.

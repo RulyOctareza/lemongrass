@@ -4,7 +4,7 @@ import { join } from 'path'
 import * as pty from 'node-pty'
 import { randomUUID } from 'crypto'
 import { registerTab } from './tabSessions'
-import { orientationArgs, type OrientationRole } from './orientation'
+import { orientationLaunch, type OrientationRole } from './orientation'
 import { startupTrimArgs, startupTrimEnv } from './startupTrim'
 
 // Every shell spawns an agent binary directly, never a login shell. Codex
@@ -68,8 +68,14 @@ function accountConfigDir(opts: SpawnOptions): string | undefined {
 export function registerPtyHandlers(getSender: () => WebContents | undefined): void {
   ipcMain.handle('pty:spawn', async (_event, opts: SpawnOptions) => {
     const id = randomUUID()
+    const orientation = orientationLaunch(
+      opts.command,
+      opts.orientation ?? 'tab',
+      homedir(),
+      opts.cwd
+    )
     const args = [
-      ...orientationArgs(opts.command, opts.orientation ?? 'tab', homedir()),
+      ...orientation.args,
       ...startupTrimArgs(opts.command, homedir()),
       ...(opts.args ?? [])
     ]
@@ -83,6 +89,7 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
       env: {
         ...(process.env as Record<string, string>),
         ...startupTrimEnv(opts.command),
+        ...orientation.env,
         ...(opts.tabId ? { LGRASS_TAB_ID: opts.tabId } : {}),
         ...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {})
       }

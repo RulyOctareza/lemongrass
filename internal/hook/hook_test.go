@@ -216,3 +216,34 @@ func TestSessionStartWithoutTabIDRecordsNoTabSession(t *testing.T) {
 		t.Errorf("TabSessions = %v, want none", tabs)
 	}
 }
+
+func projectWithLaws(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	laws := filepath.Join(dir, "biblio", "laws")
+	if err := os.MkdirAll(laws, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(laws, "summary.md"), []byte("# Laws summary\n\n- a rule\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestSessionStartDeliversLaws(t *testing.T) {
+	result := hookSessionStart(openHookTestStore(t), hookEvent{SessionID: "s", SessionSource: "startup"}, projectWithLaws(t))
+	if !strings.Contains(result.AdditionalContext, "# Laws summary") {
+		t.Errorf("context = %q, want the laws summary", result.AdditionalContext)
+	}
+}
+
+func TestSessionStartSkipsLawsAlreadyInThePrompt(t *testing.T) {
+	t.Setenv(lawsInPromptEnv, "1")
+	project := projectWithLaws(t)
+	for source, want := range map[string]bool{"startup": false, "clear": false, "compact": false, "resume": true} {
+		result := hookSessionStart(openHookTestStore(t), hookEvent{SessionID: "s", SessionSource: source}, project)
+		if got := strings.Contains(result.AdditionalContext, "# Laws summary"); got != want {
+			t.Errorf("source %s: laws delivered = %v, want %v", source, got, want)
+		}
+	}
+}
