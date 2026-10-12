@@ -573,7 +573,7 @@ function openInNewShellWithAgent(
   // The 'shell' agent spawns zsh directly, which treats a positional prompt argument as a script path to source.
   if (agent.id !== 'shell') {
     setShellArgs(tab.id, [
-      `Read ${projectRelativePath(source.path)} and follow the instructions in it.`
+      `Read ${projectRelativePath(source.path)} and discuss it with the user.`
     ])
   }
   const next = tree.splitWithTab(root, paneId, 'right', tab)
