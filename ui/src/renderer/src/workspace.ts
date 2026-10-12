@@ -717,6 +717,7 @@ export async function reopenWorkgroupMember(
     label: member.label,
     command: agent.command,
     cwd: project.path,
+    thinker: true,
     ...(agent.command === 'claude' && account ? { account } : {})
   }
   const root = workspaces[project.id].layout.root
@@ -773,6 +774,7 @@ function spawnWorkgroup(request: WorkgroupSpawnRequest): WorkgroupSpawnResult {
       label: member.label,
       command: shellAgentById(member.vendor).command,
       cwd: project.path,
+      thinker: true,
       ...(member.vendor === 'claude' && account ? { account } : {})
     }
     setShellArgs(tab.id, workgroupArgs(member))

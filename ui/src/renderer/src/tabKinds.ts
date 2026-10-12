@@ -54,7 +54,13 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     body: ShellView,
     keepAlive: true,
     bodyProps: (tab) => ({
-      spec: { id: tab.id, command: tab.command, cwd: tab.cwd, account: tab.account }
+      spec: {
+        id: tab.id,
+        command: tab.command,
+        cwd: tab.cwd,
+        account: tab.account,
+        thinker: tab.thinker
+      }
     })
   },
   doc: {

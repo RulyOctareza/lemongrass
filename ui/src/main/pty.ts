@@ -4,6 +4,7 @@ import { join } from 'path'
 import * as pty from 'node-pty'
 import { randomUUID } from 'crypto'
 import { registerTab } from './tabSessions'
+import { orientationArgs, type OrientationRole } from './orientation'
 
 // Every shell spawns an agent binary directly, never a login shell. Codex
 // receives repeated Ctrl+C during a graceful tab or app shutdown, so it can
@@ -20,6 +21,8 @@ interface SpawnOptions {
   tabId?: string
   /** Claude account name; the agent then runs with that account's config directory. */
   account?: string
+  /** Which orientation a Claude tab starts with. */
+  orientation?: OrientationRole
   cols?: number
   rows?: number
 }
@@ -64,7 +67,10 @@ function accountConfigDir(opts: SpawnOptions): string | undefined {
 export function registerPtyHandlers(getSender: () => WebContents | undefined): void {
   ipcMain.handle('pty:spawn', async (_event, opts: SpawnOptions) => {
     const id = randomUUID()
-    const args = opts.args ?? []
+    const args = [
+      ...orientationArgs(opts.command, opts.orientation ?? 'tab', homedir()),
+      ...(opts.args ?? [])
+    ]
     const configDir = accountConfigDir(opts)
     if (opts.tabId && opts.cwd) await registerTab(opts.cwd, opts.tabId, opts.command)
     const proc = pty.spawn(opts.command, args, {

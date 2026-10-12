@@ -35,9 +35,10 @@ type skillFile struct {
 }
 
 type keeper struct {
-	home       string
-	candidates []string
-	skills     []skillFile
+	home        string
+	candidates  []string
+	skills      []skillFile
+	orientation []skillFile
 }
 
 func newKeeper(home string) *keeper {
@@ -48,6 +49,7 @@ func newKeeper(home string) *keeper {
 		},
 	}
 	k.skills = k.loadSkills()
+	k.orientation = k.loadOrientation()
 	return k
 }
 
@@ -122,7 +124,7 @@ func removeLegacySkill(dir string) error {
 
 func (k *keeper) reconcile() error {
 	var errs []error
-	for _, f := range k.skills {
+	for _, f := range k.managedFiles() {
 		if err := agentconf.SyncFile(f.path, f.content); err != nil {
 			errs = append(errs, err)
 		}

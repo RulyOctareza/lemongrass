@@ -30,6 +30,7 @@ export interface ShellSpec {
   command: string
   cwd?: string
   account?: string
+  thinker?: boolean
 }
 
 interface ShellSession {
@@ -196,6 +197,7 @@ async function start(session: ShellSession): Promise<void> {
     args,
     cwd: spec.cwd,
     account: spec.account,
+    orientation: spec.thinker ? 'thinker' : 'tab',
     tabId: isResumableCommand(spec.command) ? spec.id : undefined,
     cols: term.cols,
     rows: term.rows

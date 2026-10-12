@@ -9,6 +9,7 @@ export interface PtySpawnOptions {
   cwd?: string
   tabId?: string
   account?: string
+  orientation?: 'tab' | 'thinker'
   cols?: number
   rows?: number
 }
@@ -186,7 +187,15 @@ export type WorkspaceTab =
   | { id: string; kind: 'diff'; path: string }
   | { id: string; kind: 'connector' }
   | { id: string; kind: 'workgroup'; groupId: number }
-  | { id: string; kind: 'shell'; label: string; command: string; cwd?: string; account?: string }
+  | {
+      id: string
+      kind: 'shell'
+      label: string
+      command: string
+      cwd?: string
+      account?: string
+      thinker?: boolean
+    }
 
 export type WorkspaceLayoutNode =
   | { type: 'leaf'; id: string; tabs: WorkspaceTab[]; activeTabId: string | null }

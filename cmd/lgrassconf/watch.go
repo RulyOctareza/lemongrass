@@ -40,7 +40,7 @@ func (k *keeper) skillDirs() []string {
 }
 
 func (k *keeper) watchedDirs() []string {
-	dirs := k.skillDirs()
+	dirs := append(k.skillDirs(), k.orientationDir())
 	for _, c := range k.candidates {
 		dirs = append(dirs, filepath.Dir(c))
 	}
@@ -61,7 +61,8 @@ func (k *keeper) relevant() map[string]bool {
 	for _, dir := range k.skillDirs() {
 		set[dir] = true
 	}
-	for _, f := range k.skills {
+	set[k.orientationDir()] = true
+	for _, f := range k.managedFiles() {
 		set[f.path] = true
 	}
 	for _, v := range vendors {
