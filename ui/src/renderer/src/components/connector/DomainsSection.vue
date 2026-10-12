@@ -50,6 +50,8 @@ interface UserFieldDraft {
 }
 
 interface UserDraft {
+  id: number
+  expanded: boolean
   name: string
   isByot: boolean
   token: string
@@ -76,6 +78,9 @@ const newDomainTokenPrefix = ref('Bearer ')
 const newDomainUsers = ref<UserDraft[]>([])
 const domainFormError = ref('')
 const creatingDomain = ref(false)
+const settingsOpen = ref(true)
+const userSearch = ref('')
+let nextUserDraftId = 0
 
 function openDomainForm(): void {
   editingDomainName.value = null
@@ -92,6 +97,8 @@ function openDomainForm(): void {
   newDomainTokenPrefix.value = 'Bearer '
   newDomainUsers.value = []
   domainFormError.value = ''
+  settingsOpen.value = true
+  userSearch.value = ''
   showDomainForm.value = true
 }
 
@@ -102,6 +109,8 @@ function cancelDomainForm(): void {
 function userDraftFromDomainUser(user: VaultDomainUser): UserDraft {
   const fields = Object.entries(user.Fields ?? {}).map(([key, value]) => ({ key, value }))
   return {
+    id: nextUserDraftId++,
+    expanded: false,
     name: user.Name,
     isByot: user.Token !== '',
     token: user.Token,
@@ -132,6 +141,7 @@ function fillDomainForm(domain: VaultDomain): void {
   newDomainTokenPrefix.value = domain.TokenPlacement.Prefix
   newDomainUsers.value = (domain.Users ?? []).map(userDraftFromDomainUser)
   domainFormError.value = ''
+  userSearch.value = ''
   showDomainForm.value = true
 }
 
@@ -145,6 +155,7 @@ async function openDomainEdit(name: string): Promise<void> {
     copiedFrom.value = ''
     newDomainName.value = name
     fillDomainForm(domain)
+    settingsOpen.value = false
   } catch (err) {
     domainsError.value = describeError(err)
   } finally {
@@ -162,6 +173,7 @@ async function openDomainCopy(name: string): Promise<void> {
     copiedFrom.value = name
     newDomainName.value = `${name} copy`
     fillDomainForm(domain)
+    settingsOpen.value = true
   } catch (err) {
     domainsError.value = describeError(err)
   } finally {
@@ -170,7 +182,10 @@ async function openDomainCopy(name: string): Promise<void> {
 }
 
 function addUserDraft(): void {
-  newDomainUsers.value.push({
+  userSearch.value = ''
+  newDomainUsers.value.unshift({
+    id: nextUserDraftId++,
+    expanded: true,
     name: '',
     isByot: false,
     token: '',
@@ -217,10 +232,7 @@ function buildDomainDraft(): VaultDomain {
 }
 
 function buildUserPayload(draft: UserDraft): VaultDomainUser {
-  const tags = draft.tags
-    .split(',')
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0)
+  const tags = userTagList(draft)
   if (draft.isByot) {
     return { Name: draft.name.trim(), Fields: {}, Token: draft.token, Tags: tags }
   }
@@ -249,6 +261,36 @@ const domainNameTaken = computed(
 )
 
 const userNames = computed(() => newDomainUsers.value.map((u) => u.name))
+
+function userTagList(draft: UserDraft): string[] {
+  return draft.tags
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+}
+
+const visibleUsers = computed(() => {
+  const query = userSearch.value.trim().toLowerCase()
+  return newDomainUsers.value
+    .map((user, index) => ({ user, index }))
+    .filter(
+      ({ user }) =>
+        query === '' ||
+        user.name.toLowerCase().includes(query) ||
+        userHandle(user.name).includes(query) ||
+        user.tags.toLowerCase().includes(query)
+    )
+})
+
+// A user whose problem would be hidden by collapsing stays open.
+function userEditorOpen(draft: UserDraft, index: number): boolean {
+  return (
+    draft.expanded ||
+    draft.name.trim() === '' ||
+    draft.testStatus === 'error' ||
+    collidingUserName(userNames.value, index) !== null
+  )
+}
 
 const canSubmitDomain = computed(
   () =>
@@ -329,178 +371,233 @@ watch(
         <p v-if="domainNameTaken" class="error-text">A domain with this name already exists.</p>
       </div>
 
-      <div class="field-block">
-        <label class="field-label" for="domain-base-url">Base URL</label>
-        <input
-          id="domain-base-url"
-          v-model="newDomainBaseUrl"
-          type="text"
-          placeholder="https://api.example.com"
-        />
-      </div>
+      <button
+        type="button"
+        class="settings-toggle"
+        :aria-expanded="settingsOpen"
+        @click="settingsOpen = !settingsOpen"
+      >
+        <span class="settings-chevron" :class="{ expanded: settingsOpen }">▸</span>
+        Settings
+        <span v-if="!settingsOpen" class="settings-summary">{{ newDomainBaseUrl }}</span>
+      </button>
 
-      <div class="field-block">
-        <label class="field-label" for="domain-login-endpoint">Login endpoint</label>
-        <input
-          id="domain-login-endpoint"
-          v-model="newDomainLoginEndpoint"
-          type="text"
-          placeholder="/auth/login (leave blank if every user is bring-your-own-token)"
-        />
-      </div>
-
-      <div class="field-block">
-        <label class="field-label" for="domain-token-path">Token path</label>
-        <input
-          id="domain-token-path"
-          v-model="newDomainTokenPath"
-          type="text"
-          placeholder="e.g. access_token or data.token"
-        />
-        <p class="hint">
-          Where the access token lives in the login response, as a dotted JSON path.
-        </p>
-      </div>
-
-      <div class="field-block">
-        <label class="field-label">Token lifetime (TTLOrigin)</label>
-        <div class="radio-row">
-          <label class="radio-option">
-            <input v-model="newDomainTtlMode" type="radio" value="fixed" />
-            Fixed
-          </label>
-          <label class="radio-option">
-            <input v-model="newDomainTtlMode" type="radio" value="field" />
-            From response field
-          </label>
-          <label class="radio-option">
-            <input v-model="newDomainTtlMode" type="radio" value="jwt" />
-            Decode as JWT (jwt-exp)
-          </label>
+      <div v-show="settingsOpen" class="settings-body">
+        <div class="field-block">
+          <label class="field-label" for="domain-base-url">Base URL</label>
+          <input
+            id="domain-base-url"
+            v-model="newDomainBaseUrl"
+            type="text"
+            placeholder="https://api.example.com"
+          />
         </div>
-        <input
-          v-if="newDomainTtlMode === 'fixed'"
-          v-model.number="newDomainFixedTtlMinutes"
-          type="number"
-          min="1"
-          title="Fixed TTL, minutes"
-        />
-        <input
-          v-if="newDomainTtlMode === 'field'"
-          v-model="newDomainTtlField"
-          type="text"
-          placeholder="e.g. expires_in"
-        />
-      </div>
 
-      <div class="field-block">
-        <label class="field-label">Token placement</label>
-        <div class="field-grid">
-          <div>
-            <select v-model="newDomainTokenKind">
-              <option value="header">Header</option>
-              <option value="cookie">Cookie</option>
-              <option value="query">Query param</option>
-            </select>
-          </div>
-          <div>
-            <input v-model="newDomainTokenName" type="text" placeholder="e.g. Authorization" />
-          </div>
+        <div class="field-block">
+          <label class="field-label" for="domain-login-endpoint">Login endpoint</label>
+          <input
+            id="domain-login-endpoint"
+            v-model="newDomainLoginEndpoint"
+            type="text"
+            placeholder="/auth/login (leave blank if every user is bring-your-own-token)"
+          />
         </div>
-        <input
-          v-if="newDomainTokenKind === 'header'"
-          v-model="newDomainTokenPrefix"
-          type="text"
-          placeholder="Prefix, e.g. 'Bearer '"
-        />
-      </div>
 
-      <div class="field-block">
-        <label class="field-label">Users</label>
-        <div v-for="(user, userIndex) in newDomainUsers" :key="userIndex" class="user-draft">
-          <div class="user-name-row">
-            <input v-model="user.name" type="text" placeholder="User name" />
+        <div class="field-block">
+          <label class="field-label" for="domain-token-path">Token path</label>
+          <input
+            id="domain-token-path"
+            v-model="newDomainTokenPath"
+            type="text"
+            placeholder="e.g. access_token or data.token"
+          />
+          <p class="hint">
+            Where the access token lives in the login response, as a dotted JSON path.
+          </p>
+        </div>
+
+        <div class="field-block">
+          <label class="field-label">Token lifetime (TTLOrigin)</label>
+          <div class="radio-row">
             <label class="radio-option">
-              <input v-model="user.isByot" type="checkbox" />
-              Bring your own token
+              <input v-model="newDomainTtlMode" type="radio" value="fixed" />
+              Fixed
+            </label>
+            <label class="radio-option">
+              <input v-model="newDomainTtlMode" type="radio" value="field" />
+              From response field
+            </label>
+            <label class="radio-option">
+              <input v-model="newDomainTtlMode" type="radio" value="jwt" />
+              Decode as JWT (jwt-exp)
             </label>
           </div>
-
-          <p
-            v-if="userHandle(user.name) !== '' && userHandle(user.name) !== user.name"
-            class="hint"
-          >
-            Models use this user as {{ userHandle(user.name) }}.
-          </p>
-          <p v-if="collidingUserName(userNames, userIndex) !== null" class="error-text">
-            Models would use the same handle, {{ userHandle(user.name) }}, for "{{
-              collidingUserName(userNames, userIndex)
-            }}". Rename one of them.
-          </p>
-
           <input
-            v-model="user.tags"
-            type="text"
-            placeholder="Tags, comma separated, e.g. tenant x, low level"
+            v-if="newDomainTtlMode === 'fixed'"
+            v-model.number="newDomainFixedTtlMinutes"
+            type="number"
+            min="1"
+            title="Fixed TTL, minutes"
           />
-
           <input
-            v-if="user.isByot"
-            v-model="user.token"
+            v-if="newDomainTtlMode === 'field'"
+            v-model="newDomainTtlField"
             type="text"
-            placeholder="Paste the token"
+            placeholder="e.g. expires_in"
           />
-
-          <div v-else class="kv-list">
-            <div v-for="(field, fieldIndex) in user.fields" :key="fieldIndex" class="kv-row">
-              <input v-model="field.key" type="text" placeholder="field name" />
-              <input v-model="field.value" type="text" placeholder="value" />
-              <button
-                type="button"
-                class="chip-remove"
-                title="Remove field"
-                @click="removeUserField(userIndex, fieldIndex)"
-              >
-                ×
-              </button>
-            </div>
-            <button type="button" class="ghost-button" @click="addUserField(userIndex)">
-              + Field
-            </button>
-          </div>
-
-          <div class="test-row">
-            <button
-              class="ghost-button"
-              :disabled="user.testStatus === 'testing'"
-              @click="testUserDraft(userIndex)"
-            >
-              {{ user.testStatus === 'testing' ? 'Testing...' : 'Test login' }}
-            </button>
-            <span
-              class="test-status"
-              :class="{
-                'test-status-ok': user.testStatus === 'ok',
-                'test-status-error': user.testStatus === 'error'
-              }"
-            >
-              <template v-if="user.testStatus === 'ok'">✓ OK</template>
-              <template v-else-if="user.testStatus === 'error'">✗ {{ user.testError }}</template>
-              <template v-else-if="user.testStatus === 'testing'">Testing...</template>
-              <template v-else>Not tested yet</template>
-            </span>
-            <button type="button" class="ghost-button danger" @click="removeUserDraft(userIndex)">
-              Remove user
-            </button>
-          </div>
         </div>
-        <button type="button" class="ghost-button" @click="addUserDraft">+ User</button>
+
+        <div class="field-block">
+          <label class="field-label">Token placement</label>
+          <div class="field-grid">
+            <div>
+              <select v-model="newDomainTokenKind">
+                <option value="header">Header</option>
+                <option value="cookie">Cookie</option>
+                <option value="query">Query param</option>
+              </select>
+            </div>
+            <div>
+              <input v-model="newDomainTokenName" type="text" placeholder="e.g. Authorization" />
+            </div>
+          </div>
+          <input
+            v-if="newDomainTokenKind === 'header'"
+            v-model="newDomainTokenPrefix"
+            type="text"
+            placeholder="Prefix, e.g. 'Bearer '"
+          />
+        </div>
       </div>
 
-      <p v-if="!vaultUnlocked" class="hint">Unlock the vault above before saving.</p>
-      <p v-if="domainFormError" class="error-text">{{ domainFormError }}</p>
+      <div class="field-block">
+        <div class="users-toolbar">
+          <label class="field-label">Users ({{ newDomainUsers.length }})</label>
+          <input
+            v-model="userSearch"
+            type="search"
+            class="users-search"
+            placeholder="Search name or tag"
+          />
+          <button type="button" class="ghost-button" @click="addUserDraft">+ User</button>
+        </div>
+        <p v-if="newDomainUsers.length > 0 && visibleUsers.length === 0" class="empty">
+          No user matches.
+        </p>
+        <div v-for="{ user, index: userIndex } in visibleUsers" :key="user.id" class="user-draft">
+          <button
+            type="button"
+            class="user-summary"
+            :aria-expanded="userEditorOpen(user, userIndex)"
+            @click="user.expanded = !user.expanded"
+          >
+            <span class="settings-chevron" :class="{ expanded: userEditorOpen(user, userIndex) }"
+              >▸</span
+            >
+            <span class="user-summary-name">{{ user.name.trim() || 'New user' }}</span>
+            <span class="capsule-row">
+              <span v-for="tag in userTagList(user)" :key="tag" class="value-capsule">{{
+                tag
+              }}</span>
+            </span>
+            <span class="user-summary-kind">{{ user.isByot ? 'Token' : 'Login' }}</span>
+            <span
+              class="status-capsule"
+              :class="{
+                'status-ok': user.testStatus === 'ok',
+                'status-error': user.testStatus === 'error'
+              }"
+            >
+              <template v-if="user.testStatus === 'ok'">OK</template>
+              <template v-else-if="user.testStatus === 'error'">Failed</template>
+              <template v-else-if="user.testStatus === 'testing'">Testing</template>
+              <template v-else>Not tested</template>
+            </span>
+          </button>
 
-      <div class="create-actions">
+          <template v-if="userEditorOpen(user, userIndex)">
+            <div class="user-name-row">
+              <input v-model="user.name" type="text" placeholder="User name" />
+              <label class="radio-option">
+                <input v-model="user.isByot" type="checkbox" />
+                Bring your own token
+              </label>
+            </div>
+
+            <p
+              v-if="userHandle(user.name) !== '' && userHandle(user.name) !== user.name"
+              class="hint"
+            >
+              Models use this user as {{ userHandle(user.name) }}.
+            </p>
+            <p v-if="collidingUserName(userNames, userIndex) !== null" class="error-text">
+              Models would use the same handle, {{ userHandle(user.name) }}, for "{{
+                collidingUserName(userNames, userIndex)
+              }}". Rename one of them.
+            </p>
+
+            <input
+              v-model="user.tags"
+              type="text"
+              placeholder="Tags, comma separated, e.g. tenant x, low level"
+            />
+
+            <input
+              v-if="user.isByot"
+              v-model="user.token"
+              type="text"
+              placeholder="Paste the token"
+            />
+
+            <div v-else class="kv-list">
+              <div v-for="(field, fieldIndex) in user.fields" :key="fieldIndex" class="kv-row">
+                <input v-model="field.key" type="text" placeholder="field name" />
+                <input v-model="field.value" type="text" placeholder="value" />
+                <button
+                  type="button"
+                  class="chip-remove"
+                  title="Remove field"
+                  @click="removeUserField(userIndex, fieldIndex)"
+                >
+                  ×
+                </button>
+              </div>
+              <button type="button" class="ghost-button" @click="addUserField(userIndex)">
+                + Field
+              </button>
+            </div>
+
+            <div class="test-row">
+              <button
+                class="ghost-button"
+                :disabled="user.testStatus === 'testing'"
+                @click="testUserDraft(userIndex)"
+              >
+                {{ user.testStatus === 'testing' ? 'Testing...' : 'Test login' }}
+              </button>
+              <span
+                class="test-status"
+                :class="{
+                  'test-status-ok': user.testStatus === 'ok',
+                  'test-status-error': user.testStatus === 'error'
+                }"
+              >
+                <template v-if="user.testStatus === 'ok'">✓ OK</template>
+                <template v-else-if="user.testStatus === 'error'">✗ {{ user.testError }}</template>
+                <template v-else-if="user.testStatus === 'testing'">Testing...</template>
+                <template v-else>Not tested yet</template>
+              </span>
+              <button type="button" class="ghost-button danger" @click="removeUserDraft(userIndex)">
+                Remove user
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="create-actions form-action-bar">
+        <p v-if="!vaultUnlocked" class="hint">Unlock the vault above before saving.</p>
+        <p v-if="domainFormError" class="error-text">{{ domainFormError }}</p>
         <button class="ghost-button" @click="cancelDomainForm">Cancel</button>
         <button
           class="primary-button"
