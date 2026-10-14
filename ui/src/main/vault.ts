@@ -111,6 +111,7 @@ export interface TokenPlacement {
 export interface DomainUser {
   Name: string
   Fields: Record<string, string>
+  FieldTypes: Record<string, string> | null
   Token: string
   Tags: string[]
 }
@@ -123,6 +124,13 @@ export interface Domain {
   FixedTTLSeconds: number
   TokenPlacement: TokenPlacement
   Users: DomainUser[]
+}
+
+// error is empty when the login passed; status and body are the login endpoint's non-2xx answer.
+export interface DomainLoginTest {
+  error: string
+  status: number
+  body: string
 }
 
 export interface MethodPath {
@@ -322,8 +330,12 @@ async function deleteDomain(name: string): Promise<void> {
 
 // Tests a domain user's login (or, for a bring-your-own-token user, validates the pasted
 // token) with values straight out of the in-progress form -- no root secret, nothing stored.
-async function testDomainLogin(domain: Domain, user: DomainUser): Promise<void> {
-  await vaultCall<void>('test_domain_login', { domain, user })
+async function testDomainLogin(domain: Domain, user: DomainUser): Promise<DomainLoginTest> {
+  const result = await vaultCall<Partial<DomainLoginTest> | undefined>('test_domain_login', {
+    domain,
+    user
+  })
+  return { error: result?.error ?? '', status: result?.status ?? 0, body: result?.body ?? '' }
 }
 
 async function listHTTPChannels(): Promise<HTTPChannel[]> {

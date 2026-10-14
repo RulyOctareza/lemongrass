@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, toRef, watch } from 'vue'
+import AppModal from '../AppModal.vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import { collidingUserName, userHandle } from '../../userHandle'
-import type { VaultDomain, VaultDomainUser } from '../../../../preload/types'
+import type { VaultDomain, VaultDomainUser, VaultLoginFieldType } from '../../../../preload/types'
 
 const props = defineProps<{
   visible: boolean
@@ -44,9 +45,12 @@ async function deleteDomain(name: string): Promise<void> {
 type TtlMode = 'field' | 'jwt' | 'fixed'
 type UserTestStatus = 'idle' | 'testing' | 'ok' | 'error'
 
+type FieldType = 'text' | VaultLoginFieldType
+
 interface UserFieldDraft {
   key: string
   value: string
+  type: FieldType
 }
 
 interface UserDraft {
@@ -59,6 +63,8 @@ interface UserDraft {
   fields: UserFieldDraft[]
   testStatus: UserTestStatus
   testError: string
+  testResponseStatus: number
+  testResponseBody: string
 }
 
 const showDomainForm = ref(false)
@@ -107,7 +113,11 @@ function cancelDomainForm(): void {
 }
 
 function userDraftFromDomainUser(user: VaultDomainUser): UserDraft {
-  const fields = Object.entries(user.Fields ?? {}).map(([key, value]) => ({ key, value }))
+  const fields = Object.entries(user.Fields ?? {}).map(([key, value]) => ({
+    key,
+    value,
+    type: user.FieldTypes?.[key] ?? ('text' as FieldType)
+  }))
   return {
     id: nextUserDraftId++,
     expanded: false,
@@ -115,9 +125,11 @@ function userDraftFromDomainUser(user: VaultDomainUser): UserDraft {
     isByot: user.Token !== '',
     token: user.Token,
     tags: (user.Tags ?? []).join(', '),
-    fields: fields.length > 0 ? fields : [{ key: '', value: '' }],
+    fields: fields.length > 0 ? fields : [{ key: '', value: '', type: 'text' }],
     testStatus: 'idle',
-    testError: ''
+    testError: '',
+    testResponseStatus: 0,
+    testResponseBody: ''
   }
 }
 
@@ -190,9 +202,11 @@ function addUserDraft(): void {
     isByot: false,
     token: '',
     tags: '',
-    fields: [{ key: '', value: '' }],
+    fields: [{ key: '', value: '', type: 'text' }],
     testStatus: 'idle',
-    testError: ''
+    testError: '',
+    testResponseStatus: 0,
+    testResponseBody: ''
   })
 }
 
@@ -201,7 +215,13 @@ function removeUserDraft(index: number): void {
 }
 
 function addUserField(userIndex: number): void {
-  newDomainUsers.value[userIndex].fields.push({ key: '', value: '' })
+  newDomainUsers.value[userIndex].fields.push({ key: '', value: '', type: 'text' })
+}
+
+function onFieldTypeChange(field: UserFieldDraft): void {
+  if (field.type === 'boolean' && field.value !== 'true' && field.value !== 'false') {
+    field.value = 'true'
+  }
 }
 
 function removeUserField(userIndex: number, fieldIndex: number): void {
@@ -234,25 +254,57 @@ function buildDomainDraft(): VaultDomain {
 function buildUserPayload(draft: UserDraft): VaultDomainUser {
   const tags = userTagList(draft)
   if (draft.isByot) {
-    return { Name: draft.name.trim(), Fields: {}, Token: draft.token, Tags: tags }
+    return { Name: draft.name.trim(), Fields: {}, FieldTypes: null, Token: draft.token, Tags: tags }
   }
   const fields: Record<string, string> = {}
+  const fieldTypes: Record<string, VaultLoginFieldType> = {}
   for (const f of draft.fields) {
-    if (f.key.trim()) fields[f.key.trim()] = f.value
+    const key = f.key.trim()
+    if (!key) continue
+    fields[key] = f.value
+    if (f.type !== 'text') fieldTypes[key] = f.type
   }
-  return { Name: draft.name.trim(), Fields: fields, Token: '', Tags: tags }
+  return {
+    Name: draft.name.trim(),
+    Fields: fields,
+    FieldTypes: Object.keys(fieldTypes).length > 0 ? fieldTypes : null,
+    Token: '',
+    Tags: tags
+  }
 }
 
 async function testUserDraft(index: number): Promise<void> {
   const draft = newDomainUsers.value[index]
   draft.testStatus = 'testing'
   draft.testError = ''
+  draft.testResponseStatus = 0
+  draft.testResponseBody = ''
   try {
-    await window.api.vault.testDomainLogin(buildDomainDraft(), buildUserPayload(draft))
-    draft.testStatus = 'ok'
+    const result = await window.api.vault.testDomainLogin(
+      buildDomainDraft(),
+      buildUserPayload(draft)
+    )
+    if (result.error === '') {
+      draft.testStatus = 'ok'
+      return
+    }
+    draft.testStatus = 'error'
+    draft.testError = describeError(result.error)
+    draft.testResponseStatus = result.status
+    draft.testResponseBody = result.body
   } catch (err) {
     draft.testStatus = 'error'
     draft.testError = describeError(err)
+  }
+}
+
+const responseDetailUser = ref<UserDraft | null>(null)
+
+function formatResponseBody(body: string): string {
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2)
+  } catch {
+    return body
   }
 }
 
@@ -552,7 +604,27 @@ watch(
             <div v-else class="kv-list">
               <div v-for="(field, fieldIndex) in user.fields" :key="fieldIndex" class="kv-row">
                 <input v-model="field.key" type="text" placeholder="field name" />
-                <input v-model="field.value" type="text" placeholder="value" />
+                <select
+                  v-model="field.type"
+                  class="kv-type"
+                  title="Type sent in the login body"
+                  @change="onFieldTypeChange(field)"
+                >
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="boolean">Boolean</option>
+                </select>
+                <select v-if="field.type === 'boolean'" v-model="field.value" class="kv-value">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+                <input
+                  v-else
+                  v-model="field.value"
+                  type="text"
+                  :inputmode="field.type === 'number' ? 'decimal' : undefined"
+                  :placeholder="field.type === 'number' ? 'number, e.g. 3' : 'value'"
+                />
                 <button
                   type="button"
                   class="chip-remove"
@@ -587,6 +659,16 @@ watch(
                 <template v-else-if="user.testStatus === 'testing'">Testing...</template>
                 <template v-else>Not tested yet</template>
               </span>
+              <button
+                v-if="user.testStatus === 'error' && user.testResponseStatus > 0"
+                type="button"
+                class="response-detail-button"
+                title="Show the login response"
+                aria-label="Show the login response"
+                @click="responseDetailUser = user"
+              >
+                !
+              </button>
               <button type="button" class="ghost-button danger" @click="removeUserDraft(userIndex)">
                 Remove user
               </button>
@@ -645,5 +727,22 @@ watch(
         </div>
       </div>
     </div>
+
+    <AppModal
+      v-if="responseDetailUser"
+      scope="app"
+      size="md"
+      title="Login response"
+      @close="responseDetailUser = null"
+    >
+      <p>
+        The login endpoint answered {{ responseDetailUser.name.trim() || 'this user' }} with status
+        {{ responseDetailUser.testResponseStatus }}.
+      </p>
+      <pre v-if="responseDetailUser.testResponseBody" class="response-body">{{
+        formatResponseBody(responseDetailUser.testResponseBody)
+      }}</pre>
+      <p v-else class="hint">The response had no body.</p>
+    </AppModal>
   </div>
 </template>

@@ -74,9 +74,12 @@ export interface VaultTokenPlacement {
   Prefix: string
 }
 
+export type VaultLoginFieldType = 'number' | 'boolean'
+
 export interface VaultDomainUser {
   Name: string
   Fields: Record<string, string>
+  FieldTypes: Record<string, VaultLoginFieldType> | null
   Token: string
   Tags: string[]
 }
@@ -89,6 +92,12 @@ export interface VaultDomain {
   FixedTTLSeconds: number
   TokenPlacement: VaultTokenPlacement
   Users: VaultDomainUser[]
+}
+
+export interface VaultDomainLoginTest {
+  error: string
+  status: number
+  body: string
 }
 
 export interface VaultMethodPath {

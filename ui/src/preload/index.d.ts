@@ -19,6 +19,7 @@ import type {
   VaultChannelWithShortId,
   VaultDomain,
   VaultDomainUser,
+  VaultDomainLoginTest,
   VaultHTTPScope,
   VaultHTTPChannel,
   VaultHTTPChannelWithShortId,
@@ -140,7 +141,7 @@ interface Api {
     getDomain: (passphrase: string, name: string) => Promise<VaultDomain>
     updateDomain: (passphrase: string, name: string, domain: VaultDomain) => Promise<void>
     deleteDomain: (name: string) => Promise<void>
-    testDomainLogin: (domain: VaultDomain, user: VaultDomainUser) => Promise<void>
+    testDomainLogin: (domain: VaultDomain, user: VaultDomainUser) => Promise<VaultDomainLoginTest>
     listHTTPChannels: () => Promise<VaultHTTPChannel[]>
     createHTTPChannel: (
       passphrase: string,

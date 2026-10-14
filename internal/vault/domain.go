@@ -44,12 +44,14 @@ type Domain struct {
 // DomainUser is a login user (Fields carries whatever LoginEndpoint needs, e.g.
 // username/password) or a bring-your-own-token user (Token is pre-supplied and LoginEndpoint
 // is never called for it) -- never both. Tags are free text a human sets to say what the user
-// is for, and are the only part of a user a model is ever shown besides its name.
+// is for, and are the only part of a user a model is ever shown besides its name. FieldTypes
+// maps a field to FieldNumber or FieldBoolean, and a field with no entry is text.
 type DomainUser struct {
-	Name   string
-	Fields map[string]string
-	Token  string
-	Tags   []string
+	Name       string
+	Fields     map[string]string
+	FieldTypes map[string]string
+	Token      string
+	Tags       []string
 }
 
 func (u DomainUser) IsBYOT() bool {
@@ -83,6 +85,9 @@ func domainKey(name string) string {
 // same Store but under a distinct key prefix so domain and db connection names never collide.
 func (s *Service) PutDomain(rootSecret, name string, d Domain) error {
 	if err := checkUserHandles(d.Users); err != nil {
+		return err
+	}
+	if err := checkLoginFields(d.Users); err != nil {
 		return err
 	}
 	rootKey, err := DeriveKey(rootSecret, s.rootSalt)

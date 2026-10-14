@@ -496,6 +496,46 @@
   color: var(--color-danger, #e5484d);
 }
 
+.vault-tab .response-detail-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--color-danger, #e5484d);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-danger, #e5484d);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.vault-tab .response-detail-button:hover {
+  background: var(--color-surface-2);
+}
+
+.vault-tab .response-body {
+  min-height: 0;
+  max-height: 60vh;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-fg-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .vault-tab .unlock-panel {
   display: flex;
   flex-direction: column;
@@ -679,6 +719,14 @@
 
 .vault-tab .kv-row input,
 .vault-tab .exclusion-row input {
+  flex: 1;
+}
+
+.vault-tab .kv-row .kv-type {
+  flex: 0 0 96px;
+}
+
+.vault-tab .kv-row .kv-value {
   flex: 1;
 }
 

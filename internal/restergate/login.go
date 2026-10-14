@@ -27,17 +27,28 @@ func (g *Gate) TestDomainLogin(domain vault.Domain, user vault.DomainUser) error
 	return err
 }
 
+// LoginStatusError is a non-2xx login response. Its message carries only the status, since the
+// body can echo the submitted fields and reaches the model through every caller but the Vault UI.
+type LoginStatusError struct {
+	Status int
+	Body   []byte
+}
+
+func (e *LoginStatusError) Error() string {
+	return fmt.Sprintf("restergate: login returned status %d", e.Status)
+}
+
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-// loginHTTP POSTs user.Fields as a JSON body to domain.LoginEndpoint and extracts the token and
+// loginHTTP POSTs user.LoginBody() to domain.LoginEndpoint and extracts the token and
 // its computed expiry from the response.
 func loginHTTP(domain vault.Domain, user vault.DomainUser) (token string, expiresAt time.Time, err error) {
 	if domain.LoginEndpoint == "" {
 		return "", time.Time{}, errors.New("restergate: domain has no login endpoint, only bring-your-own-token users are supported")
 	}
-	body, err := json.Marshal(user.Fields)
+	body, err := user.LoginBody()
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("restergate: encoding login body: %w", err)
+		return "", time.Time{}, err
 	}
 	req, err := http.NewRequest(http.MethodPost, domain.BaseURL+domain.LoginEndpoint, bytes.NewReader(body))
 	if err != nil {
@@ -58,7 +69,7 @@ func loginHTTP(domain vault.Domain, user vault.DomainUser) (token string, expire
 		return "", time.Time{}, fmt.Errorf("restergate: reading login response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", time.Time{}, fmt.Errorf("restergate: login returned status %d", resp.StatusCode)
+		return "", time.Time{}, &LoginStatusError{Status: resp.StatusCode, Body: respBody}
 	}
 
 	token, err = jsonPathString(respBody, domain.TokenPath)

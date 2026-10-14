@@ -19,6 +19,7 @@ import type {
   VaultChannelWithShortId,
   VaultDomain,
   VaultDomainUser,
+  VaultDomainLoginTest,
   VaultHTTPScope,
   VaultHTTPChannel,
   VaultHTTPChannelWithShortId,
@@ -171,7 +172,7 @@ const vault = {
   updateDomain: (passphrase: string, name: string, domain: VaultDomain): Promise<void> =>
     ipcRenderer.invoke('vault:updateDomain', passphrase, name, domain),
   deleteDomain: (name: string): Promise<void> => ipcRenderer.invoke('vault:deleteDomain', name),
-  testDomainLogin: (domain: VaultDomain, user: VaultDomainUser): Promise<void> =>
+  testDomainLogin: (domain: VaultDomain, user: VaultDomainUser): Promise<VaultDomainLoginTest> =>
     ipcRenderer.invoke('vault:testDomainLogin', domain, user),
   listHTTPChannels: (): Promise<VaultHTTPChannel[]> => ipcRenderer.invoke('vault:listHTTPChannels'),
   createHTTPChannel: (

@@ -3,6 +3,7 @@ package restergate
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -115,6 +116,52 @@ func TestLoginHTTPBadCredentialsErrors(t *testing.T) {
 	domain := vault.Domain{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token"}
 	if _, _, err := loginHTTP(domain, vault.DomainUser{}); err == nil {
 		t.Error("loginHTTP with a 401 response = nil error, want an error")
+	}
+}
+
+func TestLoginHTTPSendsTypedFields(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&got)
+		json.NewEncoder(w).Encode(map[string]string{"access_token": "abc123"})
+	}))
+	defer srv.Close()
+
+	domain := vault.Domain{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 30}
+	user := vault.DomainUser{
+		Fields:     map[string]string{"username": "alice", "site_id": "3", "remember": "false"},
+		FieldTypes: map[string]string{"site_id": vault.FieldNumber, "remember": vault.FieldBoolean},
+	}
+	if _, _, err := loginHTTP(domain, user); err != nil {
+		t.Fatalf("loginHTTP: %v", err)
+	}
+	if got["username"] != "alice" || got["site_id"] != float64(3) || got["remember"] != false {
+		t.Errorf("login body = %#v, want username a string, site_id a number, remember a boolean", got)
+	}
+}
+
+func TestLoginHTTPStatusErrorCarriesBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"message":"email is required"}`))
+	}))
+	defer srv.Close()
+
+	domain := vault.Domain{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token"}
+	_, _, err := loginHTTP(domain, vault.DomainUser{})
+
+	var statusErr *LoginStatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("loginHTTP with a 400 response = %v, want a *LoginStatusError", err)
+	}
+	if statusErr.Status != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400", statusErr.Status)
+	}
+	if string(statusErr.Body) != `{"message":"email is required"}` {
+		t.Errorf("Body = %q, want the response body", statusErr.Body)
+	}
+	if err.Error() != "restergate: login returned status 400" {
+		t.Errorf("Error() = %q, want the status only", err.Error())
 	}
 }
 

@@ -176,6 +176,27 @@ type testDomainLoginPayload struct {
 	User   vault.DomainUser `json:"user"`
 }
 
+// testDomainLoginResultPayload is a finished login test. An empty Error means the login passed;
+// Status and Body are set only when the login endpoint answered with a non-2xx status.
+type testDomainLoginResultPayload struct {
+	Error  string `json:"error,omitempty"`
+	Status int    `json:"status,omitempty"`
+	Body   string `json:"body,omitempty"`
+}
+
+func testDomainLoginResult(err error) testDomainLoginResultPayload {
+	if err == nil {
+		return testDomainLoginResultPayload{}
+	}
+	result := testDomainLoginResultPayload{Error: err.Error()}
+	var statusErr *restergate.LoginStatusError
+	if errors.As(err, &statusErr) {
+		result.Status = statusErr.Status
+		result.Body = string(statusErr.Body)
+	}
+	return result
+}
+
 type createHTTPChannelPayload struct {
 	RootSecret string          `json:"root_secret"`
 	Name       string          `json:"name"`
@@ -502,10 +523,7 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
-		if err := svc.HTTP.TestDomainLogin(p.Domain, p.User); err != nil {
-			return errResponse(err)
-		}
-		return response{OK: true}
+		return payloadResponse(testDomainLoginResult(svc.HTTP.TestDomainLogin(p.Domain, p.User)))
 
 	case opCreateHTTPChannel:
 		var p createHTTPChannelPayload
@@ -847,7 +865,14 @@ func (c *Client) DeleteDomain(name string) error {
 }
 
 func (c *Client) TestDomainLogin(d vault.Domain, u vault.DomainUser) error {
-	return c.call(opTestDomainLogin, testDomainLoginPayload{Domain: d, User: u}, nil)
+	var out testDomainLoginResultPayload
+	if err := c.call(opTestDomainLogin, testDomainLoginPayload{Domain: d, User: u}, &out); err != nil {
+		return err
+	}
+	if out.Error != "" {
+		return errors.New(out.Error)
+	}
+	return nil
 }
 
 func (c *Client) CreateHTTPChannel(rootSecret, name, domainName string, scope vault.HTTPScope, ttl time.Duration) (vault.HTTPChannel, error) {
