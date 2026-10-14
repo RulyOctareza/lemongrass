@@ -309,3 +309,66 @@ export interface AccountInfo {
 export type AccountAddResult = { ok: true; account: AccountInfo } | { ok: false; error: string }
 
 export type AccountRemoveResult = { ok: true } | { ok: false; error: string }
+
+export interface NodeShare {
+  alias: string
+  books: string[]
+  tasks: string[]
+}
+
+export interface NodeGrantView {
+  id: string
+  label: string
+  shares: NodeShare[]
+  expiresAt: string
+  revoked: boolean
+  createdAt: string
+  lastUsed?: string
+}
+
+export interface NodeTask {
+  slug: string
+  archived: boolean
+}
+
+export interface NodeProjectContent {
+  projectId: string
+  name: string
+  alias: string
+  // Book identities, title and creation date, as grants store them.
+  books: string[]
+  tasks: NodeTask[]
+}
+
+export interface NodeStatus {
+  running: boolean
+  url?: string
+  until?: string
+  error?: string
+  daemonDown?: boolean
+}
+
+export interface NodeTunnelSettings {
+  provider: 'ngrok' | 'local'
+  authtokenSet: boolean
+  domain: string
+  localPort: number
+}
+
+export interface NodeState {
+  tunnel: NodeTunnelSettings
+  status: NodeStatus
+  grants: NodeGrantView[]
+  projects: NodeProjectContent[]
+}
+
+export interface NodeIssueRequest {
+  label: string
+  days: number
+  shares: { projectId: string; books: string[]; tasks: string[] }[]
+}
+
+export interface NodeIssued {
+  id: string
+  token: string
+}

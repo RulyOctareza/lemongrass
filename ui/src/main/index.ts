@@ -16,9 +16,10 @@ import { registerWorkspaceLayoutHandlers } from './workspaceLayouts'
 import { registerBiblioHandlers, registerBiblioImageScheme, closeBiblioWatchers } from './biblio'
 import { registerGitHandlers } from './git'
 import { registerVaultHandlers } from './vault'
+import { registerNodeHandlers } from './node'
 import { registerWindowControlHandlers, wireMaximizeEvents } from './windowControls'
 import { installLgrass, installLgrassd, installLgrassconf } from './lgrassInstall'
-import { ensureVaultAndAgentRunning, killDaemons } from './daemons'
+import { ensureDaemonsRunning, killDaemons } from './daemons'
 import { startWorkgroupBridge, stopWorkgroupBridge } from './workgroupBridge'
 import { registerWorkgroupHandlers } from './workgroups'
 
@@ -87,7 +88,7 @@ app.whenReady().then(() => {
   const lgrassdPath = installLgrassd()
   installLgrassconf()
   if (lgrassdPath) {
-    void ensureVaultAndAgentRunning(lgrassdPath)
+    void ensureDaemonsRunning(lgrassdPath)
   }
 
   registerPtyHandlers(() => mainWindow?.webContents)
@@ -98,6 +99,7 @@ app.whenReady().then(() => {
   registerBiblioHandlers(() => mainWindow?.webContents)
   registerGitHandlers()
   registerVaultHandlers()
+  registerNodeHandlers()
   registerWindowControlHandlers(() => mainWindow)
   startWorkgroupBridge(() => mainWindow, lgrassdPath)
   registerWorkgroupHandlers(lgrassPath)

@@ -4,6 +4,7 @@ import AppModal from './AppModal.vue'
 import BiblioTreeItem from './BiblioTreeItem.vue'
 import GitPanel from './GitPanel.vue'
 import MarkdownEditor from './MarkdownEditor.vue'
+import NodeEntry from './NodeEntry.vue'
 import VaultEntry from './VaultEntry.vue'
 import WorkgroupPanel from './WorkgroupPanel.vue'
 import { activePath, closeUnder, openFile, type ProjectRef } from '../workspace'
@@ -173,6 +174,7 @@ function onGutterUp(): void {
       <WorkgroupPanel :project="project" />
       <GitPanel :project="project" />
       <VaultEntry @open="emit('openVault')" />
+      <NodeEntry />
     </div>
 
     <div class="biblio-gutter" @pointerdown="onGutterDown" />

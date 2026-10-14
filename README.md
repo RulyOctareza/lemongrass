@@ -34,6 +34,10 @@ A `SessionStart` hook delivers the project's laws summary and gates tool calls b
 
 The convention behind this is [bibliothek](https://github.com/faizalv/bibliothek): a skill plus a `biblio/{scratchpad,laws,handover,books}/` folder layout, developed in its own repository and usable without Lemongrass. Lemongrass pins it as a git submodule and puts its text into the system prompt of every Claude tab, so Claude tabs never load it as a skill. The app shows that folder as a tree and reader beside the terminal panes. The scratchpad is editable in a WYSIWYG editor that autosaves, enforced on the server side. The other folders are read-only.
 
+### Share books and tasks with someone else's agent
+
+The Node screen, under Vault in the sidebar, serves the books and scratchpad tasks you pick to other people's agents over MCP, read only. You issue each person a token with an expiry and open an ngrok tunnel for a set number of hours. They add the URL and token to Claude Code or any MCP client and do not need Lemongrass. The endpoint has a single `read` tool. A read with no path lists what was shared, and the agent reads on from those paths, so it does not spend tokens on a large tool surface. Anything not picked returns the same "not found" as a path that does not exist. Laws and handovers are never served. A revoke or expiry takes effect on the next request. The tunnel closes itself when its time is up.
+
 ### Real terminals, controlled by structured events
 
 Panes are `xterm.js` in the renderer over `node-pty` in the main process, the stack behind VS Code's integrated terminal, not a chat UI. Control decisions such as nudges come from each agent's own hook events and never from parsing rendered terminal text. The app also provides tabs, split layouts that persist across restarts, session restore, and a Git panel with diff, commit and push.
@@ -49,6 +53,7 @@ Built:
 
 In progress:
 
+- The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. The app screen is temporary, and it has not yet been read through a real ngrok tunnel by a real client. Search and an `lgrass node` client for Lemongrass users are planned.
 - A wire-protocol proxy so a whole app can point its own database driver at a local port. Port allocation and the MySQL handshake listener are done. Query execution and the Postgres listener are not.
 - A Decisions section in the Vault tab that replaces the native dialog for workgroup approvals.
 - Codex as a workgroup member. Its gate depends on a listener heartbeat that is unverified under Codex's default sandbox.
@@ -63,12 +68,13 @@ Limits:
 - Linux is the primary platform. The macOS build exists and Windows packaging is not wired.
 - An HTTP channel's scope is declared and checked against the request. The database scope is checked against what the parsed statement touches, which is a stronger guarantee.
 - The guard does not inspect an interpreter one-liner such as `python -c` or `node -e`, and a path built from an unknown variable can pass.
+- The node's `~/.lemongrass/node.json` holds token hashes and the ngrok authtoken at mode 0600. The guard keeps agents' tools away from it, with the interpreter caveat above. A token is shown once and only its hash is stored.
 
 ## How it fits together
 
 - `ui/` is the Electron app: terminal panes, project and layout management, the bibliothek tree and reader, and the Connector tab.
 - `cmd/lgrass` is the Go CLI models and users call: session and thread coordination, `lgrass db`, `lgrass rester`, and `lgrass workgroup`.
-- `cmd/lgrassd` is the binary only the app and the agents' hooks call, installed off `PATH`: the hooks and their gates, the vault and agent daemons, tab records and account management.
+- `cmd/lgrassd` is the binary only the app and the agents' hooks call, installed off `PATH`: the hooks and their gates, the vault, agent and node daemons, tab records and account management.
 - `cmd/lgrassconf` is a small Go daemon, a systemd user service on Linux and a LaunchAgent on macOS. It registers the Claude Code and Codex hooks, installs each agent's skills and keeps every Claude account's hooks and shared folders in place.
 - `internal/` holds the Go packages the three binaries share, such as the vault, the guard, the hook engine, the session store and the account manager. It is importable only from inside this repository.
 

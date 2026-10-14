@@ -13,6 +13,9 @@ import type {
   GitStatus,
   GitDiff,
   GitActionResult,
+  NodeIssued,
+  NodeIssueRequest,
+  NodeState,
   WorkspaceLayoutState,
   VaultScope,
   VaultChannel,
@@ -108,6 +111,20 @@ interface Api {
     diff: (projectPath: string, path: string, origPath?: string) => Promise<GitDiff>
     commit: (projectPath: string, message: string, paths?: string[]) => Promise<GitActionResult>
     push: (projectPath: string) => Promise<GitActionResult>
+  }
+  node: {
+    state: () => Promise<NodeState>
+    saveTunnel: (
+      provider: 'ngrok' | 'local',
+      authtoken: string | null,
+      domain: string,
+      localPort: number
+    ) => Promise<NodeState>
+    openTunnel: (hours: number) => Promise<NodeState>
+    closeTunnel: () => Promise<NodeState>
+    issue: (req: NodeIssueRequest) => Promise<NodeIssued>
+    revoke: (id: string) => Promise<NodeState>
+    remove: (id: string) => Promise<NodeState>
   }
   vault: {
     list: () => Promise<VaultChannel[]>

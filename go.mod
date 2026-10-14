@@ -11,11 +11,18 @@ require (
 	github.com/wasilibs/go-pgquery v0.0.0-20260908021017-318158a2ab67
 	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
 	github.com/zalando/go-keyring v0.2.8
+	golang.ngrok.com/ngrok/v2 v2.2.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sys v0.48.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.58.0
 	mvdan.cc/sh/v3 v3.14.1
+)
+
+require (
+	github.com/jpillora/backoff v1.0.0 // indirect
+	golang.ngrok.com/muxado/v2 v2.0.1 // indirect
+	golang.org/x/net v0.58.0 // indirect
 )
 
 require (

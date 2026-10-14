@@ -38,6 +38,11 @@ func loadAll() ([]Project, error) {
 	return projects, nil
 }
 
+// List returns every registered project, or none when the registry does not exist yet.
+func List() ([]Project, error) {
+	return loadAll()
+}
+
 func saveAll(projects []Project) error {
 	if err := os.MkdirAll(config.Dir(), 0o755); err != nil {
 		return err

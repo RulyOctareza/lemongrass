@@ -14,6 +14,9 @@ import type {
   GitStatus,
   GitDiff,
   GitActionResult,
+  NodeIssued,
+  NodeIssueRequest,
+  NodeState,
   VaultScope,
   VaultChannel,
   VaultChannelWithShortId,
@@ -124,6 +127,22 @@ const git = {
     ipcRenderer.invoke('git:commit', projectPath, message, paths),
   push: (projectPath: string): Promise<GitActionResult> =>
     ipcRenderer.invoke('git:push', projectPath)
+}
+
+const node = {
+  state: (): Promise<NodeState> => ipcRenderer.invoke('node:state'),
+  saveTunnel: (
+    provider: 'ngrok' | 'local',
+    authtoken: string | null,
+    domain: string,
+    localPort: number
+  ): Promise<NodeState> =>
+    ipcRenderer.invoke('node:saveTunnel', provider, authtoken, domain, localPort),
+  openTunnel: (hours: number): Promise<NodeState> => ipcRenderer.invoke('node:openTunnel', hours),
+  closeTunnel: (): Promise<NodeState> => ipcRenderer.invoke('node:closeTunnel'),
+  issue: (req: NodeIssueRequest): Promise<NodeIssued> => ipcRenderer.invoke('node:issue', req),
+  revoke: (id: string): Promise<NodeState> => ipcRenderer.invoke('node:revoke', id),
+  remove: (id: string): Promise<NodeState> => ipcRenderer.invoke('node:remove', id)
 }
 
 const vault = {
@@ -269,6 +288,7 @@ const api = {
   tabSessions,
   biblio,
   git,
+  node,
   vault,
   windowControls,
   workgroup

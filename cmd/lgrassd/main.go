@@ -25,6 +25,8 @@ func main() {
 		cmdVault(os.Args[2:])
 	case "agent":
 		cmdAgent(os.Args[2:])
+	case "node":
+		cmdNode(os.Args[2:])
 	case "tabs":
 		cmdTabs(os.Args[2:])
 	case "accounts":
@@ -49,6 +51,8 @@ COMMANDS
   agent run                         Starts the gatekeeper agent daemon, listening on a unix socket
                                      under ~/.lemongrass; maps short channel ids to real vault
                                      channels and forwards queries to a running vault daemon
+  node run                          Starts the node daemon, which serves granted books and tasks
+                                     read-only over a tunnel while node.json says it is open
   tabs list                         Tab id to session id map for the project at the working directory, as JSON
   tabs register <tab-id> <vendor>   Records the agent vendor a tab runs
   tabs title <tab-id> <title>       Records the shell title a tab currently shows
