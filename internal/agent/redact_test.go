@@ -38,7 +38,7 @@ func TestHTTPErrorsNeverCarryTheRealChannelID(t *testing.T) {
 	}
 	real := string(c.ID)
 
-	_, err = svc.RequestHTTP(shortID, "alice", "POST", "/x", nil, "", "")
+	_, err = svc.RequestHTTP(shortID, "alice", "POST", "/x", nil, "", nil, "")
 	if err == nil || !strings.Contains(err.Error(), "does not grant") || strings.Contains(err.Error(), real) {
 		t.Errorf("scope denial: err = %v, want a denial without the real id", err)
 	}
@@ -47,7 +47,7 @@ func TestHTTPErrorsNeverCarryTheRealChannelID(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, call := range map[string]func() error{
-		"request": func() error { _, err := svc.RequestHTTP(shortID, "alice", "GET", "/x", nil, "", ""); return err },
+		"request": func() error { _, err := svc.RequestHTTP(shortID, "alice", "GET", "/x", nil, "", nil, ""); return err },
 		"info":    func() error { _, err := svc.HTTPChannelInfo(shortID); return err },
 		"users":   func() error { _, err := svc.HTTPUsers(shortID); return err },
 	} {

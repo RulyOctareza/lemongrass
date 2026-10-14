@@ -101,7 +101,7 @@ func TestSpreadsheetUploadReachesTheAPIThroughTheWholeChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := agentClient.RequestHTTP(cmd.shortID, cmd.user, cmd.method, cmd.path, body, contentType, actorFor(cmd.shortID))
+	result, err := agentClient.RequestHTTP(cmd.shortID, cmd.user, cmd.method, cmd.path, body, contentType, cmd.headers, actorFor(cmd.shortID))
 	if err != nil || result.Status != 200 {
 		t.Fatalf("RequestHTTP = %+v, %v", result, err)
 	}

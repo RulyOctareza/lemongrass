@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/faizalv/lemongrass/internal/vault"
 )
 
 func TestParseResterArgs(t *testing.T) {
@@ -50,6 +52,14 @@ func TestParseResterArgs(t *testing.T) {
 		{name: "missing path", args: []string{"abc", "get"}, wantErr: "get needs exactly one path"},
 		{name: "two paths", args: []string{"abc", "get", "/a", "/b"}, wantErr: "get needs exactly one path"},
 		{name: "flag without value", args: []string{"abc", "get", "/a", "--user"}, wantErr: "--user needs a value"},
+		{name: "headers", args: []string{"abc", "post", "/x", "--header", "anthropic-version: 2023-06-01", "--header=X-Empty:", "--header", "X-Url:  https://a.test:8080/ "}, want: resterCommand{shortID: "abc", method: "POST", path: "/x", headers: []vault.Header{{Name: "anthropic-version", Value: "2023-06-01"}, {Name: "X-Empty", Value: ""}, {Name: "X-Url", Value: "https://a.test:8080/"}}}},
+		{name: "header with out", args: []string{"abc", "get", "/x", "--out", "f", "--header", "Accept: text/csv"}, want: resterCommand{shortID: "abc", method: "GET", path: "/x", out: "f", headers: []vault.Header{{Name: "Accept", Value: "text/csv"}}}},
+		{name: "header without colon", args: []string{"abc", "get", "/x", "--header", "Accept"}, wantErr: "--header needs '<name>: <value>'"},
+		{name: "header bad name", args: []string{"abc", "get", "/x", "--header", "X Bad: 1"}, wantErr: "--header: header name \"X Bad\""},
+		{name: "header empty name", args: []string{"abc", "get", "/x", "--header", ": 1"}, wantErr: "--header: header name is empty"},
+		{name: "info with header", args: []string{"abc", "info", "--header", "A: 1"}, wantErr: "info takes no other arguments"},
+		{name: "users with header", args: []string{"abc", "users", "--header", "A: 1"}, wantErr: "users takes no other arguments"},
+		{name: "flush with header", args: []string{"abc", "flush", "--header", "A: 1"}, wantErr: "flush takes only --user"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

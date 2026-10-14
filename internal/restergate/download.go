@@ -24,8 +24,8 @@ type Download struct {
 }
 
 // DownloadHTTP makes the same checked, token-bearing call as RequestHTTP but hands back a 2xx response body unread instead of buffering it, so a body of any size can be streamed to its destination.
-func (g *Gate) DownloadHTTP(id vault.ChannelID, user, method, requestPath string, body []byte, contentType string) (Download, error) {
-	resp, target, err := g.exchange(id, user, method, requestPath, body, contentType, true)
+func (g *Gate) DownloadHTTP(id vault.ChannelID, user, method, requestPath string, body []byte, contentType string, headers []vault.Header) (Download, error) {
+	resp, target, err := g.exchange(id, user, method, requestPath, body, contentType, headers, true)
 	if err != nil {
 		return Download{}, err
 	}

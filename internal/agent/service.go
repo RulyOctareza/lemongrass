@@ -79,22 +79,22 @@ func (s *Service) Execute(shortID string, sqlText string, commit bool, actor str
 // RequestHTTP resolves shortID to its real vault channel and forwards the HTTP request,
 // returning the same error for an unregistered, forgotten, or mistyped id. actor is the
 // caller-facing identity the call is audited under, forwarded as-is to the vault.
-func (s *Service) RequestHTTP(shortID, user, method, path string, body []byte, contentType, actor string) (restergate.HTTPResult, error) {
+func (s *Service) RequestHTTP(shortID, user, method, path string, body []byte, contentType string, headers []vault.Header, actor string) (restergate.HTTPResult, error) {
 	realID, ok := s.lookup(shortID)
 	if !ok {
 		return restergate.HTTPResult{}, ErrNoSuchChannel
 	}
-	result, err := s.vaultClient.RequestHTTP(realID, user, method, path, body, contentType, actor)
+	result, err := s.vaultClient.RequestHTTP(realID, user, method, path, body, contentType, headers, actor)
 	return result, redactID(err, realID, shortID)
 }
 
 // RequestHTTPDownload resolves shortID to its real vault channel and forwards the download request, returning the same error for an unregistered, forgotten, or mistyped id. A streamed result's body is open and the caller must close it.
-func (s *Service) RequestHTTPDownload(shortID, user, method, path string, body []byte, contentType string) (gatekeeper.DownloadResult, error) {
+func (s *Service) RequestHTTPDownload(shortID, user, method, path string, body []byte, contentType string, headers []vault.Header) (gatekeeper.DownloadResult, error) {
 	realID, ok := s.lookup(shortID)
 	if !ok {
 		return gatekeeper.DownloadResult{}, ErrNoSuchChannel
 	}
-	res, err := s.vaultClient.RequestHTTPDownload(realID, user, method, path, body, contentType)
+	res, err := s.vaultClient.RequestHTTPDownload(realID, user, method, path, body, contentType, headers)
 	return res, redactID(err, realID, shortID)
 }
 

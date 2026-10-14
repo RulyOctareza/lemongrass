@@ -50,7 +50,7 @@ func TestUserErrorsIncludeTags(t *testing.T) {
 	}
 	svc, id := setUpHTTPChannel(t, srv, users, []string{"GET"})
 
-	_, err := svc.RequestHTTP(id, "", "GET", "/api/orders", nil, "")
+	_, err := svc.RequestHTTP(id, "", "GET", "/api/orders", nil, "", nil)
 	if err == nil || !strings.Contains(err.Error(), "employee (tenant x, low level)") || !strings.Contains(err.Error(), "admin") {
 		t.Errorf("err = %v, want one listing employee with its tags and admin", err)
 	}
@@ -88,7 +88,7 @@ func TestUpdateDomainPropagatesToActiveAndInactiveChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.RequestHTTP(activeID, "alice", "GET", "/api/x", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(activeID, "alice", "GET", "/api/x", nil, "", nil); err != nil {
 		t.Fatalf("baseline request: %v", err)
 	}
 	if len(oldHits) != 1 {
@@ -102,13 +102,13 @@ func TestUpdateDomainPropagatesToActiveAndInactiveChannels(t *testing.T) {
 		t.Fatalf("UpdateDomain: %v", err)
 	}
 
-	if _, err := svc.RequestHTTP(activeID, "alice", "GET", "/api/x", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(activeID, "alice", "GET", "/api/x", nil, "", nil); err != nil {
 		t.Fatalf("request on the active channel after the edit: %v", err)
 	}
 	if len(newHits) != 1 || len(oldHits) != 1 {
 		t.Errorf("newHits = %v, oldHits = %v, want the request to reach only the new base URL", newHits, oldHits)
 	}
-	if _, err := svc.RequestHTTP(activeID, "bob", "GET", "/api/x", nil, ""); err == nil || !strings.Contains(err.Error(), `no user "bob"`) {
+	if _, err := svc.RequestHTTP(activeID, "bob", "GET", "/api/x", nil, "", nil); err == nil || !strings.Contains(err.Error(), `no user "bob"`) {
 		t.Errorf("removed user: err = %v, want a no-such-user error", err)
 	}
 

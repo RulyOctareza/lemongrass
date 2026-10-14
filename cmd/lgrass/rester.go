@@ -8,13 +8,14 @@ import (
 
 	"github.com/faizalv/lemongrass/internal/agent"
 	"github.com/faizalv/lemongrass/internal/restergate"
+	"github.com/faizalv/lemongrass/internal/vault"
 )
 
 const resterUsage = `usage:
   lgrass rester <short-id> info
   lgrass rester <short-id> users
   lgrass rester <short-id> flush [--user <name>]
-  lgrass rester <short-id> <get|post|put|patch|delete|head|options> <path> [--user <name>] [body flags]
+  lgrass rester <short-id> <get|post|put|patch|delete|head|options> <path> [--user <name>] [--header '<name>: <value>']... [body flags]
   lgrass rester <short-id> <get|post|put|patch|delete> <path> --out <file-or-directory> [--confirm]
 
 body flags, at most one kind per request:
@@ -32,6 +33,11 @@ to the domain's base URL, a full URL under it also works. --user may be left out
 domain has a single user. A user is named as users shows it: lowercase, with underscores for
 spaces, and a name typed in another case or with spaces reaches the same user. Response is printed as JSON:
 {"status": N, "headers": {...}, "body": ..., "url": "..."}.
+
+--header adds one request header to this call and may be repeated, with or without --out. The
+domain may already send headers of its own, which are not shown and cannot be replaced. A header
+that carries the token or a credential (Authorization, Cookie), Content-Type (use --content-type
+with --body-file), or one the domain sets is refused with the header named.
 
 --out saves the response body of a successful call to a file instead of printing it, byte for
 byte and with no size limit, and prints {"status": N, "headers": {...}, "size": N, "url": "...",
@@ -73,6 +79,7 @@ type resterCommand struct {
 	contentType string
 	forms       []formField
 	files       []filePart
+	headers     []vault.Header
 }
 
 func parseResterArgs(args []string) (resterCommand, error) {
@@ -138,19 +145,25 @@ func parseResterArgs(args []string) (resterCommand, error) {
 				return resterCommand{}, err
 			}
 			cmd.files = append(cmd.files, part)
+		case "--header":
+			h, err := parseHeader(value)
+			if err != nil {
+				return resterCommand{}, err
+			}
+			cmd.headers = append(cmd.headers, h)
 		default:
 			return resterCommand{}, fmt.Errorf("unknown flag %s", name)
 		}
 	}
 
 	if cmd.info || cmd.users {
-		if len(positional) > 0 || cmd.user != "" || cmd.hasBodyFlags() || cmd.hasOutFlags() {
+		if len(positional) > 0 || cmd.user != "" || cmd.hasBodyFlags() || cmd.hasOutFlags() || len(cmd.headers) > 0 {
 			return resterCommand{}, fmt.Errorf("%s takes no other arguments", strings.ToLower(args[1]))
 		}
 		return cmd, nil
 	}
 	if cmd.flush {
-		if len(positional) > 0 || cmd.hasBodyFlags() || cmd.hasOutFlags() {
+		if len(positional) > 0 || cmd.hasBodyFlags() || cmd.hasOutFlags() || len(cmd.headers) > 0 {
 			return resterCommand{}, fmt.Errorf("flush takes only --user")
 		}
 		return cmd, nil
@@ -166,6 +179,19 @@ func parseResterArgs(args []string) (resterCommand, error) {
 		return resterCommand{}, err
 	}
 	return cmd, nil
+}
+
+// parseHeader reads a --header value written as name: value.
+func parseHeader(value string) (vault.Header, error) {
+	name, v, ok := strings.Cut(value, ":")
+	if !ok {
+		return vault.Header{}, fmt.Errorf("--header needs '<name>: <value>', got %q", value)
+	}
+	h := vault.Header{Name: strings.TrimSpace(name), Value: strings.TrimSpace(v)}
+	if err := vault.CheckHeader(h); err != nil {
+		return vault.Header{}, fmt.Errorf("--header: %w", err)
+	}
+	return h, nil
 }
 
 func (c resterCommand) hasOutFlags() bool {
@@ -261,5 +287,5 @@ func execRester(client *agent.Client, cmd resterCommand) (any, error) {
 	if cmd.out != "" {
 		return downloadThroughAgent(client, cmd, target, body, contentType)
 	}
-	return client.RequestHTTP(cmd.shortID, cmd.user, cmd.method, cmd.path, body, contentType, actorFor(cmd.shortID))
+	return client.RequestHTTP(cmd.shortID, cmd.user, cmd.method, cmd.path, body, contentType, cmd.headers, actorFor(cmd.shortID))
 }

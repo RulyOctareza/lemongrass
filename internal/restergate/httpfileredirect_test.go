@@ -65,7 +65,7 @@ func newFileRedirectFixture(t *testing.T) *fileRedirectFixture {
 
 func TestFileBodyIsNeverResentToAnotherHost(t *testing.T) {
 	f := newFileRedirectFixture(t)
-	_, err := f.svc.RequestHTTP(f.id, "alice", "POST", "/to-other", spreadsheetShapedBytes(), xlsxType)
+	_, err := f.svc.RequestHTTP(f.id, "alice", "POST", "/to-other", spreadsheetShapedBytes(), xlsxType, nil)
 	if err == nil || !strings.Contains(err.Error(), "refusing to resend the file") {
 		t.Fatalf("err = %v, want a refusal to resend the file", err)
 	}
@@ -77,7 +77,7 @@ func TestFileBodyIsNeverResentToAnotherHost(t *testing.T) {
 func TestFileBodyFollowsASameHostRedirectWithItsBytes(t *testing.T) {
 	f := newFileRedirectFixture(t)
 	want := spreadsheetShapedBytes()
-	result, err := f.svc.RequestHTTP(f.id, "alice", "POST", "/to-final", want, xlsxType)
+	result, err := f.svc.RequestHTTP(f.id, "alice", "POST", "/to-final", want, xlsxType, nil)
 	if err != nil || result.Status != 200 {
 		t.Fatalf("RequestHTTP = %+v, %v", result, err)
 	}
@@ -89,7 +89,7 @@ func TestFileBodyFollowsASameHostRedirectWithItsBytes(t *testing.T) {
 
 func TestInlineJSONBodyKeepsTheExistingCrossHostRedirect(t *testing.T) {
 	f := newFileRedirectFixture(t)
-	if _, err := f.svc.RequestHTTP(f.id, "alice", "POST", "/to-other", []byte(`{"a":1}`), ""); err != nil {
+	if _, err := f.svc.RequestHTTP(f.id, "alice", "POST", "/to-other", []byte(`{"a":1}`), "", nil); err != nil {
 		t.Fatalf("RequestHTTP: %v", err)
 	}
 	if n := len(f.otherRec.all()); n != 1 {

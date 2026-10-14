@@ -68,12 +68,13 @@ type executeResultPayload struct {
 }
 
 type requestHTTPPayload struct {
-	ShortID     string `json:"short_id"`
-	User        string `json:"user"`
-	Method      string `json:"method"`
-	Path        string `json:"path"`
-	Body        []byte `json:"body"`
-	ContentType string `json:"content_type"`
+	ShortID     string         `json:"short_id"`
+	User        string         `json:"user"`
+	Method      string         `json:"method"`
+	Path        string         `json:"path"`
+	Body        []byte         `json:"body"`
+	ContentType string         `json:"content_type"`
+	Headers     []vault.Header `json:"headers,omitempty"`
 	// Actor is the caller-facing identity RequestHTTP audits under; empty for RequestHTTPDownload, which is not audited.
 	Actor string `json:"actor,omitempty"`
 }
@@ -171,7 +172,7 @@ func dispatch(svc *Service, queryLimiter *vault.FailureLimiter, req request) res
 			return errResponse(err)
 		}
 		return queryOp(queryLimiter, func() (response, error) {
-			result, err := svc.RequestHTTP(p.ShortID, p.User, p.Method, p.Path, p.Body, p.ContentType, p.Actor)
+			result, err := svc.RequestHTTP(p.ShortID, p.User, p.Method, p.Path, p.Body, p.ContentType, p.Headers, p.Actor)
 			return payloadResponse(httpResultPayload{Result: result}), err
 		})
 
@@ -253,7 +254,7 @@ func serveDownload(svc *Service, conn net.Conn, req request) {
 		gatekeeper.WriteDownloadError(conn, err)
 		return
 	}
-	res, err := svc.RequestHTTPDownload(p.ShortID, p.User, p.Method, p.Path, p.Body, p.ContentType)
+	res, err := svc.RequestHTTPDownload(p.ShortID, p.User, p.Method, p.Path, p.Body, p.ContentType, p.Headers)
 	if err != nil {
 		gatekeeper.WriteDownloadError(conn, err)
 		return
@@ -313,7 +314,7 @@ func (c *Client) callWithin(timeout time.Duration, op string, payload, out inter
 }
 
 // RequestHTTPDownload asks the agent daemon for a download and returns its header, and for a 2xx response the open body, which the caller must close.
-func (c *Client) RequestHTTPDownload(shortID, user, method, path string, body []byte, contentType string) (gatekeeper.DownloadResult, error) {
+func (c *Client) RequestHTTPDownload(shortID, user, method, path string, body []byte, contentType string, headers []vault.Header) (gatekeeper.DownloadResult, error) {
 	timeout := max(c.Timeout, restergate.RequestTimeout)
 	conn, err := net.DialTimeout("unix", c.SocketPath, timeout)
 	if err != nil {
@@ -321,7 +322,7 @@ func (c *Client) RequestHTTPDownload(shortID, user, method, path string, body []
 	}
 	conn.SetDeadline(time.Now().Add(timeout))
 
-	payload, err := json.Marshal(requestHTTPPayload{ShortID: shortID, User: user, Method: method, Path: path, Body: body, ContentType: contentType})
+	payload, err := json.Marshal(requestHTTPPayload{ShortID: shortID, User: user, Method: method, Path: path, Body: body, ContentType: contentType, Headers: headers})
 	if err == nil {
 		err = json.NewEncoder(conn).Encode(request{Op: opRequestHTTPDownload, Payload: payload})
 	}
@@ -359,9 +360,9 @@ func (c *Client) Execute(shortID string, sqlText string, commit bool, actor stri
 	return out.Result, err
 }
 
-func (c *Client) RequestHTTP(shortID, user, method, path string, body []byte, contentType, actor string) (restergate.HTTPResult, error) {
+func (c *Client) RequestHTTP(shortID, user, method, path string, body []byte, contentType string, headers []vault.Header, actor string) (restergate.HTTPResult, error) {
 	var out httpResultPayload
-	err := c.callWithin(max(c.Timeout, restergate.RequestTimeout), opRequestHTTP, requestHTTPPayload{ShortID: shortID, User: user, Method: method, Path: path, Body: body, ContentType: contentType, Actor: actor}, &out)
+	err := c.callWithin(max(c.Timeout, restergate.RequestTimeout), opRequestHTTP, requestHTTPPayload{ShortID: shortID, User: user, Method: method, Path: path, Body: body, ContentType: contentType, Headers: headers, Actor: actor}, &out)
 	return out.Result, err
 }
 

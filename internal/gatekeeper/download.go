@@ -200,7 +200,7 @@ func serveDownload(svc *Backend, conn net.Conn, req request) {
 		WriteDownloadError(conn, err)
 		return
 	}
-	dl, err := svc.HTTP.DownloadHTTP(p.ID, p.User, p.Method, p.Path, p.Body, p.ContentType)
+	dl, err := svc.HTTP.DownloadHTTP(p.ID, p.User, p.Method, p.Path, p.Body, p.ContentType, p.Headers)
 	if err != nil {
 		WriteDownloadError(conn, err)
 		return
@@ -219,7 +219,7 @@ func downloadResult(dl restergate.Download) DownloadResult {
 }
 
 // RequestHTTPDownload asks the vault daemon for a download and returns its header, and for a 2xx response the open body.
-func (c *Client) RequestHTTPDownload(id vault.ChannelID, user, method, path string, body []byte, contentType string) (DownloadResult, error) {
+func (c *Client) RequestHTTPDownload(id vault.ChannelID, user, method, path string, body []byte, contentType string, headers []vault.Header) (DownloadResult, error) {
 	timeout := max(c.Timeout, restergate.RequestTimeout)
 	conn, err := net.DialTimeout("unix", c.SocketPath, timeout)
 	if err != nil {
@@ -227,7 +227,7 @@ func (c *Client) RequestHTTPDownload(id vault.ChannelID, user, method, path stri
 	}
 	conn.SetDeadline(time.Now().Add(timeout))
 
-	payload, err := json.Marshal(requestHTTPPayload{ID: id, User: user, Method: method, Path: path, Body: body, ContentType: contentType})
+	payload, err := json.Marshal(requestHTTPPayload{ID: id, User: user, Method: method, Path: path, Body: body, ContentType: contentType, Headers: headers})
 	if err == nil {
 		err = json.NewEncoder(conn).Encode(request{Op: opRequestHTTPDownload, Payload: payload})
 	}

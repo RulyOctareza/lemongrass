@@ -53,6 +53,11 @@ interface UserFieldDraft {
   type: FieldType
 }
 
+interface HeaderDraft {
+  name: string
+  value: string
+}
+
 interface UserDraft {
   id: number
   expanded: boolean
@@ -81,6 +86,7 @@ const newDomainFixedTtlMinutes = ref(60)
 const newDomainTokenKind = ref<'header' | 'cookie' | 'query'>('header')
 const newDomainTokenName = ref('Authorization')
 const newDomainTokenPrefix = ref('Bearer ')
+const newDomainHeaders = ref<HeaderDraft[]>([])
 const newDomainUsers = ref<UserDraft[]>([])
 const domainFormError = ref('')
 const creatingDomain = ref(false)
@@ -101,6 +107,7 @@ function openDomainForm(): void {
   newDomainTokenKind.value = 'header'
   newDomainTokenName.value = 'Authorization'
   newDomainTokenPrefix.value = 'Bearer '
+  newDomainHeaders.value = []
   newDomainUsers.value = []
   domainFormError.value = ''
   settingsOpen.value = true
@@ -151,6 +158,7 @@ function fillDomainForm(domain: VaultDomain): void {
   newDomainTokenKind.value = domain.TokenPlacement.Kind
   newDomainTokenName.value = domain.TokenPlacement.Name
   newDomainTokenPrefix.value = domain.TokenPlacement.Prefix
+  newDomainHeaders.value = (domain.Headers ?? []).map((h) => ({ name: h.Name, value: h.Value }))
   newDomainUsers.value = (domain.Users ?? []).map(userDraftFromDomainUser)
   domainFormError.value = ''
   userSearch.value = ''
@@ -210,6 +218,14 @@ function addUserDraft(): void {
   })
 }
 
+function addDomainHeader(): void {
+  newDomainHeaders.value.push({ name: '', value: '' })
+}
+
+function removeDomainHeader(index: number): void {
+  newDomainHeaders.value.splice(index, 1)
+}
+
 function removeUserDraft(index: number): void {
   newDomainUsers.value.splice(index, 1)
 }
@@ -236,6 +252,9 @@ function buildDomainDraft(): VaultDomain {
       : newDomainTtlMode.value === 'field'
         ? newDomainTtlField.value.trim()
         : ''
+  const headers = newDomainHeaders.value
+    .filter((h) => h.name.trim() !== '')
+    .map((h) => ({ Name: h.name.trim(), Value: h.value }))
   return {
     BaseURL: newDomainBaseUrl.value.trim(),
     LoginEndpoint: newDomainLoginEndpoint.value.trim(),
@@ -247,7 +266,8 @@ function buildDomainDraft(): VaultDomain {
       Name: newDomainTokenName.value.trim(),
       Prefix: newDomainTokenPrefix.value
     },
-    Users: []
+    Users: [],
+    Headers: headers.length > 0 ? headers : null
   }
 }
 
@@ -519,6 +539,30 @@ watch(
             type="text"
             placeholder="Prefix, e.g. 'Bearer '"
           />
+        </div>
+
+        <div class="field-block">
+          <label class="field-label">Headers</label>
+          <p class="hint">Sent on the login and on every call. Models never see them.</p>
+          <div class="kv-list">
+            <div
+              v-for="(header, headerIndex) in newDomainHeaders"
+              :key="headerIndex"
+              class="kv-row"
+            >
+              <input v-model="header.name" type="text" placeholder="e.g. anthropic-version" />
+              <input v-model="header.value" type="text" placeholder="value" />
+              <button
+                type="button"
+                class="chip-remove"
+                title="Remove header"
+                @click="removeDomainHeader(headerIndex)"
+              >
+                ×
+              </button>
+            </div>
+            <button type="button" class="ghost-button" @click="addDomainHeader">+ Header</button>
+          </div>
         </div>
       </div>
 

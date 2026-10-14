@@ -39,6 +39,9 @@ type Domain struct {
 
 	TokenPlacement TokenPlacement
 	Users          []DomainUser
+
+	// Headers go on the login call and every proxied call, and a model never sees them.
+	Headers []Header
 }
 
 // DomainUser is a login user (Fields carries whatever LoginEndpoint needs, e.g.
@@ -88,6 +91,9 @@ func (s *Service) PutDomain(rootSecret, name string, d Domain) error {
 		return err
 	}
 	if err := checkLoginFields(d.Users); err != nil {
+		return err
+	}
+	if err := checkDomainHeaders(d); err != nil {
 		return err
 	}
 	rootKey, err := DeriveKey(rootSecret, s.rootSalt)

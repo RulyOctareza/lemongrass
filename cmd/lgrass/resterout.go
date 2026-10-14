@@ -95,7 +95,7 @@ func probeWritable(dir string) error {
 
 // downloadThroughAgent runs cmd's request as a download and saves a 2xx body to target. Any other response is returned as the inline result an ordinary call returns.
 func downloadThroughAgent(client *agent.Client, cmd resterCommand, target downloadTarget, body []byte, contentType string) (any, error) {
-	res, err := client.RequestHTTPDownload(cmd.shortID, cmd.user, cmd.method, cmd.path, body, contentType)
+	res, err := client.RequestHTTPDownload(cmd.shortID, cmd.user, cmd.method, cmd.path, body, contentType, cmd.headers)
 	if err != nil {
 		return nil, err
 	}

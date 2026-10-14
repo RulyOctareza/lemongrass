@@ -59,7 +59,7 @@ func TestIPCRequestHTTPDownloadStreamsAFileIntact(t *testing.T) {
 		w.Write(want)
 	})
 
-	res, err := client.RequestHTTPDownload(shortID, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(shortID, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTPDownload: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestIPCRequestHTTPDownloadNon2xxIsInline(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(`{"error":"gone"}`))
 	})
-	res, err := client.RequestHTTPDownload(shortID, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(shortID, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTPDownload: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestIPCRequestHTTPDownloadNon2xxIsInline(t *testing.T) {
 
 func TestIPCRequestHTTPDownloadUnknownShortID(t *testing.T) {
 	client := startTestAgent(t, startTestVault(t))
-	_, err := client.RequestHTTPDownload("BOGUS1", "alice", "GET", "/export", nil, "")
+	_, err := client.RequestHTTPDownload("BOGUS1", "alice", "GET", "/export", nil, "", nil)
 	if err == nil || !strings.Contains(err.Error(), ErrNoSuchChannel.Error()) {
 		t.Errorf("err = %v, want %v", err, ErrNoSuchChannel)
 	}
@@ -110,7 +110,7 @@ func TestIPCRequestHTTPDownloadCutUpstreamIsAnError(t *testing.T) {
 		conn, _, _ := w.(http.Hijacker).Hijack()
 		conn.Close()
 	})
-	res, err := client.RequestHTTPDownload(shortID, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(shortID, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTPDownload: %v", err)
 	}

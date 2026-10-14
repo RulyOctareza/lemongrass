@@ -54,6 +54,7 @@ func loginHTTP(domain vault.Domain, user vault.DomainUser) (token string, expire
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("restergate: building login request: %w", err)
 	}
+	setHeaders(req, domain.Headers)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := *httpClient

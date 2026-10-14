@@ -79,7 +79,7 @@ func TestCrossHostRedirectDropsTheToken(t *testing.T) {
 				return other.URL + "/file?X-Amz-Signature=presigned"
 			})
 
-			result, err := svc.RequestHTTP(id, "alice", "GET", "/download", nil, "")
+			result, err := svc.RequestHTTP(id, "alice", "GET", "/download", nil, "", nil)
 			if err != nil {
 				t.Fatalf("RequestHTTP: %v", err)
 			}
@@ -111,7 +111,7 @@ func TestSameHostRedirectKeepsTheToken(t *testing.T) {
 	placement := vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "X-Api-Key"}
 	svc, id, _ := newRedirectFixture(t, placement, func(*httptest.Server) string { return "" })
 
-	result, err := svc.RequestHTTP(id, "alice", "GET", "/local", nil, "")
+	result, err := svc.RequestHTTP(id, "alice", "GET", "/local", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTP: %v", err)
 	}

@@ -57,7 +57,7 @@ func TestRequestHTTPSuccessfulCall(t *testing.T) {
 
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
-	result, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "")
+	result, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTP: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestRequestHTTPScopeDenied(t *testing.T) {
 
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
-	if _, err := svc.RequestHTTP(id, "alice", "DELETE", "/api/orders/1", nil, ""); err == nil {
+	if _, err := svc.RequestHTTP(id, "alice", "DELETE", "/api/orders/1", nil, "", nil); err == nil {
 		t.Error("RequestHTTP with an ungranted method = nil error, want an error")
 	}
 }
@@ -102,7 +102,7 @@ func TestRequestHTTPExpiredChannelDenied(t *testing.T) {
 		t.Fatalf("ActivateHTTP: %v", err)
 	}
 
-	if _, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, ""); err == nil {
+	if _, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "", nil); err == nil {
 		t.Error("RequestHTTP on an expired channel = nil error, want an error")
 	}
 }
@@ -131,14 +131,14 @@ func TestRequestHTTPReactiveRetryOnStaleToken(t *testing.T) {
 
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
-	if _, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "", nil); err != nil {
 		t.Fatalf("first RequestHTTP: %v", err)
 	}
 	if loginCalls != 1 {
 		t.Fatalf("loginCalls after first request = %d, want 1", loginCalls)
 	}
 
-	result, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "")
+	result, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "", nil)
 	if err != nil {
 		t.Fatalf("second RequestHTTP (should transparently retry after a stale-token 401): %v", err)
 	}
@@ -168,11 +168,11 @@ func TestRequestHTTPBYOTStaleTokenIsNotRetried(t *testing.T) {
 
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "bot", Token: "pasted-token"}}, []string{"GET"})
 
-	if _, err := svc.RequestHTTP(id, "bot", "GET", "/api/orders", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(id, "bot", "GET", "/api/orders", nil, "", nil); err != nil {
 		t.Fatalf("first RequestHTTP: %v", err)
 	}
 
-	if _, err := svc.RequestHTTP(id, "bot", "GET", "/api/orders", nil, ""); err == nil {
+	if _, err := svc.RequestHTTP(id, "bot", "GET", "/api/orders", nil, "", nil); err == nil {
 		t.Error("second RequestHTTP for a bring-your-own-token user's now-stale token = nil error, want an error (no login to retry with)")
 	}
 	if _, ok := svc.cachedTokenFor(id, "bot"); ok {
@@ -186,7 +186,7 @@ func TestRequestHTTPSoleUserDefault(t *testing.T) {
 	defer srv.Close()
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
-	if _, err := svc.RequestHTTP(id, "", "GET", "/api/orders", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(id, "", "GET", "/api/orders", nil, "", nil); err != nil {
 		t.Fatalf("RequestHTTP with no user on a one-user domain: %v", err)
 	}
 }
@@ -201,10 +201,10 @@ func TestRequestHTTPUserErrorsListUsers(t *testing.T) {
 	}
 	svc, id := setUpHTTPChannel(t, srv, users, []string{"GET"})
 
-	if _, err := svc.RequestHTTP(id, "", "GET", "/api/orders", nil, ""); err == nil || !strings.Contains(err.Error(), "alice, bob") {
+	if _, err := svc.RequestHTTP(id, "", "GET", "/api/orders", nil, "", nil); err == nil || !strings.Contains(err.Error(), "alice, bob") {
 		t.Errorf("missing user: err = %v, want one listing alice, bob", err)
 	}
-	if _, err := svc.RequestHTTP(id, "carol", "GET", "/api/orders", nil, ""); err == nil || !strings.Contains(err.Error(), `no user "carol"`) || !strings.Contains(err.Error(), "alice, bob") {
+	if _, err := svc.RequestHTTP(id, "carol", "GET", "/api/orders", nil, "", nil); err == nil || !strings.Contains(err.Error(), `no user "carol"`) || !strings.Contains(err.Error(), "alice, bob") {
 		t.Errorf("unknown user: err = %v, want one naming carol and listing alice, bob", err)
 	}
 	if len(hits) != 0 {

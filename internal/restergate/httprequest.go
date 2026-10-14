@@ -63,9 +63,9 @@ func checkRequestBody(body []byte, contentType string) error {
 // (or reuses) that user's token, and on a non-400 4xx from an already-successfully-used token,
 // transparently re-logs in and retries exactly once before giving up. contentType is set only
 // for a body read from a file or built from form input, and an empty one means an inline JSON
-// body.
-func (g *Gate) RequestHTTP(id vault.ChannelID, user, method, requestPath string, body []byte, contentType string) (HTTPResult, error) {
-	resp, target, err := g.exchange(id, user, method, requestPath, body, contentType, false)
+// body. headers are the caller's own, sent after the domain's.
+func (g *Gate) RequestHTTP(id vault.ChannelID, user, method, requestPath string, body []byte, contentType string, headers []vault.Header) (HTTPResult, error) {
+	resp, target, err := g.exchange(id, user, method, requestPath, body, contentType, headers, false)
 	if err != nil {
 		return HTTPResult{}, err
 	}
@@ -74,7 +74,7 @@ func (g *Gate) RequestHTTP(id vault.ChannelID, user, method, requestPath string,
 }
 
 // exchange runs one call through the expiry, scope and token handling that every call shares and returns the open response, whose body the caller must close. A stream call has no total timeout: it waits RequestTimeout for response headers and then RequestTimeout of silence between body reads.
-func (g *Gate) exchange(id vault.ChannelID, user, method, requestPath string, body []byte, contentType string, stream bool) (*http.Response, requestTarget, error) {
+func (g *Gate) exchange(id vault.ChannelID, user, method, requestPath string, body []byte, contentType string, headers []vault.Header, stream bool) (*http.Response, requestTarget, error) {
 	c, domain, err := g.vault.OpenHTTPChannel(id)
 	if err != nil {
 		return nil, requestTarget{}, err
@@ -95,20 +95,23 @@ func (g *Gate) exchange(id vault.ChannelID, user, method, requestPath string, bo
 	if err := checkRequestBody(body, contentType); err != nil {
 		return nil, requestTarget{}, err
 	}
+	if err := checkCallHeaders(domain, headers); err != nil {
+		return nil, requestTarget{}, err
+	}
 
 	token, everUsed, err := g.obtainToken(id, domain, user)
 	if err != nil {
 		return nil, requestTarget{}, err
 	}
 
-	resp, err := sendHTTPRequest(domain, token, method, target, body, contentType, stream)
+	resp, err := sendHTTPRequest(domain, token, method, target, body, contentType, headers, stream)
 	if err != nil {
 		return nil, requestTarget{}, err
 	}
 
 	if everUsed && isStaleTokenSignal(resp.StatusCode) {
 		resp.Body.Close()
-		resp, err = g.retryWithFreshToken(id, domain, user, method, target, body, contentType, stream)
+		resp, err = g.retryWithFreshToken(id, domain, user, method, target, body, contentType, headers, stream)
 		if err != nil {
 			return nil, requestTarget{}, err
 		}
@@ -123,7 +126,7 @@ func (g *Gate) exchange(id vault.ChannelID, user, method, requestPath string, bo
 // retryWithFreshToken evicts the stale cached token, re-logs in (bring-your-own-token users
 // have no login to refresh from, so their token is only evicted, not replaced), and retries the
 // call exactly once.
-func (g *Gate) retryWithFreshToken(id vault.ChannelID, domain vault.Domain, user, method string, target requestTarget, body []byte, contentType string, stream bool) (*http.Response, error) {
+func (g *Gate) retryWithFreshToken(id vault.ChannelID, domain vault.Domain, user, method string, target requestTarget, body []byte, contentType string, headers []vault.Header, stream bool) (*http.Response, error) {
 	domainUser, err := findDomainUser(domain, user)
 	if err != nil {
 		return nil, err
@@ -137,7 +140,7 @@ func (g *Gate) retryWithFreshToken(id vault.ChannelID, domain vault.Domain, user
 	if err != nil {
 		return nil, fmt.Errorf("restergate: token appeared stale, re-login also failed: %w", err)
 	}
-	return sendHTTPRequest(domain, freshToken, method, target, body, contentType, stream)
+	return sendHTTPRequest(domain, freshToken, method, target, body, contentType, headers, stream)
 }
 
 // isStaleTokenSignal reports whether status is a non-400 4xx, the signal a used token has gone
@@ -146,7 +149,7 @@ func isStaleTokenSignal(status int) bool {
 	return status >= 400 && status < 500 && status != http.StatusBadRequest
 }
 
-func sendHTTPRequest(domain vault.Domain, token, method string, target requestTarget, body []byte, contentType string, stream bool) (*http.Response, error) {
+func sendHTTPRequest(domain vault.Domain, token, method string, target requestTarget, body []byte, contentType string, headers []vault.Header, stream bool) (*http.Response, error) {
 	var reqBody io.Reader
 	if len(body) > 0 {
 		reqBody = bytes.NewReader(body)
@@ -158,6 +161,8 @@ func sendHTTPRequest(domain vault.Domain, token, method string, target requestTa
 	if base, err := url.Parse(domain.BaseURL); err != nil || !strings.EqualFold(req.URL.Host, base.Host) {
 		return nil, fmt.Errorf("restergate: refusing to send a request for %s to a host other than %s", target.URL, domain.BaseURL)
 	}
+	setHeaders(req, domain.Headers)
+	setHeaders(req, headers)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	} else if len(body) > 0 {
@@ -167,7 +172,7 @@ func sendHTTPRequest(domain vault.Domain, token, method string, target requestTa
 
 	client := *httpClient
 	client.Timeout = RequestTimeout
-	client.CheckRedirect = followRedirects(domain.TokenPlacement)
+	client.CheckRedirect = followRedirects(domain)
 	if contentType != "" {
 		client.CheckRedirect = sameHostRedirectsForFiles
 	}

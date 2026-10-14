@@ -74,7 +74,7 @@ func TestDownloadStreamsALargeBodyIntact(t *testing.T) {
 		w.Write(want)
 	})
 
-	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTPDownload: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestDownloadEmptyBodyStillStreams(t *testing.T) {
 	client, id := startDownloadStack(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil || res.Body == nil {
 		t.Fatalf("result = %+v, err = %v, want a stream", res, err)
 	}
@@ -114,7 +114,7 @@ func TestDownloadNon2xxIsInline(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(`{"error":"nope"}`))
 	})
-	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTPDownload: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestDownloadNon2xxIsInline(t *testing.T) {
 
 func TestDownloadScopeRefusalIsAnError(t *testing.T) {
 	client, id := startDownloadStack(t, func(w http.ResponseWriter, r *http.Request) {}, "POST")
-	_, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "")
+	_, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "", nil)
 	var remote RemoteError
 	if !errors.As(err, &remote) || !strings.Contains(err.Error(), "does not grant") {
 		t.Errorf("err = %v, want the daemon's scope refusal as a RemoteError", err)
@@ -140,7 +140,7 @@ func TestDownloadCutUpstreamIsAnErrorNotAShortFile(t *testing.T) {
 		conn, _, _ := w.(http.Hijacker).Hijack()
 		conn.Close()
 	})
-	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTPDownload: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestDownloadStalledUpstreamEndsAfterTheIdleTimeout(t *testing.T) {
 		w.(http.Flusher).Flush()
 		time.Sleep(2 * time.Second)
 	})
-	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "")
+	res, err := client.RequestHTTPDownload(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTPDownload: %v", err)
 	}

@@ -64,7 +64,7 @@ func TestServiceRequestHTTPForwardsActorToVault(t *testing.T) {
 		byID:        map[string]vault.ChannelID{"short1": vault.ChannelID("real1")},
 	}
 
-	if _, err := svc.RequestHTTP("short1", "alice", "GET", "/x", nil, "", "tab-99"); err != nil {
+	if _, err := svc.RequestHTTP("short1", "alice", "GET", "/x", nil, "", nil, "tab-99"); err != nil {
 		t.Fatalf("RequestHTTP: %v", err)
 	}
 

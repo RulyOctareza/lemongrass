@@ -37,7 +37,7 @@ func TestRequestHTTPUpstreamIsNotBoundByTheLoginTimeout(t *testing.T) {
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 	setTimeouts(t, 100*time.Millisecond, 5*time.Second)
 
-	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), "text/csv")
+	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), "text/csv", nil)
 	if err != nil || result.Status != 200 {
 		t.Errorf("RequestHTTP = %+v, %v, want a slow upstream to complete under RequestTimeout", result, err)
 	}
@@ -49,7 +49,7 @@ func TestRequestHTTPGivesUpAfterRequestTimeout(t *testing.T) {
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 	setTimeouts(t, 5*time.Second, 200*time.Millisecond)
 
-	_, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), "text/csv")
+	_, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), "text/csv", nil)
 	if err == nil || !strings.Contains(err.Error(), "request failed") {
 		t.Errorf("err = %v, want the request to fail once RequestTimeout passes", err)
 	}

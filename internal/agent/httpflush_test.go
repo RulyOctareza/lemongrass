@@ -52,7 +52,7 @@ func TestServiceFlushHTTPTokens(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		if _, err := svc.RequestHTTP(shortID, "", "GET", "/api/x", nil, "", ""); err != nil {
+		if _, err := svc.RequestHTTP(shortID, "", "GET", "/api/x", nil, "", nil, ""); err != nil {
 			t.Fatalf("RequestHTTP: %v", err)
 		}
 	}
@@ -64,7 +64,7 @@ func TestServiceFlushHTTPTokens(t *testing.T) {
 	if err != nil || flushed != 1 {
 		t.Fatalf("FlushHTTPTokens = %d, %v, want 1", flushed, err)
 	}
-	if _, err := svc.RequestHTTP(shortID, "", "GET", "/api/x", nil, "", ""); err != nil {
+	if _, err := svc.RequestHTTP(shortID, "", "GET", "/api/x", nil, "", nil, ""); err != nil {
 		t.Fatalf("RequestHTTP after flush: %v", err)
 	}
 	if logins.Load() != 2 {
@@ -116,7 +116,7 @@ func TestServiceRequestHTTPCarriesBinaryBodyAndContentType(t *testing.T) {
 
 	want := append([]byte("PK\x03\x04"), 0, 1, 2, 0xff, 0xfe, '\r', '\n', 0)
 	const xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-	if _, err := svc.RequestHTTP(shortID, "", "POST", "/import", want, xlsx, ""); err != nil {
+	if _, err := svc.RequestHTTP(shortID, "", "POST", "/import", want, xlsx, nil, ""); err != nil {
 		t.Fatalf("RequestHTTP: %v", err)
 	}
 	if gotType != xlsx || !bytes.Equal(gotBody, want) {
@@ -163,7 +163,7 @@ func TestIPCRequestHTTPOutlivesAgentConnDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := agentClient.RequestHTTP(shortID, "alice", "POST", "/import", []byte("x"), "text/csv", "tab-1")
+	result, err := agentClient.RequestHTTP(shortID, "alice", "POST", "/import", []byte("x"), "text/csv", nil, "tab-1")
 	if err != nil || result.Status != 200 {
 		t.Errorf("RequestHTTP = %+v, %v, want a call slower than the agent's connDeadline to complete", result, err)
 	}

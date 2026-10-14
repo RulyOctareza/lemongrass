@@ -68,7 +68,7 @@ func TestRequestHTTPSendsBinaryBodyByteForByteWithContentType(t *testing.T) {
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 
 	want := spreadsheetShapedBytes()
-	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", want, xlsxType)
+	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", want, xlsxType, nil)
 	if err != nil || result.Status != 200 {
 		t.Fatalf("RequestHTTP = %+v, %v", result, err)
 	}
@@ -84,7 +84,7 @@ func TestRequestHTTPDefaultsToJSONWithoutContentType(t *testing.T) {
 	defer srv.Close()
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 
-	if _, err := svc.RequestHTTP(id, "alice", "POST", "/orders", []byte(`{"a":1}`), ""); err != nil {
+	if _, err := svc.RequestHTTP(id, "alice", "POST", "/orders", []byte(`{"a":1}`), "", nil); err != nil {
 		t.Fatal(err)
 	}
 	seen := rec.all()
@@ -99,16 +99,16 @@ func TestRequestHTTPRejectsOversizeBodyAndBadContentType(t *testing.T) {
 	defer srv.Close()
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 
-	_, err := svc.RequestHTTP(id, "alice", "POST", "/import", make([]byte, MaxRequestBodyBytes+1), xlsxType)
+	_, err := svc.RequestHTTP(id, "alice", "POST", "/import", make([]byte, MaxRequestBodyBytes+1), xlsxType, nil)
 	if err == nil || !strings.Contains(err.Error(), "25 MiB") {
 		t.Errorf("oversize err = %v, want one naming the 25 MiB limit", err)
 	}
-	if _, err := svc.RequestHTTP(id, "alice", "POST", "/import", make([]byte, MaxRequestBodyBytes), xlsxType); err != nil {
+	if _, err := svc.RequestHTTP(id, "alice", "POST", "/import", make([]byte, MaxRequestBodyBytes), xlsxType, nil); err != nil {
 		t.Errorf("a body exactly at the limit: %v", err)
 	}
 
 	for _, bad := range []string{"text/plain\r\nX-Injected: 1", "not a media type", "text/", "nonsense"} {
-		if _, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), bad); err == nil {
+		if _, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), bad, nil); err == nil {
 			t.Errorf("content type %q was accepted", bad)
 		}
 	}
@@ -143,11 +143,11 @@ func TestRequestHTTPRetryResendsSameBodyAndContentType(t *testing.T) {
 	defer srv.Close()
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET", "POST"})
 
-	if _, err := svc.RequestHTTP(id, "alice", "GET", "/ok", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(id, "alice", "GET", "/ok", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	want := spreadsheetShapedBytes()
-	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", want, xlsxType)
+	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", want, xlsxType, nil)
 	if err != nil || result.Status != 200 {
 		t.Fatalf("RequestHTTP = %+v, %v", result, err)
 	}

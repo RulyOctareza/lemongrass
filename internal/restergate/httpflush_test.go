@@ -33,7 +33,7 @@ func twoLoginUsers() []vault.DomainUser {
 
 func mustRequest(t *testing.T, svc *testSvc, id vault.ChannelID, user string) {
 	t.Helper()
-	if _, err := svc.RequestHTTP(id, user, "GET", "/api/x", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(id, user, "GET", "/api/x", nil, "", nil); err != nil {
 		t.Fatalf("RequestHTTP as %q: %v", user, err)
 	}
 }

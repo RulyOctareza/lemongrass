@@ -49,7 +49,7 @@ func TestDownloadHTTPStreamsBodyLargerThanTheInlineLimit(t *testing.T) {
 	})
 	svc, id := setUpHTTPChannel(t, srv, aliceOnly(), []string{"GET"})
 
-	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "")
+	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("DownloadHTTP: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestDownloadHTTPNon2xxComesBackInline(t *testing.T) {
 	})
 	svc, id := setUpHTTPChannel(t, srv, aliceOnly(), []string{"GET"})
 
-	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "")
+	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("DownloadHTTP: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestDownloadHTTPCrossHostRedirectDropsTheToken(t *testing.T) {
 	placement := vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "}
 	svc, id, seen := newRedirectFixture(t, placement, func(other *httptest.Server) string { return other.URL + "/presigned/file.bin?sig=abc" })
 
-	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/download", nil, "")
+	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/download", nil, "", nil)
 	if err != nil {
 		t.Fatalf("DownloadHTTP: %v", err)
 	}
@@ -127,14 +127,14 @@ func TestDownloadHTTPRetriesAStaleToken(t *testing.T) {
 	defer srv.Close()
 	svc, id := setUpHTTPChannel(t, srv, aliceOnly(), []string{"GET"})
 
-	first, err := svc.DownloadHTTP(id, "alice", "GET", "/file", nil, "")
+	first, err := svc.DownloadHTTP(id, "alice", "GET", "/file", nil, "", nil)
 	if err != nil {
 		t.Fatalf("first DownloadHTTP: %v", err)
 	}
 	first.Body.Close()
 	revoked["tok1"] = true
 
-	second, err := svc.DownloadHTTP(id, "alice", "GET", "/file", nil, "")
+	second, err := svc.DownloadHTTP(id, "alice", "GET", "/file", nil, "", nil)
 	if err != nil {
 		t.Fatalf("second DownloadHTTP: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestDownloadHTTPRespectsChannelScope(t *testing.T) {
 	srv := newDownloadServer(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("x")) })
 	svc, id := setUpHTTPChannel(t, srv, aliceOnly(), []string{"POST"})
 
-	if _, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, ""); err == nil || !strings.Contains(err.Error(), "does not grant") {
+	if _, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "", nil); err == nil || !strings.Contains(err.Error(), "does not grant") {
 		t.Errorf("err = %v, want a scope refusal", err)
 	}
 }
@@ -185,7 +185,7 @@ func TestDownloadHTTPGivesUpWhenHeadersNeverArrive(t *testing.T) {
 	svc, id := setUpHTTPChannel(t, srv, aliceOnly(), []string{"GET"})
 	setTimeouts(t, 5*time.Second, 150*time.Millisecond)
 
-	_, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "")
+	_, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "", nil)
 	if err == nil || !strings.Contains(err.Error(), "nothing received") {
 		t.Errorf("err = %v, want the header wait to end with a nothing-received error", err)
 	}
@@ -200,7 +200,7 @@ func TestDownloadHTTPStalledBodyEndsAfterTheIdleTimeout(t *testing.T) {
 	svc, id := setUpHTTPChannel(t, srv, aliceOnly(), []string{"GET"})
 	setTimeouts(t, 5*time.Second, 200*time.Millisecond)
 
-	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "")
+	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("DownloadHTTP: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestDownloadHTTPSlowSteadyBodyOutlivesTheRequestTimeout(t *testing.T) {
 	svc, id := setUpHTTPChannel(t, srv, aliceOnly(), []string{"GET"})
 	setTimeouts(t, 5*time.Second, 200*time.Millisecond)
 
-	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "")
+	dl, err := svc.DownloadHTTP(id, "alice", "GET", "/export", nil, "", nil)
 	if err != nil {
 		t.Fatalf("DownloadHTTP: %v", err)
 	}

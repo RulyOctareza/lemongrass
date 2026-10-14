@@ -67,7 +67,7 @@ func TestIPCRequestHTTPOutlivesConnDeadline(t *testing.T) {
 	t.Cleanup(func() { l.Close() })
 	client := &Client{SocketPath: sockPath}
 
-	result, err := client.RequestHTTP(c.ID, "alice", "POST", "/import", []byte("x"), "text/csv", "tab-1")
+	result, err := client.RequestHTTP(c.ID, "alice", "POST", "/import", []byte("x"), "text/csv", nil, "tab-1")
 	if err != nil || result.Status != 200 {
 		t.Errorf("RequestHTTP = %+v, %v, want a call slower than connDeadline to complete", result, err)
 	}
@@ -118,7 +118,7 @@ func TestIPCFlushHTTPTokensRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.RequestHTTP(c.ID, "alice", "GET", "/api/x", nil, "", ""); err != nil {
+	if _, err := client.RequestHTTP(c.ID, "alice", "GET", "/api/x", nil, "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	flushed, err := client.FlushHTTPTokens(c.ID, "")

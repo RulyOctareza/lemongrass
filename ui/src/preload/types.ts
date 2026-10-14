@@ -84,6 +84,11 @@ export interface VaultDomainUser {
   Tags: string[]
 }
 
+export interface VaultHeader {
+  Name: string
+  Value: string
+}
+
 export interface VaultDomain {
   BaseURL: string
   LoginEndpoint: string
@@ -92,6 +97,7 @@ export interface VaultDomain {
   FixedTTLSeconds: number
   TokenPlacement: VaultTokenPlacement
   Users: VaultDomainUser[]
+  Headers: VaultHeader[] | null
 }
 
 export interface VaultDomainLoginTest {

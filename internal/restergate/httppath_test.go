@@ -98,7 +98,7 @@ func TestRequestHTTPFullURLUnderBaseAndReportedURL(t *testing.T) {
 	defer srv.Close()
 	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
-	result, err := svc.RequestHTTP(id, "alice", "GET", srv.URL+"/api/orders?limit=2", nil, "")
+	result, err := svc.RequestHTTP(id, "alice", "GET", srv.URL+"/api/orders?limit=2", nil, "", nil)
 	if err != nil {
 		t.Fatalf("RequestHTTP: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestRequestHTTPNeverReachesAnotherHost(t *testing.T) {
 		"//" + otherHost + "/steal",
 		"@" + otherHost + "/steal",
 	} {
-		result, err := svc.RequestHTTP(id, "alice", "GET", p, nil, "")
+		result, err := svc.RequestHTTP(id, "alice", "GET", p, nil, "", nil)
 		if err == nil && !strings.HasPrefix(result.URL, srv.URL+"/") {
 			t.Errorf("path %q was sent to %q", p, result.URL)
 		}
@@ -175,7 +175,7 @@ func TestRequestHTTPExclusionHoldsAgainstBypassShapes(t *testing.T) {
 		"/users//1/change-password",
 		srv.URL + "/users/1/change-password",
 	} {
-		if _, err := svc.RequestHTTP(c.ID, "alice", "PUT", p, nil, ""); err == nil || !strings.Contains(err.Error(), "does not grant") {
+		if _, err := svc.RequestHTTP(c.ID, "alice", "PUT", p, nil, "", nil); err == nil || !strings.Contains(err.Error(), "does not grant") {
 			t.Errorf("path %q: err = %v, want a scope denial", p, err)
 		}
 	}
@@ -183,7 +183,7 @@ func TestRequestHTTPExclusionHoldsAgainstBypassShapes(t *testing.T) {
 		t.Errorf("an excluded endpoint was reached: %v", hits)
 	}
 
-	if _, err := svc.RequestHTTP(c.ID, "alice", "PUT", "/users/1/profile", nil, ""); err != nil {
+	if _, err := svc.RequestHTTP(c.ID, "alice", "PUT", "/users/1/profile", nil, "", nil); err != nil {
 		t.Errorf("allowed path rejected: %v", err)
 	}
 }

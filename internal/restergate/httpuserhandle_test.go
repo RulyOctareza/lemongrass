@@ -58,7 +58,7 @@ func TestModelSeesHandlesNotStoredNames(t *testing.T) {
 		t.Errorf("info users = %+v, %v, want the handle", info.Users, err)
 	}
 
-	_, err = svc.RequestHTTP(id, "mallory", "GET", "/api/x", nil, "")
+	_, err = svc.RequestHTTP(id, "mallory", "GET", "/api/x", nil, "", nil)
 	if err == nil || !strings.Contains(err.Error(), "john_doe (tenant x)") || strings.Contains(err.Error(), "John Doe") {
 		t.Errorf("err = %v, want a list showing john_doe (tenant x) and no raw name", err)
 	}

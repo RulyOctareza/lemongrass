@@ -218,6 +218,7 @@ type requestHTTPPayload struct {
 	Path        string          `json:"path"`
 	Body        []byte          `json:"body"`
 	ContentType string          `json:"content_type"`
+	Headers     []vault.Header  `json:"headers,omitempty"`
 	// Actor is the caller-facing identity RequestHTTP will audit under once the audit write
 	// lands; carried over the wire already so that build doesn't need another round of
 	// payload changes.
@@ -550,7 +551,7 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
-		result, err := svc.HTTP.RequestHTTP(p.ID, p.User, p.Method, p.Path, p.Body, p.ContentType)
+		result, err := svc.HTTP.RequestHTTP(p.ID, p.User, p.Method, p.Path, p.Body, p.ContentType, p.Headers)
 		if err != nil {
 			return errResponse(err)
 		}
@@ -887,9 +888,9 @@ func (c *Client) ActivateHTTP(rootSecret string, id vault.ChannelID, ttl time.Du
 	return out.Channel, err
 }
 
-func (c *Client) RequestHTTP(id vault.ChannelID, user, method, path string, body []byte, contentType, actor string) (restergate.HTTPResult, error) {
+func (c *Client) RequestHTTP(id vault.ChannelID, user, method, path string, body []byte, contentType string, headers []vault.Header, actor string) (restergate.HTTPResult, error) {
 	var out httpResultPayload
-	err := c.callWithin(max(c.Timeout, restergate.RequestTimeout), opRequestHTTP, requestHTTPPayload{ID: id, User: user, Method: method, Path: path, Body: body, ContentType: contentType, Actor: actor}, &out)
+	err := c.callWithin(max(c.Timeout, restergate.RequestTimeout), opRequestHTTP, requestHTTPPayload{ID: id, User: user, Method: method, Path: path, Body: body, ContentType: contentType, Headers: headers, Actor: actor}, &out)
 	return out.Result, err
 }
 

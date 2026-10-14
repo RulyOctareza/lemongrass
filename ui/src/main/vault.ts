@@ -116,6 +116,11 @@ export interface DomainUser {
   Tags: string[]
 }
 
+export interface Header {
+  Name: string
+  Value: string
+}
+
 export interface Domain {
   BaseURL: string
   LoginEndpoint: string
@@ -124,6 +129,7 @@ export interface Domain {
   FixedTTLSeconds: number
   TokenPlacement: TokenPlacement
   Users: DomainUser[]
+  Headers: Header[] | null
 }
 
 // error is empty when the login passed; status and body are the login endpoint's non-2xx answer.
