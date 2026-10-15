@@ -34,6 +34,7 @@ type hookEvent struct {
 	Message              string          `json:"message"`
 	TabID                string
 	EnforceBibliothek    bool
+	Raw                  []byte `json:"-"`
 	PreserveSessionState bool
 }
 
@@ -64,6 +65,7 @@ func Run(args []string, tabID string) {
 	}
 
 	payload.TabID = tabID
+	payload.Raw = raw
 	if (event == "SessionStart" || event == "SessionEnd" || event == "PreToolUse") && os.Getenv(hookProbeEnv) != "" {
 		logHookProbe(event, os.Getenv("LGRASS_HOOK_VENDOR"), raw, payload)
 	}
@@ -208,7 +210,9 @@ func hookPreToolUse(store *session.Store, payload hookEvent, projectPath string)
 			}
 		}
 	}
-	parts = append(parts, notificationContext(store, payload.TabID)...)
+	if os.Getenv(replayEnv) == "" {
+		parts = append(parts, notificationContext(store, payload.TabID)...)
+	}
 
 	return newHookResult("PreToolUse", "allow", parts)
 }

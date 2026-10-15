@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/faizalv/lemongrass/internal/hook"
 	"github.com/faizalv/lemongrass/internal/session"
 )
 
@@ -24,7 +25,7 @@ func cmdSign(args []string) {
 		fmt.Print(signUsage)
 		return
 	}
-	word, sessionID, err := signRequest(args)
+	word, sessionID, err := signRequest(args, "word")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n\n%s", err, signUsage)
 		os.Exit(1)
@@ -56,6 +57,20 @@ func cmdSign(args []string) {
 		os.Exit(1)
 	}
 	fmt.Println(signAcknowledgement(signable))
+	if signable.ID == session.MemoryWriteWord {
+		printHeldCalls(store, sessionID, proj.Path)
+	}
+}
+
+func printHeldCalls(store *session.Store, sessionID, projectPath string) {
+	calls, err := store.HeldCalls(sessionID)
+	if err != nil {
+		return
+	}
+	for _, call := range calls {
+		fmt.Println()
+		fmt.Println(hook.DescribeHeldCall(call, projectPath))
+	}
 }
 
 func signHelpRequested(args []string) bool {
@@ -77,7 +92,7 @@ func signAcknowledgement(s session.Signable) string {
 	return "signed " + s.ID + ". " + s.Pledge
 }
 
-func signRequest(args []string) (word, sessionID string, err error) {
+func signRequest(args []string, noun string) (word, sessionID string, err error) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--session-id":
@@ -88,13 +103,13 @@ func signRequest(args []string) (word, sessionID string, err error) {
 			sessionID = args[i]
 		default:
 			if word != "" {
-				return "", "", errors.New("multiple words")
+				return "", "", errors.New("more than one " + noun)
 			}
 			word = args[i]
 		}
 	}
 	if word == "" {
-		return "", "", errors.New("missing word")
+		return "", "", errors.New("missing " + noun)
 	}
 	if sessionID == "" {
 		sessionID = os.Getenv("CLAUDE_CODE_SESSION_ID")

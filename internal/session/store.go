@@ -57,6 +57,17 @@ CREATE TABLE IF NOT EXISTS lg_signatures (
 	signed_at TEXT NOT NULL,
 	PRIMARY KEY (project_id, session_id, checklist_id)
 );
+CREATE TABLE IF NOT EXISTS lg_held_calls (
+	project_id TEXT NOT NULL,
+	id TEXT NOT NULL,
+	session_id TEXT NOT NULL,
+	tab_id TEXT NOT NULL,
+	tool_name TEXT NOT NULL,
+	payload BLOB NOT NULL,
+	hook_binary TEXT NOT NULL,
+	held_at TEXT NOT NULL,
+	PRIMARY KEY (project_id, id)
+);
 `
 
 // Open may run before config.Dir() exists, since a hook can fire before any other lgrass call in a project.

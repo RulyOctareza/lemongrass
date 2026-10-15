@@ -36,6 +36,8 @@ func main() {
 		cmdTips(os.Args[2:])
 	case "sign":
 		cmdSign(os.Args[2:])
+	case "replay":
+		cmdReplay(os.Args[2:])
 	case "how":
 		cmdHow(os.Args[2:])
 	default:
@@ -80,6 +82,10 @@ COMMANDS
   sign [--session-id <id>] <word>   Signs a word a deny message names for the current
                                      session until its TTL expires, and prints the word's pledge;
                                      an unregistered word is rejected
+
+  replay [--session-id <id>] <held-call-id>
+                                     Runs a call a deny message held instead of resending it, after
+                                     every gate checks it again; a held call runs once and expires
 
   how [<domain> [<action> ...]]     Prints only the instructions for the step at hand; with no action it lists
                                      what exists. how task close <slug> picks the light or full close from

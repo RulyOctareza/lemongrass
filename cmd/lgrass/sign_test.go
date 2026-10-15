@@ -23,7 +23,7 @@ func TestSignRequest(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			id, sessionID, err := signRequest(c.args)
+			id, sessionID, err := signRequest(c.args, "word")
 			if (err != nil) != c.wantErr {
 				t.Fatalf("signRequest(%v) error = %v, wantErr %v", c.args, err, c.wantErr)
 			}

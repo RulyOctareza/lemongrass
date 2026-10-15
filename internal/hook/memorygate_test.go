@@ -93,3 +93,33 @@ func TestMemoryFeedbackDenyCoversBashUntilSigned(t *testing.T) {
 		t.Errorf("PermissionDecision = %q, want no deny after signing", result.PermissionDecision)
 	}
 }
+
+func TestTouchesClaudeMemoryJudgesHeredocBodiesByConsumer(t *testing.T) {
+	home, projectPath := memoryGateFixture(t)
+	memDir, _ := claudeMemoryDir(projectPath)
+	otherMem := filepath.Join(home, ".claude", "projects", "-x", "memory")
+	script := "MEM = '" + otherMem + "'\nopen(MEM + '/a.md', 'w')\n"
+
+	cases := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{"script to a file mentions memory", "cat > /tmp/fix.py <<'EOF'\n" + script + "EOF\npython3 -m py_compile /tmp/fix.py", false},
+		{"tee with stdout to devnull", "tee /tmp/fix.py > /dev/null <<'EOF'\n" + script + "EOF", false},
+		{"heredoc into memory", "cat >> " + filepath.Join(memDir, "MEMORY.md") + " <<'EOF'\n- pointer\nEOF", true},
+		{"heredoc after cd into memory", "cd " + memDir + " && cat >> MEMORY.md <<'EOF'\n- pointer\nEOF", true},
+		{"interpreter heredoc", "python3 - <<'EOF'\n" + script + "EOF", true},
+		{"tee to stdout", "tee /tmp/fix.py <<'EOF' | sh\n" + script + "EOF", true},
+		{"cat to stdout", "cat <<'EOF' | python3\n" + script + "EOF", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in, _ := json.Marshal(map[string]string{"command": tc.command})
+			payload := hookEvent{ToolName: "Bash", ToolInput: in}
+			if got := touchesClaudeMemory(payload, projectPath); got != tc.want {
+				t.Errorf("touchesClaudeMemory = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

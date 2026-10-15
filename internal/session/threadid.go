@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	threadIDLength   = 6
-	threadIDAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-	threadIDAttempts = 20
+	shortIDLength   = 6
+	shortIDAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+	shortIDAttempts = 20
 )
 
 type queryer interface {
@@ -18,17 +18,22 @@ type queryer interface {
 
 // A random 6 character id that no thread in the store uses yet.
 func newThreadID(q queryer) (string, error) {
-	for i := 0; i < threadIDAttempts; i++ {
-		buf := make([]byte, threadIDLength)
+	return newShortID(q, `SELECT 1 FROM lg_threads WHERE id = ?`, "thread")
+}
+
+// A random 6 character id that the exists query, given the id as its only argument, finds no row for.
+func newShortID(q queryer, exists, kind string) (string, error) {
+	for i := 0; i < shortIDAttempts; i++ {
+		buf := make([]byte, shortIDLength)
 		if _, err := rand.Read(buf); err != nil {
 			return "", err
 		}
 		for j, b := range buf {
-			buf[j] = threadIDAlphabet[int(b)%len(threadIDAlphabet)]
+			buf[j] = shortIDAlphabet[int(b)%len(shortIDAlphabet)]
 		}
 		id := string(buf)
 		var one int
-		err := q.QueryRow(`SELECT 1 FROM lg_threads WHERE id = ?`, id).Scan(&one)
+		err := q.QueryRow(exists, id).Scan(&one)
 		if err == sql.ErrNoRows {
 			return id, nil
 		}
@@ -36,5 +41,5 @@ func newThreadID(q queryer) (string, error) {
 			return "", err
 		}
 	}
-	return "", errors.New("session: no free thread id found")
+	return "", errors.New("session: no free " + kind + " id found")
 }

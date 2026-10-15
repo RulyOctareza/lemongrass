@@ -44,7 +44,35 @@ func memoryFeedbackDeny(store *session.Store, payload hookEvent, projectPath str
 	if err == nil && !signedAt.IsZero() && time.Since(signedAt) <= memoryFeedbackSignatureTTL {
 		return ""
 	}
+	if id := holdMemoryCall(store, payload); id != "" {
+		return session.FormatMemoryHeldDeny(id)
+	}
 	return session.FormatMemoryFeedbackDeny()
+}
+
+// holdMemoryCall returns "" when the call is not one replay can run, is itself a replay, or cannot be stored, which leaves the plain deny.
+func holdMemoryCall(store *session.Store, payload hookEvent) string {
+	if payload.ToolName != "Bash" && payload.ToolName != "Write" {
+		return ""
+	}
+	if payload.SessionID == "" || len(payload.Raw) == 0 || os.Getenv(replayEnv) != "" {
+		return ""
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	id, err := store.HoldCall(session.HeldCall{
+		SessionID:  payload.SessionID,
+		TabID:      payload.TabID,
+		ToolName:   payload.ToolName,
+		Payload:    payload.Raw,
+		HookBinary: binary,
+	})
+	if err != nil {
+		return ""
+	}
+	return id
 }
 
 func touchesClaudeMemory(payload hookEvent, projectPath string) bool {
@@ -99,20 +127,24 @@ func isClaudeMemoryPath(p, cwd, home, projectMemDir string) bool {
 	return len(parts) >= 4 && claudeConfigDirName.MatchString(parts[0]) && parts[1] == "projects" && parts[3] == "memory"
 }
 
-// A shell command counts when it names a memory directory, or runs from inside one, and contains something that can write. A command whose every segment naming a memory directory is a plain read (cat, ls, grep, head) passes, whatever its other segments write.
+// A shell command counts when it names a memory directory, or runs from inside one, and contains something that can write. A command whose every segment naming a memory directory is a plain read (cat, ls, grep, head) passes, whatever its other segments write. A heredoc body that only reaches a file is data, so only its command line is judged.
 func shellTouchesClaudeMemory(payload hookEvent, home, projectMemDir string) bool {
 	var in shellToolInput
 	if err := json.Unmarshal(payload.ToolInput, &in); err != nil || in.Command == "" {
 		return false
 	}
-	stripped := shellDevNullRedirect.ReplaceAllString(in.Command, "")
+	command := in.Command
+	if spans, ok := shellHeredocs(command); ok {
+		command = maskBodies(command, spans, func(sp heredocSpan) bool { return sp.dataOnly })
+	}
+	stripped := shellDevNullRedirect.ReplaceAllString(command, "")
 	if !shellWriteIndicator.MatchString(stripped) && !findWriteAction.MatchString(stripped) {
 		return false
 	}
 	if payload.Cwd != "" && isClaudeMemoryPath(filepath.Join(payload.Cwd, "x"), "", home, projectMemDir) {
 		return true
 	}
-	cmd := strings.ReplaceAll(in.Command, "\\", "")
+	cmd := strings.ReplaceAll(command, "\\", "")
 	if !namesClaudeMemory(cmd, projectMemDir) {
 		return false
 	}

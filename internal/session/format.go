@@ -39,12 +39,18 @@ func FormatNudge(liveness []SessionStatus) string {
 	return b.String()
 }
 
+const memoryFeedbackDenyLead = "lgrass: STOP. This call writes into Claude Code memory, which holds one-line pointers only. " +
+	"A rule or feedback placed there is a violation and gets deleted; it goes in biblio/laws/. " +
+	"Every write route is watched, whatever the tool. "
+
 // This only formats the message, the caller owns the sign/TTL check.
 func FormatMemoryFeedbackDeny() string {
-	return "lgrass: STOP. This call writes into Claude Code memory, which holds one-line pointers only. " +
-		"A rule or feedback placed there is a violation and gets deleted; it goes in biblio/laws/. " +
-		"Every write route is watched, whatever the tool. " +
-		"For a pointer, run `lgrass sign " + MemoryWriteWord + "` and retry."
+	return memoryFeedbackDenyLead + "For a pointer, run `lgrass sign " + MemoryWriteWord + "` and retry."
+}
+
+func FormatMemoryHeldDeny(id string) string {
+	return memoryFeedbackDenyLead + "The call did not run and is held as " + id + ". " +
+		"Run `lgrass sign " + MemoryWriteWord + "`, check what it writes into memory, then run `lgrass replay " + id + "` instead of resending it."
 }
 
 func FormatTaskCloseDeny(slug string) string {
