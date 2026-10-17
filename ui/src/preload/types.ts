@@ -29,6 +29,7 @@ export interface Project {
   id: string
   name: string
   path: string
+  trusted?: boolean
 }
 
 export interface BiblioNode {

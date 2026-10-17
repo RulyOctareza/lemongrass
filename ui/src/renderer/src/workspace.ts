@@ -8,7 +8,8 @@ import {
   onShellAccountChange,
   onShellExit,
   setShellArgs,
-  setShellResume
+  setShellResume,
+  startShellDetached
 } from './shellRegistry'
 import { accountIsDeleted, preferredAccount, setPreferredAccount } from './accounts'
 import { defaultGroupColor, groupColorVar, isGroupColor, type GroupColor } from './groupColors'
@@ -799,6 +800,7 @@ function spawnWorkgroup(request: WorkgroupSpawnRequest): WorkgroupSpawnResult {
   const leaderTab = leaderLeaf.tabs.find((tab) => tab.id === request.leaderTabId)
   const leaderAccount = leaderTab?.kind === 'shell' ? leaderTab.account : undefined
   const remembered: Record<string, string> = {}
+  const thinkerTabs: ShellTab[] = []
   let next = root
   for (const member of request.members) {
     const account = request.accountsChosen ? member.account : leaderAccount
@@ -813,10 +815,20 @@ function spawnWorkgroup(request: WorkgroupSpawnRequest): WorkgroupSpawnResult {
       ...(member.vendor === 'claude' && account ? { account } : {})
     }
     setShellArgs(tab.id, workgroupArgs(member))
+    thinkerTabs.push(tab)
     next = tree.addTab(next, leaderLeaf.id, tab)
   }
   rememberThinkerAccounts(remembered)
   commit(project, tree.setActiveTab(next, leaderLeaf.id, request.leaderTabId))
+  for (const member of thinkerTabs) {
+    startShellDetached({
+      id: member.id,
+      command: member.command,
+      cwd: member.cwd,
+      account: member.account,
+      thinker: true
+    })
+  }
   return { ok: true }
 }
 

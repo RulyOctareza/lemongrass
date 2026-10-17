@@ -3,11 +3,14 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { randomUUID } from 'crypto'
+import { writeTrust } from './projectTrust'
 
 export interface Project {
   id: string
   name: string
   path: string
+  // Absent until the human answers the trust question for this project.
+  trusted?: boolean
 }
 
 // Centralized under ~/.lemongrass/, not Electron's userData folder, so the CLI and UI share one registry.
@@ -37,6 +40,11 @@ function resolvePath(path: string): string {
   }
 }
 
+export function isTrustedProject(path: string): boolean {
+  const target = resolvePath(path)
+  return loadProjects().some((p) => p.trusted === true && resolvePath(p.path) === target)
+}
+
 export function registerProjectHandlers(getWindow: () => BrowserWindow | undefined): void {
   ipcMain.handle('projects:list', () => loadProjects())
 
@@ -55,6 +63,16 @@ export function registerProjectHandlers(getWindow: () => BrowserWindow | undefin
     const project: Project = { id: randomUUID(), name: basename(dirPath), path: dirPath }
     projects.push(project)
     saveProjects(projects)
+    return project
+  })
+
+  ipcMain.handle('projects:setTrust', async (_event, id: string, trusted: boolean) => {
+    const projects = loadProjects()
+    const project = projects.find((p) => p.id === id)
+    if (!project || typeof trusted !== 'boolean') return null
+    project.trusted = trusted
+    saveProjects(projects)
+    if (trusted) await writeTrust(project.path)
     return project
   })
 }

@@ -5,6 +5,8 @@ import * as pty from 'node-pty'
 import { randomUUID } from 'crypto'
 import { registerTab } from './tabSessions'
 import { ACCOUNT_NAME } from './accountNames'
+import { isTrustedProject } from './projects'
+import { writeTrust } from './projectTrust'
 import { orientationLaunch, type OrientationRole } from './orientation'
 import { startupTrimArgs, startupTrimEnv } from './startupTrim'
 
@@ -64,6 +66,12 @@ function accountConfigDir(opts: SpawnOptions): string | undefined {
   return join(homedir(), `.claude-${opts.account}`)
 }
 
+function trustTarget(opts: SpawnOptions): string | undefined {
+  if (opts.command === 'codex') return 'codex'
+  if (opts.command !== 'claude') return undefined
+  return opts.account && ACCOUNT_NAME.test(opts.account) ? opts.account : 'primary'
+}
+
 export function registerPtyHandlers(getSender: () => WebContents | undefined): void {
   ipcMain.handle('pty:spawn', async (_event, opts: SpawnOptions) => {
     const id = randomUUID()
@@ -80,6 +88,8 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
     ]
     const configDir = accountConfigDir(opts)
     if (opts.tabId && opts.cwd) await registerTab(opts.cwd, opts.tabId, opts.command)
+    const target = trustTarget(opts)
+    if (target && opts.cwd && isTrustedProject(opts.cwd)) await writeTrust(opts.cwd, target)
     const proc = pty.spawn(opts.command, args, {
       name: 'xterm-256color',
       cols: opts.cols ?? 80,

@@ -12,6 +12,7 @@ import {
 import { registerTabSessionHandlers } from './tabSessions'
 import { registerAccountHandlers } from './accounts'
 import { registerProjectHandlers } from './projects'
+import { setTrustBinary } from './projectTrust'
 import { registerWorkspaceLayoutHandlers } from './workspaceLayouts'
 import { registerBiblioHandlers, registerBiblioImageScheme, closeBiblioWatchers } from './biblio'
 import { registerGitHandlers } from './git'
@@ -93,6 +94,7 @@ app.whenReady().then(() => {
 
   registerPtyHandlers(() => mainWindow?.webContents)
   registerAccountHandlers(lgrassdPath)
+  setTrustBinary(lgrassdPath)
   registerProjectHandlers(() => mainWindow)
   registerWorkspaceLayoutHandlers()
   registerTabSessionHandlers(lgrassdPath)

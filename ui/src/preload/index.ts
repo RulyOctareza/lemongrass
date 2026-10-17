@@ -73,7 +73,9 @@ const tabSessions = {
 
 const projects = {
   list: (): Promise<Project[]> => ipcRenderer.invoke('projects:list'),
-  add: (): Promise<Project | null> => ipcRenderer.invoke('projects:add')
+  add: (): Promise<Project | null> => ipcRenderer.invoke('projects:add'),
+  setTrust: (id: string, trusted: boolean): Promise<Project | null> =>
+    ipcRenderer.invoke('projects:setTrust', id, trusted)
 }
 
 const workspaceLayouts = {

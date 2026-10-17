@@ -31,6 +31,8 @@ func main() {
 		cmdTabs(os.Args[2:])
 	case "accounts":
 		cmdAccounts(os.Args[2:])
+	case "trust":
+		cmdTrust(os.Args[2:])
 	case "nudge":
 		cmdNudge(os.Args[2:])
 	case "hook":
@@ -61,6 +63,7 @@ COMMANDS
   accounts list                     The Claude accounts beside the primary, as JSON
   accounts add <name>               Creates ~/.claude-<name>, links the shared folders and registers the hooks
   accounts remove <name>            Deletes ~/.claude-<name> and forgets the account
+  trust <path> [--target <t>]       Marks a project trusted for Claude and Codex; t is primary, codex or an account name
   nudge <tab-id>                    Prints the tab's pending thread nudge and marks it sent
   hook <event>                      Invoked by Claude Code's and Codex's own hook systems, reads hook JSON off stdin
 

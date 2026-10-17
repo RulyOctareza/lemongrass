@@ -6,6 +6,7 @@ import HeaderBar from './components/HeaderBar.vue'
 import WorkspaceView from './components/WorkspaceView.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import WorkgroupApprovalModal from './components/WorkgroupApprovalModal.vue'
+import ProjectTrustModal from './components/ProjectTrustModal.vue'
 import { loadAccounts } from './accounts'
 import {
   cancelShellPicker,
@@ -26,6 +27,8 @@ const loadedProjects = reactive<Record<string, boolean>>({})
 const sidebarCollapsed = ref(false)
 const closing = ref(false)
 const settingsOpen = ref(false)
+const trustPrompt = ref<Project | null>(null)
+const trustBusy = ref(false)
 
 const activeProject = computed((): Project | undefined =>
   projects.value.find((p) => p.id === activeProjectId.value)
@@ -50,6 +53,7 @@ async function selectProject(id: string): Promise<void> {
   if (shellPicker.open) cancelShellPicker()
   activeProjectId.value = id
   const project = projects.value.find((p) => p.id === id)
+  if (project && project.trusted === undefined) trustPrompt.value = project
   if (!project || loadedProjects[id]) return
   await ensureLoaded({ id, path: project.path })
   biblioByProject[id] = await window.api.biblio.tree(project.path)
@@ -69,6 +73,21 @@ async function onBiblioChanged(projectPath: string): Promise<void> {
   if (!project) return
   biblioByProject[project.id] = await window.api.biblio.tree(projectPath)
   void refreshReadOnlyDocs({ id: project.id, path: project.path })
+}
+
+async function answerTrust(trusted: boolean): Promise<void> {
+  const project = trustPrompt.value
+  if (!project) return
+  trustBusy.value = true
+  try {
+    const updated = await window.api.projects.setTrust(project.id, trusted)
+    if (updated) {
+      projects.value = projects.value.map((p) => (p.id === updated.id ? updated : p))
+    }
+  } finally {
+    trustBusy.value = false
+    trustPrompt.value = null
+  }
 }
 
 async function addProject(): Promise<void> {
@@ -180,6 +199,13 @@ onBeforeUnmount(() => {
 
     <SettingsModal v-if="settingsOpen" @close="settingsOpen = false" />
     <WorkgroupApprovalModal />
+    <ProjectTrustModal
+      v-if="trustPrompt"
+      :project="trustPrompt"
+      :busy="trustBusy"
+      @answer="answerTrust"
+      @close="trustPrompt = null"
+    />
 
     <div v-if="closing" class="closing-overlay">
       <div class="closing-card">

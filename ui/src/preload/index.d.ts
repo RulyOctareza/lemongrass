@@ -75,6 +75,7 @@ interface Api {
   projects: {
     list: () => Promise<Project[]>
     add: () => Promise<Project | null>
+    setTrust: (id: string, trusted: boolean) => Promise<Project | null>
   }
   tabSessions: {
     list: (projectPath: string) => Promise<Record<string, string>>

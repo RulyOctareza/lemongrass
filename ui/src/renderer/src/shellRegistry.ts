@@ -39,6 +39,7 @@ interface ShellSession {
   fit: FitAddon
   host: HTMLDivElement
   opened: boolean
+  started: boolean
   disposed: boolean
   shellId?: string
   resumeDeadline?: number
@@ -158,7 +159,15 @@ function createSession(spec: ShellSpec): ShellSession {
   const host = document.createElement('div')
   host.style.height = '100%'
   host.style.width = '100%'
-  const session: ShellSession = { spec, term, fit, host, opened: false, disposed: false }
+  const session: ShellSession = {
+    spec,
+    term,
+    fit,
+    host,
+    opened: false,
+    started: false,
+    disposed: false
+  }
 
   term.onTitleChange((title) => {
     if (!title) return
@@ -253,6 +262,16 @@ export function focusShell(tabId: string): void {
   sessions.get(tabId)?.term.focus()
 }
 
+// Starts a shell's process before its tab is shown, because only the active project's tabs are mounted and a workgroup thinker must run whichever project is on screen.
+export function startShellDetached(spec: ShellSpec): void {
+  listen()
+  if (sessions.has(spec.id)) return
+  const session = createSession(spec)
+  sessions.set(spec.id, session)
+  session.started = true
+  void start(session)
+}
+
 export function attachShell(spec: ShellSpec, container: HTMLElement): void {
   listen()
   let session = sessions.get(spec.id)
@@ -264,6 +283,8 @@ export function attachShell(spec: ShellSpec, container: HTMLElement): void {
   if (!session.opened) {
     session.opened = true
     session.term.open(session.host)
+    if (session.started) return fitShell(spec.id)
+    session.started = true
     session.fit.fit()
     void start(session)
     return
