@@ -45,7 +45,8 @@ const color = computed(() => groupColorOf(props.project.id, props.groupId))
 
 const ROLE_LABELS: Record<WorkgroupMemberInfo['role'], string> = {
   leader: 'Leader',
-  thinker: 'Thinker'
+  thinker: 'Thinker',
+  collaborator: 'Collaborator'
 }
 
 watch(

@@ -152,3 +152,105 @@ export async function decideApproval(requestId: string, approved: boolean): Prom
 window.api.workgroup.onPendingChange(setPending)
 window.api.workgroup.onOpenApprovals(() => openApprovals())
 void window.api.workgroup.pending().then(setPending)
+
+export interface JoinDraft {
+  project: ProjectRef
+  groupId: number
+  groupName: string
+  tabId: string
+  tabTitle: string
+  vendor: string
+  label: string
+}
+
+// notice is set once the tab has joined but something after the join fell short, so the modal offers only Close.
+export const joining = reactive<{
+  draft: JoinDraft | null
+  busy: boolean
+  error: string | null
+  notice: string | null
+}>({ draft: null, busy: false, error: null, notice: null })
+
+const JOINABLE_COMMANDS: Record<string, string> = { claude: 'claude', codex: 'codex' }
+const LABEL_MAX = 30
+
+// A Claude or Codex shell in no live group can be added; Cursor and plain shells have no hooks, so no gate would hold them.
+export function joinVendor(projectId: string, tab: WorkspaceTab): string | null {
+  if (tab.kind !== 'shell' || isWorkgroupMember(projectId, tab.id)) return null
+  return JOINABLE_COMMANDS[tab.command] ?? null
+}
+
+export function liveGroupsOf(projectId: string): WorkgroupInfo[] {
+  return states[projectId]?.groups ?? []
+}
+
+// The tab title reduced to the member label pattern and made unique in the group, falling back to the vendor name.
+export function joinLabel(title: string, vendor: string, group: WorkgroupInfo): string {
+  const cleaned = title
+    .replace(/[^A-Za-z0-9_-]+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '')
+    .slice(0, LABEL_MAX)
+  const base = /^[A-Za-z0-9]/.test(cleaned) ? cleaned : vendor
+  const taken = new Set(group.members.map((member) => member.label.toLowerCase()))
+  if (!taken.has(base.toLowerCase())) return base
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`
+    const candidate = base.slice(0, LABEL_MAX - suffix.length) + suffix
+    if (!taken.has(candidate.toLowerCase())) return candidate
+  }
+}
+
+export function openJoin(
+  project: ProjectRef,
+  group: WorkgroupInfo,
+  tab: WorkspaceTab,
+  tabTitle: string
+): void {
+  const vendor = joinVendor(project.id, tab)
+  if (!vendor) return
+  joining.error = null
+  joining.notice = null
+  joining.draft = {
+    project,
+    groupId: group.id,
+    groupName: group.name,
+    tabId: tab.id,
+    tabTitle,
+    vendor,
+    label: joinLabel(tabTitle, vendor, group)
+  }
+}
+
+export function closeJoin(): void {
+  if (joining.busy) return
+  joining.draft = null
+  joining.error = null
+  joining.notice = null
+}
+
+export async function confirmJoin(): Promise<void> {
+  const draft = joining.draft
+  if (!draft || joining.busy) return
+  joining.busy = true
+  joining.error = null
+  try {
+    const result = await window.api.workgroup.join({
+      projectPath: draft.project.path,
+      groupId: draft.groupId,
+      tabId: draft.tabId,
+      label: draft.label
+    })
+    if (!result.ok) {
+      joining.error = result.error ?? 'The tab could not join the workgroup.'
+      return
+    }
+    await refreshWorkgroups(draft.project)
+    if (result.warning) {
+      joining.notice = result.warning
+      return
+    }
+    joining.draft = null
+  } finally {
+    joining.busy = false
+  }
+}

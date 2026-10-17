@@ -254,7 +254,7 @@ export interface WorkgroupSpawnResult {
 
 export interface WorkgroupMemberInfo {
   tabId: string
-  role: 'leader' | 'thinker'
+  role: 'leader' | 'thinker' | 'collaborator'
   label: string
   vendor: string
 }
@@ -307,6 +307,20 @@ export interface WorkgroupThreadResult {
   ok: boolean
   thread?: WorkgroupThread
   error?: string
+}
+
+export interface WorkgroupJoinRequest {
+  projectPath: string
+  groupId: number
+  tabId: string
+  label: string
+}
+
+export interface WorkgroupJoinResult {
+  ok: boolean
+  error?: string
+  // Set when the tab joined but the welcome line could not be typed into it.
+  warning?: string
 }
 
 export interface WorkgroupDisbandResult {

@@ -17,6 +17,7 @@ const (
 	opPropose = "propose"
 	opSpawn   = "spawn"
 	opNudge   = "nudge"
+	opClaim   = "claim"
 
 	dialTimeout    = time.Second
 	proposeTimeout = 10 * time.Minute
@@ -56,6 +57,16 @@ type Response struct {
 	Reason   string `json:"reason,omitempty"`
 	// Withdrawn is true when the request ended without the human answering, such as the app window closing.
 	Withdrawn bool `json:"withdrawn,omitempty"`
+	// Join is what a claimed join token was minted for.
+	Join *JoinGrant `json:"join,omitempty"`
+}
+
+// A join the human approved in the app: an open tab becoming a collaborator of a live group.
+type JoinGrant struct {
+	ProjectPath string `json:"project_path"`
+	GroupID     int64  `json:"group_id"`
+	TabID       string `json:"tab_id"`
+	Label       string `json:"label"`
 }
 
 // The socket the lemongrass app listens on for group requests.
@@ -94,6 +105,18 @@ func Nudge(socketPath, tabID string) (typed bool, reason string, err error) {
 		return false, "", err
 	}
 	return resp.Typed, resp.Reason, nil
+}
+
+// Redeems a join token the app minted when the human approved, once. Only the app can mint one, so a model running `lgrass workgroup join` itself gets nothing.
+func Claim(socketPath, token string) (JoinGrant, error) {
+	resp, err := call(socketPath, Request{Op: opClaim, Token: token}, spawnTimeout)
+	if err != nil {
+		return JoinGrant{}, err
+	}
+	if resp.Join == nil {
+		return JoinGrant{}, errors.New("workgroup: the app returned no join for the token")
+	}
+	return *resp.Join, nil
 }
 
 func call(socketPath string, req Request, deadline time.Duration) (Response, error) {

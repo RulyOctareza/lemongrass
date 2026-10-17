@@ -63,9 +63,45 @@ interface Reply {
   typed?: boolean
   reason?: string
   withdrawn?: boolean
+  join?: { project_path: string; group_id: number; tab_id: string; label: string }
 }
 
 const approvals = new Map<string, Approved>()
+
+export interface JoinGrant {
+  projectPath: string
+  groupId: number
+  tabId: string
+  label: string
+}
+
+const JOIN_TTL_MS = 60_000
+const joins = new Map<string, JoinGrant & { expires: number }>()
+
+// Minted only when the human approves a join in the app, and redeemed once by `lgrass workgroup join` through the claim op.
+export function mintJoinToken(grant: JoinGrant): string {
+  const now = Date.now()
+  for (const [token, join] of joins) if (join.expires < now) joins.delete(token)
+  const token = randomUUID()
+  joins.set(token, { ...grant, expires: now + JOIN_TTL_MS })
+  return token
+}
+
+function handleClaim(token: string): Reply {
+  const join = joins.get(token)
+  joins.delete(token)
+  if (!join || join.expires < Date.now())
+    return { ok: false, error: 'the join token is unknown or has expired' }
+  return {
+    ok: true,
+    join: {
+      project_path: join.projectPath,
+      group_id: join.groupId,
+      tab_id: join.tabId,
+      label: join.label
+    }
+  }
+}
 const spawnWaiters = new Map<string, (result: WorkgroupSpawnResult) => void>()
 let dialogQueue: Promise<unknown> = Promise.resolve()
 
@@ -316,6 +352,7 @@ async function respond(
   try {
     if (request.op === 'propose') return await handlePropose(request, getWindow, signal)
     if (request.op === 'spawn') return await handleSpawn(String(request.token ?? ''), getWindow)
+    if (request.op === 'claim') return handleClaim(String(request.token ?? ''))
     if (request.op === 'nudge')
       return await handleNudge(nudgeLgrassdPath, String(request.tab_id ?? ''))
     return { ok: false, error: `unknown op ${String(request.op)}` }

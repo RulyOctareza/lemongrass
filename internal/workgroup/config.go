@@ -181,6 +181,9 @@ func validateThinkers(thinkers []Thinker, taken []string, baseDir string) error 
 	return nil
 }
 
+// ValidLabel reports whether label fits the member label pattern.
+func ValidLabel(label string) bool { return labelPattern.MatchString(label) }
+
 func containsString(list []string, v string) bool {
 	for _, item := range list {
 		if item == v {

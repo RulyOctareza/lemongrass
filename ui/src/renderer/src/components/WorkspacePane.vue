@@ -21,6 +21,8 @@ import {
   type ProjectRef
 } from '../workspace'
 import { tabKindOf, type TabContext } from '../tabKinds'
+import { joinVendor, liveGroupsOf, openJoin } from '../workgroups'
+import type { WorkgroupInfo } from '../../../preload/types'
 import type { DropZone, EdgeZone } from '../layoutTree'
 import type { WorkspaceLayoutNode, WorkspaceTab } from '../../../preload/types'
 
@@ -244,6 +246,19 @@ async function copyTabId(tabId: string): Promise<void> {
   copiedTabId.value = tabId
   clearTimeout(copiedTimer)
   copiedTimer = setTimeout(() => (copiedTabId.value = null), 1500)
+}
+
+const menuJoinGroups = computed((): WorkgroupInfo[] | null =>
+  menuTab.value && joinVendor(props.project.id, menuTab.value)
+    ? liveGroupsOf(props.project.id)
+    : null
+)
+
+function menuJoin(group: WorkgroupInfo): void {
+  const tab = menuTab.value
+  if (!tab) return
+  openJoin(props.project, group, tab, tabKindOf(tab).label(tab, tabContext(tab)).text)
+  menu.value = null
 }
 
 function menuCopyTabId(): void {
@@ -610,6 +625,19 @@ onBeforeUnmount(() => {
         </svg>
         Copy tab id
       </button>
+      <template v-if="menuJoinGroups">
+        <div class="menu-divider" />
+        <p class="menu-heading">Add to workgroup</p>
+        <button
+          v-for="group in menuJoinGroups"
+          :key="`join-${group.id}`"
+          class="menu-item"
+          @click="menuJoin(group)"
+        >
+          {{ group.name }}
+        </button>
+        <button v-if="!menuJoinGroups.length" class="menu-item" disabled>No live workgroup</button>
+      </template>
       <div class="menu-divider" />
       <button
         v-for="action in closeActions"

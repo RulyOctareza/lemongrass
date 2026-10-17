@@ -6,6 +6,7 @@ import HeaderBar from './components/HeaderBar.vue'
 import WorkspaceView from './components/WorkspaceView.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import WorkgroupApprovalModal from './components/WorkgroupApprovalModal.vue'
+import WorkgroupJoinModal from './components/WorkgroupJoinModal.vue'
 import ProjectTrustModal from './components/ProjectTrustModal.vue'
 import { loadAccounts } from './accounts'
 import {
@@ -199,6 +200,7 @@ onBeforeUnmount(() => {
 
     <SettingsModal v-if="settingsOpen" @close="settingsOpen = false" />
     <WorkgroupApprovalModal />
+    <WorkgroupJoinModal />
     <ProjectTrustModal
       v-if="trustPrompt"
       :project="trustPrompt"

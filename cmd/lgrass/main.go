@@ -65,6 +65,9 @@ COMMANDS
                                      lemongrass app; approved thinkers open as tabs next to this one, and this tab is the leader
   workgroup add <path-to-config>   Leader only: proposes more thinkers for this tab's live workgroup from a config that lists
                                      only thinkers; once the human approves they open as tabs and join the group thread
+  workgroup join --token <token> [--json]
+                                     Run by the lemongrass app when the human adds an open tab to a live workgroup as a
+                                     collaborator; the token comes only from the human's approval in the app
   workgroup disband <id>            Ends a workgroup; only its leader may. Tabs stay open and the thread stays readable
   workgroup thread [--all] [--before <message-id>] [--limit N]
                                      Reads this tab's workgroup thread, post to it with thread post

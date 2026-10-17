@@ -143,6 +143,8 @@ func hookSessionStart(store *session.Store, payload hookEvent, projectPath strin
 	}
 	if member, group, ok := liveThinker(store, payload.TabID); ok {
 		parts = append(parts, session.FormatThinkerStart(member, group))
+	} else if member, group, ok := liveCollaborator(store, payload.TabID); ok {
+		parts = append(parts, session.FormatCollaboratorStart(member, group))
 	}
 	parts = append(parts, notificationContext(store, payload.TabID)...)
 	return newHookResult("SessionStart", "", parts)
@@ -178,6 +180,9 @@ func hookPreToolUse(store *session.Store, payload hookEvent, projectPath string)
 
 	_, _, deny := thinkerGateDecision(store, payload)
 	if deny != "" {
+		return newHookResult("PreToolUse", "deny", []string{deny})
+	}
+	if deny := collaboratorGateDeny(store, payload); deny != "" {
 		return newHookResult("PreToolUse", "deny", []string{deny})
 	}
 

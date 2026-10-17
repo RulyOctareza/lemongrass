@@ -23,3 +23,12 @@ func TestLeaderAddMemberIsListedAndRenders(t *testing.T) {
 		t.Errorf("extra argument err = %v", err)
 	}
 }
+
+func TestCollaboratorJoinRenders(t *testing.T) {
+	out := render(t, t.TempDir(), "collaborator", "join")
+	for _, want := range []string{"lgrass workgroup thread --all", "Introduce yourself", "agree with that member in the thread", "tell your human"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("collaborator join missing %q", want)
+		}
+	}
+}

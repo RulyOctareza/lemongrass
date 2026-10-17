@@ -124,3 +124,23 @@ func TestComposeAddedPromptTellsTheThinkerToCatchUp(t *testing.T) {
 		t.Error("a founding thinker was told it joined late")
 	}
 }
+
+func TestClaimSendsOnlyTheTokenAndReturnsTheGrant(t *testing.T) {
+	grant := JoinGrant{ProjectPath: "/p", GroupID: 7, TabID: "t1", Label: "research"}
+	path, seen := fakeApp(t, func(r Request) Response {
+		if r.Op == opClaim && r.Token == "tok-9" {
+			return Response{OK: true, Join: &grant}
+		}
+		return Response{Error: "the join token is unknown or has expired"}
+	})
+	got, err := Claim(path, "tok-9")
+	if err != nil || got != grant {
+		t.Fatalf("Claim = %+v, %v", got, err)
+	}
+	if req := <-seen; req.Op != "claim" || req.Token != "tok-9" || req.TabID != "" || req.GroupID != 0 {
+		t.Errorf("claim request = %+v, want only the op and token", req)
+	}
+	if _, err := Claim(path, "forged"); err == nil || !strings.HasPrefix(err.Error(), "workgroup: ") {
+		t.Errorf("a forged token = %v, want a refusal with the package prefix", err)
+	}
+}

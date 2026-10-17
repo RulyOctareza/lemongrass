@@ -13,7 +13,7 @@ import (
 
 func cmdWorkgroup(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: lgrass workgroup <create|add|disband|thread|list> ...")
+		fmt.Fprintln(os.Stderr, "usage: lgrass workgroup <create|add|join|disband|thread|list> ...")
 		os.Exit(1)
 	}
 	switch args[0] {
@@ -21,6 +21,8 @@ func cmdWorkgroup(args []string) {
 		cmdWorkgroupCreate(args[1:])
 	case "add":
 		cmdWorkgroupAdd(args[1:])
+	case "join":
+		cmdWorkgroupJoin(args[1:])
 	case "disband":
 		cmdWorkgroupDisband(args[1:])
 	case "thread":
@@ -181,6 +183,85 @@ func cmdWorkgroupAdd(args []string) {
 	for _, m := range members {
 		fmt.Printf("  %s (%s) tab %s\n", m.Label, m.Vendor, m.TabID)
 	}
+}
+
+// Run by the lemongrass app after the human approves adding an open tab to a live group. The token is minted by the app on that approval and redeemed here once, so no model can make a tab join.
+func cmdWorkgroupJoin(args []string) {
+	token, asJSON := "", false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
+			}
+		case "--json":
+			asJSON = true
+		}
+	}
+	if token == "" {
+		fmt.Fprintln(os.Stderr, "usage: lgrass workgroup join --token <token> [--json]")
+		os.Exit(1)
+	}
+	grant, err := workgroup.Claim(workgroup.AppSocketPath(), token)
+	if err != nil {
+		fail(err)
+	}
+	if grant.ProjectPath != currentProject().Path {
+		fmt.Fprintln(os.Stderr, "lgrass workgroup: the approved join belongs to another project")
+		os.Exit(1)
+	}
+	if !workgroup.ValidLabel(grant.Label) {
+		fmt.Fprintf(os.Stderr, "lgrass workgroup: label %q must be 1 to 30 letters, digits, dashes or underscores\n", grant.Label)
+		os.Exit(1)
+	}
+
+	store := openStore()
+	defer store.Close()
+	group, err := store.GroupByID(grant.GroupID)
+	if err != nil {
+		fail(err)
+	}
+	if !group.Live() {
+		fmt.Fprintf(os.Stderr, "lgrass workgroup: workgroup %d is disbanded\n", group.ID)
+		os.Exit(1)
+	}
+	vendor, _ := store.VendorForTab(grant.TabID)
+	if vendor != "claude" && vendor != "codex" {
+		fmt.Fprintln(os.Stderr, "lgrass workgroup: only a Claude or Codex tab can join a workgroup")
+		os.Exit(1)
+	}
+	if _, err := store.LiveGroupForTab(grant.TabID); err == nil {
+		fail(session.ErrAlreadyInside)
+	}
+	members, err := store.GroupMembers(group.ID)
+	if err != nil {
+		fail(err)
+	}
+	for _, m := range members {
+		if strings.EqualFold(m.Label, grant.Label) {
+			fail(fmt.Errorf("%w (%q)", session.ErrLabelTaken, grant.Label))
+		}
+	}
+
+	// Posted before the row exists, so the joining tab is not woken by its own arrival; the app types its first prompt.
+	if _, err := store.PostMessage(group.LeaderTabID, group.ThreadID, collaboratorJoinMessage(grant.Label, vendor)); err != nil {
+		fail(err)
+	}
+	if err := store.AddCollaborator(group.ID, session.Member{TabID: grant.TabID, Label: grant.Label, Vendor: vendor}); err != nil {
+		fail(err)
+	}
+	notifyTargets(store)
+
+	if asJSON {
+		json.NewEncoder(os.Stdout).Encode(map[string]any{"group_id": group.ID, "thread_id": group.ThreadID, "label": grant.Label})
+		return
+	}
+	fmt.Printf("%s joined workgroup %d as a collaborator, group thread %s.\n", grant.Label, group.ID, group.ThreadID)
+}
+
+func collaboratorJoinMessage(label, vendor string) string {
+	return fmt.Sprintf("lgrass: the human added %s (%s) to the group as a collaborator. It brings its own work, and its human still directs it.", label, vendor)
 }
 
 // Posted with no mention, so every member hears it, the new ones included.

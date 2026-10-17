@@ -17,6 +17,9 @@ type action struct {
 }
 
 var domains = map[string]map[string]action{
+	"collaborator": {
+		"join": {summary: "What to do after the human adds your tab to a workgroup: `lgrass how collaborator join`", run: static("collaborator/join.md")},
+	},
 	"leader": {
 		"addmember": {summary: "Add thinkers to your live workgroup: `lgrass how leader addmember`", run: static("leader/addmember.md")},
 	},

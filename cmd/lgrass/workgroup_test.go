@@ -34,3 +34,10 @@ func TestJoinMessageNamesEveryNewThinker(t *testing.T) {
 		t.Errorf("two = %q", two)
 	}
 }
+
+func TestCollaboratorJoinMessageNamesTheTabWithoutAMention(t *testing.T) {
+	got := collaboratorJoinMessage("research", "codex")
+	if !strings.Contains(got, "research (codex)") || !strings.Contains(got, "collaborator") || strings.Contains(got, "!>>") {
+		t.Errorf("message = %q", got)
+	}
+}

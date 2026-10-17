@@ -30,6 +30,8 @@ import type {
   VaultPolicyRule,
   WorkspaceLayoutState,
   WorkgroupDisbandResult,
+  WorkgroupJoinRequest,
+  WorkgroupJoinResult,
   WorkgroupInfo,
   WorkgroupPending,
   WorkgroupSpawnRequest,
@@ -277,7 +279,9 @@ const workgroup = {
   ): Promise<WorkgroupThreadResult> =>
     ipcRenderer.invoke('workgroups:thread', { projectPath, threadId, before, limit }),
   disband: (projectPath: string, groupId: number): Promise<WorkgroupDisbandResult> =>
-    ipcRenderer.invoke('workgroups:disband', { projectPath, groupId })
+    ipcRenderer.invoke('workgroups:disband', { projectPath, groupId }),
+  join: (request: WorkgroupJoinRequest): Promise<WorkgroupJoinResult> =>
+    ipcRenderer.invoke('workgroups:join', request)
 }
 
 const accounts = {

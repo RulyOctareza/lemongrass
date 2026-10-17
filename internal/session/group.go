@@ -10,6 +10,8 @@ import (
 const (
 	RoleLeader  = "leader"
 	RoleThinker = "thinker"
+	// A collaborator is an open tab the human added to a live group. It keeps its own context and its own human, so it takes no assignment and no leader's go for its own work.
+	RoleCollaborator = "collaborator"
 
 	// Every thinker loads this skill.
 	ThinkerSkill = "lgrass-howtobe-thinker"
@@ -227,6 +229,16 @@ func (s *Store) LiveMembership(tabID string) (Group, Member, error) {
 
 // AddMembers joins thinkers to a live group in one transaction. A label is unique within the group ignoring case, and a tab can be in only one live group.
 func (s *Store) AddMembers(groupID int64, thinkers []Member) error {
+	return s.addMembers(groupID, thinkers, RoleThinker)
+}
+
+// AddCollaborator joins an open tab to a live group under the same checks as AddMembers.
+func (s *Store) AddCollaborator(groupID int64, m Member) error {
+	m.Prompt, m.Skills = "", nil
+	return s.addMembers(groupID, []Member{m}, RoleCollaborator)
+}
+
+func (s *Store) addMembers(groupID int64, members []Member, role string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -263,7 +275,7 @@ func (s *Store) AddMembers(groupID int64, thinkers []Member) error {
 		return err
 	}
 
-	for _, m := range thinkers {
+	for _, m := range members {
 		if labels[strings.ToLower(m.Label)] {
 			return fmt.Errorf("%w (%q)", ErrLabelTaken, m.Label)
 		}
@@ -279,7 +291,7 @@ func (s *Store) AddMembers(groupID int64, thinkers []Member) error {
 		if err != sql.ErrNoRows {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT INTO lg_group_members (group_id, tab_id, role, label, vendor, prompt, skills) VALUES (?, ?, ?, ?, ?, ?, ?)`, groupID, m.TabID, RoleThinker, m.Label, m.Vendor, m.Prompt, strings.Join(m.Skills, ",")); err != nil {
+		if _, err := tx.Exec(`INSERT INTO lg_group_members (group_id, tab_id, role, label, vendor, prompt, skills) VALUES (?, ?, ?, ?, ?, ?, ?)`, groupID, m.TabID, role, m.Label, m.Vendor, m.Prompt, strings.Join(m.Skills, ",")); err != nil {
 			return err
 		}
 	}

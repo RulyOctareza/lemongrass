@@ -155,6 +155,17 @@ func FormatThinkerStart(m Member, group Group) string {
 	return text
 }
 
+// CollaboratorJoinCommand is the read that teaches a collaborator its role; the collaborator gate opens once a tab has run it.
+const CollaboratorJoinCommand = "lgrass how collaborator join"
+
+func FormatCollaboratorStart(m Member, group Group) string {
+	return fmt.Sprintf("%s you are collaborator %q in workgroup %q. Run %s first, then lgrass workgroup thread.", Prefix, m.Label, group.Name, CollaboratorJoinCommand)
+}
+
+func FormatCollaboratorDeny() string {
+	return fmt.Sprintf("%s you are a collaborator in a workgroup. Run `%s` first. Until then only lgrass commands are allowed.", Prefix, CollaboratorJoinCommand)
+}
+
 func FormatThinkerSkillsDeny(missing []string) string {
 	return fmt.Sprintf("%s load these skills first: %s. Claude Code: the Skill tool. Others: read the skill's SKILL.md. Until then only lgrass commands and those loads are allowed.", Prefix, strings.Join(missing, ", "))
 }
@@ -168,6 +179,9 @@ func FormatPrefixNote() string {
 func FormatMemberHeader(m Member) string {
 	if m.Role == RoleLeader {
 		return "You are the leader of this workgroup. Load the lgrass-howtobe-leader skill if you have not."
+	}
+	if m.Role == RoleCollaborator {
+		return fmt.Sprintf("You are the collaborator %q. Run `%s` if you have not in this session.", m.Label, CollaboratorJoinCommand)
 	}
 	text := fmt.Sprintf("You are the thinker %q. Skills you must load: %s.", m.Label, strings.Join(m.RequiredSkills(), ", "))
 	if m.Prompt != "" {

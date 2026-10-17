@@ -29,6 +29,8 @@ import type {
   VaultPolicy,
   VaultPolicyRule,
   WorkgroupDisbandResult,
+  WorkgroupJoinRequest,
+  WorkgroupJoinResult,
   WorkgroupInfo,
   WorkgroupPending,
   WorkgroupSpawnRequest,
@@ -57,6 +59,7 @@ interface Api {
       limit?: number
     ) => Promise<WorkgroupThreadResult>
     disband: (projectPath: string, groupId: number) => Promise<WorkgroupDisbandResult>
+    join: (request: WorkgroupJoinRequest) => Promise<WorkgroupJoinResult>
   }
   accounts: {
     list: () => Promise<AccountInfo[]>

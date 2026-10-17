@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +61,23 @@ func TestAddMembersRefusesClashesAndDisbandedGroups(t *testing.T) {
 	}
 	if err := store.AddMembers(9999, []Member{{TabID: tabAdded, Label: "z", Vendor: "claude"}}); !errors.Is(err, ErrNoSuchGroup) {
 		t.Errorf("unknown group = %v, want ErrNoSuchGroup", err)
+	}
+}
+
+func TestAddCollaboratorJoinsWithItsOwnRoleAndNoAssignment(t *testing.T) {
+	store := openTestStore(t)
+	g, _ := store.CreateGroup("g", Member{TabID: tabA, Label: "lead", Vendor: "claude"}, []Member{{TabID: tabB, Label: "reviewer", Vendor: "claude"}})
+	if err := store.AddCollaborator(g.ID, Member{TabID: tabAdded, Label: "research", Vendor: "codex", Prompt: "ignored", Skills: []string{"x"}}); err != nil {
+		t.Fatalf("AddCollaborator: %v", err)
+	}
+	_, m, err := store.LiveMembership(tabAdded)
+	if err != nil || m.Role != RoleCollaborator || m.Prompt != "" || len(m.Skills) != 0 {
+		t.Errorf("member = %+v, %v", m, err)
+	}
+	if err := store.AddCollaborator(g.ID, Member{TabID: tabAdded2, Label: "Reviewer", Vendor: "claude"}); !errors.Is(err, ErrLabelTaken) {
+		t.Errorf("label clash = %v, want ErrLabelTaken", err)
+	}
+	if h := FormatMemberHeader(m); !strings.Contains(h, `collaborator "research"`) || !strings.Contains(h, CollaboratorJoinCommand) {
+		t.Errorf("header = %q", h)
 	}
 }
