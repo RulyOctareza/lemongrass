@@ -14,7 +14,7 @@ submodules:
 	git submodule update --init
 
 # Moves the bibliothek pin to its latest commit; the new pin is committed like any other change.
-bibliothek-update:
+bibliothek-update: submodules
 	git submodule update --remote internal/bibliothek/repo
 
 # Every binary for each target arch, written to dist/<os>-<arch>/ where ui/electron-builder.yml reads them. The old output of that os is removed first so a stale binary is never bundled.
@@ -53,7 +53,8 @@ install: submodules
 	go build $(LDFLAGS) -o $(D_BIN_DIR)/lgrassd.new ./cmd/lgrassd
 	mv -f $(D_BIN_DIR)/lgrassd.new $(D_BIN_DIR)/lgrassd
 
-dev: install
+# bibliothek-update comes first so install's own submodules prerequisite, already run once here, does not check the old pin back out.
+dev: bibliothek-update install
 	npm --prefix ui run dev
 
 # Compiles everything and discards the output, since a plain `go build` of a single main package writes its binary into the source directory.
