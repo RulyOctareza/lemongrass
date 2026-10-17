@@ -24,8 +24,6 @@ func main() {
 		cmdThread(os.Args[2:])
 	case "workgroup":
 		cmdWorkgroup(os.Args[2:])
-	case "listen":
-		cmdListen(os.Args[2:])
 	case "session":
 		cmdSession(os.Args[2:])
 	case "db":
@@ -69,10 +67,6 @@ COMMANDS
   workgroup thread [--all] [--before <message-id>] [--limit N]
                                      Reads this tab's workgroup thread, post to it with thread post
   workgroup list [--json]           Live workgroups in this project with their members and tab ids; needs no tab
-
-  listen [--timeout 10m] [--block] Blocks until a thread notification for this tab is pending, then prints it and
-                                     exits; meant to run backgrounded so its exit wakes an idle model, relaunch on return.
-                                     A Claude tab is notified directly, so it only records itself as ready unless --block
 
   tips add "<message>"              Add a project-local custom tip, surfaced alongside the
                                      built-in ones on the periodic PostToolUse nudge

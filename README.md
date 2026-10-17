@@ -60,7 +60,7 @@ In progress:
 
 - The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. Its transport has been checked over a live tunnel with curl. The app screen is temporary, and a real MCP client, live revoke and expiry have not been run yet. Search and an `lgrass node` client for Lemongrass users are planned.
 - A wire-protocol proxy so a whole app can point its own database driver at a local port. Port allocation and the MySQL handshake listener are done. Query execution and the Postgres listener are not.
-- Codex as a workgroup member. Its gate depends on a listener heartbeat that is unverified under Codex's default sandbox.
+- Codex as a workgroup member. Its tabs cannot write the lgrass database under Codex's default sandbox yet.
 
 Planned:
 

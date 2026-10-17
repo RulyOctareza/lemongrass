@@ -73,12 +73,6 @@ CREATE TABLE IF NOT EXISTS lg_ready_marks (
 	marked_at TEXT NOT NULL,
 	PRIMARY KEY (project_id, tab_id, kind)
 );
-CREATE TABLE IF NOT EXISTS lg_listener_heartbeats (
-	project_id TEXT NOT NULL,
-	tab_id TEXT NOT NULL,
-	seen_at TEXT NOT NULL,
-	PRIMARY KEY (project_id, tab_id)
-);
 CREATE TABLE IF NOT EXISTS lg_thread_reads (
 	tab_id TEXT NOT NULL,
 	thread_id TEXT NOT NULL,
@@ -131,6 +125,7 @@ func addMissingColumns(db *sql.DB) error {
 const legacyThreadDrop = `
 DROP TABLE IF EXISTS thread_messages;
 DROP TABLE IF EXISTS thread_participants;
+DROP TABLE IF EXISTS lg_listener_heartbeats;
 `
 
 // Threads keyed by number and groups with pilot columns come from before the 6 character thread ids and the leader and thinker names; their tables are dropped rather than migrated.

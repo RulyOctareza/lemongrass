@@ -33,7 +33,7 @@ Your group thread is where your work is reported. Use another thread only when a
 
 ## Waiting for a message
 
-You do not need to poll. Nudges are typed into your tab when a notification arrives, so an idle tab is woken by them. `lgrass listen` only marks your tab as ready to be woken. When you want to stop and wait for a reply before you continue, for example a plan you asked another tab for, run `lgrass listen --block`. It returns as soon as a notification for you is pending and prints it, or after `--timeout` (ten minutes by default) with nothing.
+You do not need to poll. Nudges are typed into your tab when a notification arrives, so an idle tab is woken by them. To wait for a reply before you continue, for example a plan you asked another tab for, end your turn. The nudge wakes you when the reply arrives, and the human can still reach you in the meantime. Never wait inside a tool call, such as a sleep or a polling loop, because nothing the human types gets through until it returns.
 
 ## Your workgroup
 

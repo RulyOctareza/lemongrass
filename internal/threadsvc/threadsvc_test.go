@@ -215,63 +215,10 @@ func TestWakeTypesTheNudgeForIdleSupportedTabs(t *testing.T) {
 	}
 }
 
-func TestWaitReturnsImmediatelyWhenRowsAlreadyPending(t *testing.T) {
-	store := openStore(t)
-	store.CreateThread(tabAuthor, "Review", "a !>>"+tabCodex+"<<!")
-	_, path := startService(t, store, nil)
-
-	start := time.Now()
-	woke, err := Wait(path, tabCodex, 10)
-	if err != nil || !woke || time.Since(start) > 2*time.Second {
-		t.Errorf("Wait = %v, %v after %v, want an immediate wake", woke, err, time.Since(start))
-	}
-}
-
-func TestWaitWakesWhenAMessageArrivesLater(t *testing.T) {
-	store := openStore(t)
-	_, path := startService(t, store, nil)
-
-	type result struct {
-		woke bool
-		err  error
-	}
-	done := make(chan result, 1)
-	go func() {
-		woke, err := Wait(path, tabCodex, 10)
-		done <- result{woke, err}
-	}()
-	time.Sleep(200 * time.Millisecond)
-	store.CreateThread(tabAuthor, "Review", "a !>>"+tabCodex+"<<!")
-	if err := Wake(path); err != nil {
-		t.Fatalf("Wake: %v", err)
-	}
-	select {
-	case r := <-done:
-		if r.err != nil || !r.woke {
-			t.Errorf("Wait = %v, %v, want a wake", r.woke, r.err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("blocked listener was not woken")
-	}
-}
-
-func TestWaitTimesOutWithoutAWake(t *testing.T) {
-	store := openStore(t)
-	_, path := startService(t, store, nil)
-
-	woke, err := Wait(path, tabCodex, 1)
-	if err != nil || woke {
-		t.Errorf("Wait = %v, %v, want a quiet timeout", woke, err)
-	}
-}
-
-func TestClientsReportAnUnreachableService(t *testing.T) {
+func TestWakeReportsAnUnreachableService(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "none.sock")
 	if err := Wake(path); err == nil {
 		t.Error("Wake reported success with no service")
-	}
-	if _, err := Wait(path, tabCodex, 1); err == nil {
-		t.Error("Wait reported success with no service")
 	}
 }
 

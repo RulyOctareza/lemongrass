@@ -12,9 +12,6 @@ const NotificationRetention = 30 * 24 * time.Hour
 const (
 	stateSent = "sent"
 	stateRead = "read"
-
-	// A listener that has not written within this window no longer counts as live.
-	listenerHeartbeatTTL = time.Hour
 )
 
 // How a notification's target relates to its message.
@@ -121,7 +118,7 @@ func (s *Store) pendingRows(tabID, filter string) ([]PendingThread, error) {
 	return out, nil
 }
 
-// The tab's pending other rows are marked sent when a nudge or listener line already told it to read the thread.
+// The tab's pending other rows are marked sent when a nudge line already told it to read the thread.
 func (s *Store) MarkOtherSent(tabID string) error {
 	_, err := s.db.Exec(`UPDATE lg_notifications SET state = 'sent', sent_at = ? WHERE target_tab_id = ? AND kind = 'other' AND state = 'pending'`, now(), tabID)
 	return err
@@ -248,20 +245,6 @@ func (s *Store) TabsDueForRetry(maxAttempts int, backoff func(attempts int) time
 func (s *Store) PruneNotifications(at time.Time) error {
 	cutoff := at.Add(-NotificationRetention).UTC().Format(time.RFC3339Nano)
 	_, err := s.db.Exec(`DELETE FROM lg_notifications WHERE created_at < ?`, cutoff)
-	return err
-}
-
-// Also drops every heartbeat older than the TTL, so tabs that never come back leave no rows.
-func (s *Store) Heartbeat(tabID string) error {
-	ts := now()
-	if _, err := s.db.Exec(`
-		INSERT INTO lg_listener_heartbeats (project_id, tab_id, seen_at) VALUES (?, ?, ?)
-		ON CONFLICT (project_id, tab_id) DO UPDATE SET seen_at = excluded.seen_at
-	`, s.projectID, tabID, ts); err != nil {
-		return err
-	}
-	cutoff := time.Now().Add(-listenerHeartbeatTTL).UTC().Format(time.RFC3339Nano)
-	_, err := s.db.Exec(`DELETE FROM lg_listener_heartbeats WHERE seen_at < ?`, cutoff)
 	return err
 }
 

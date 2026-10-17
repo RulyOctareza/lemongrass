@@ -13,12 +13,12 @@ func TestMarksRecordListAndClear(t *testing.T) {
 	}
 	store.MarkReady(tabA, SkillMark("lgrass-howtobe-thinker"))
 	store.MarkReady(tabA, SkillMark("lgrass-howtobe-thinker"))
-	store.MarkReady(tabA, MarkListening)
+	store.MarkReady(tabA, TaskCloseMark("demo-task"))
 	store.MarkReady(tabB, SkillMark("lgrass-howtobe-thinker"))
 
 	marks, _ := store.Marks(tabA)
-	if len(marks) != 2 || !marks["skill:lgrass-howtobe-thinker"] || !marks["listen"] {
-		t.Errorf("marks = %v, want the skill and listen marks once each", marks)
+	if len(marks) != 2 || !marks["skill:lgrass-howtobe-thinker"] || !marks["task-close:demo-task"] {
+		t.Errorf("marks = %v, want the skill and task-close marks once each", marks)
 	}
 	store.ClearMarks(tabA)
 	if marks, _ := store.Marks(tabA); len(marks) != 0 {
@@ -29,34 +29,19 @@ func TestMarksRecordListAndClear(t *testing.T) {
 	}
 }
 
-func TestListenerLiveFollowsTheHeartbeatWindow(t *testing.T) {
-	store := openTestStore(t)
-
-	if live, _ := store.ListenerLive(tabA, time.Now()); live {
-		t.Error("a tab with no heartbeat reads as live")
-	}
-	store.Heartbeat(tabA)
-	if live, _ := store.ListenerLive(tabA, time.Now()); !live {
-		t.Error("a fresh heartbeat reads as not live")
-	}
-	if live, _ := store.ListenerLive(tabA, time.Now().Add(ListenerLiveWindow+time.Second)); live {
-		t.Error("a heartbeat past the window still reads as live")
-	}
-}
-
 func TestForgetTabClearsMarksAndRegisterPrunesOrphanedOnes(t *testing.T) {
 	store := openTestStore(t)
 	store.RegisterTab(tabA, "claude")
-	store.MarkReady(tabA, MarkListening)
+	store.MarkReady(tabA, SkillMark("lgrass-howtobe-thinker"))
 	store.ForgetTab(tabA)
 	if marks, _ := store.Marks(tabA); len(marks) != 0 {
 		t.Errorf("marks survived ForgetTab: %v", marks)
 	}
 
 	old := time.Now().Add(-tabRecordTTL - time.Hour).UTC().Format(time.RFC3339Nano)
-	store.db.Exec(`INSERT INTO lg_ready_marks (project_id, tab_id, kind, marked_at) VALUES ('p', 'orphan-tab', 'listen', ?)`, old)
+	store.db.Exec(`INSERT INTO lg_ready_marks (project_id, tab_id, kind, marked_at) VALUES ('p', 'orphan-tab', 'skill:lgrass-howtobe-thinker', ?)`, old)
 	store.RegisterTab(tabB, "codex")
-	store.MarkReady(tabB, MarkListening)
+	store.MarkReady(tabB, SkillMark("lgrass-howtobe-thinker"))
 	store.db.Exec(`UPDATE lg_ready_marks SET marked_at = ? WHERE tab_id = ?`, old, tabB)
 	store.RegisterTab(tabC, "codex")
 

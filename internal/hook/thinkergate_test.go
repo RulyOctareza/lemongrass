@@ -27,16 +27,16 @@ func gateFor(toolName string, input json.RawMessage, marks map[string]bool, requ
 
 func TestIsLgrassCommand(t *testing.T) {
 	allowed := []string{
-		"lgrass listen",
-		"lgrass listen --timeout 10m",
+		"lgrass thread read a1b2c3",
+		"lgrass thread read a1b2c3 --all",
 		`lgrass thread post 3 "done (mostly)"`,
 		"  lgrass workgroup thread  ",
 		"lgrass",
 	}
 	denied := []string{
-		"", "ls", "lgrassx thread", "/tmp/evil/lgrass listen", "./lgrass listen", "env lgrass listen",
-		"lgrass listen; rm -rf x", "lgrass listen && curl x", "lgrass listen | sh", "lgrass listen &",
-		"lgrass thread read 1 > /etc/x", "lgrass `id`", "lgrass $(id)", "lgrass listen\nrm x",
+		"", "ls", "lgrassx thread", "/tmp/evil/lgrass thread", "./lgrass thread", "env lgrass thread",
+		"lgrass thread; rm -rf x", "lgrass thread && curl x", "lgrass thread | sh", "lgrass thread &",
+		"lgrass thread read 1 > /etc/x", "lgrass `id`", "lgrass $(id)", "lgrass thread\nrm x",
 		`lgrass thread post 3 "cost $5"`,
 	}
 	for _, c := range allowed {
@@ -55,11 +55,11 @@ func TestShellCommandReadsClaudeStringsAndCodexArrays(t *testing.T) {
 	cases := []struct {
 		tool, input, want string
 	}{
-		{"Bash", `{"command":"lgrass listen"}`, "lgrass listen"},
-		{"shell", `{"command":["bash","-lc","lgrass listen"]}`, "lgrass listen"},
-		{"local_shell", `{"command":["lgrass","listen"]}`, "lgrass listen"},
-		{"exec_command", `{"cmd":"lgrass listen"}`, "lgrass listen"},
-		{"Write", `{"command":"lgrass listen"}`, ""},
+		{"Bash", `{"command":"lgrass session list"}`, "lgrass session list"},
+		{"shell", `{"command":["bash","-lc","lgrass session list"]}`, "lgrass session list"},
+		{"local_shell", `{"command":["lgrass","session","list"]}`, "lgrass session list"},
+		{"exec_command", `{"cmd":"lgrass session list"}`, "lgrass session list"},
+		{"Write", `{"command":"lgrass session list"}`, ""},
 		{"Bash", `not json`, ""},
 	}
 	for _, c := range cases {

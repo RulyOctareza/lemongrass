@@ -142,20 +142,6 @@ func TestPruneNotificationsKeepsThirtyDays(t *testing.T) {
 	}
 }
 
-func TestHeartbeatUpsertsAndDropsStaleOnes(t *testing.T) {
-	store := openTestStore(t)
-	old := time.Now().Add(-listenerHeartbeatTTL - time.Minute).UTC().Format(time.RFC3339Nano)
-	store.db.Exec(`INSERT INTO lg_listener_heartbeats (project_id, tab_id, seen_at) VALUES ('p', 'gone-tab', ?)`, old)
-
-	store.Heartbeat(tabA)
-	store.Heartbeat(tabA)
-	var count int
-	store.db.QueryRow(`SELECT COUNT(*) FROM lg_listener_heartbeats`).Scan(&count)
-	if count != 1 {
-		t.Errorf("heartbeat rows = %d, want 1 (own upserted, stale one dropped)", count)
-	}
-}
-
 func TestVendorForTabFallsBackToGroupMembership(t *testing.T) {
 	store := openTestStore(t)
 	store.RegisterTab(tabA, "claude")

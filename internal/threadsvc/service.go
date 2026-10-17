@@ -15,10 +15,8 @@ import (
 
 const (
 	opWake = "wake"
-	opWait = "wait"
 
-	maxWaitSeconds = 30
-	dialTimeout    = 300 * time.Millisecond
+	dialTimeout = 300 * time.Millisecond
 )
 
 func SocketPath() string {
@@ -26,15 +24,12 @@ func SocketPath() string {
 }
 
 type request struct {
-	Op      string `json:"op"`
-	TabID   string `json:"tab_id,omitempty"`
-	Seconds int    `json:"seconds,omitempty"`
+	Op string `json:"op"`
 }
 
 type response struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
-	Woke  bool   `json:"woke,omitempty"`
 }
 
 // A wake carries no data, so the ledger stays the only source of what is owed and a forged wake cannot inject a nudge.
@@ -42,7 +37,6 @@ type Service struct {
 	store        *session.Store
 	deliver      *Deliverer
 	mu           sync.Mutex
-	waiters      map[string][]chan struct{}
 	rechecking   map[string]bool
 	recheckDelay time.Duration
 	now          func() time.Time
@@ -55,7 +49,6 @@ func NewService(store *session.Store) *Service {
 	s := &Service{
 		store:        store,
 		deliver:      NewDeliverer(store),
-		waiters:      map[string][]chan struct{}{},
 		rechecking:   map[string]bool{},
 		recheckDelay: defaultRecheckDelay,
 		now:          time.Now,
@@ -113,70 +106,19 @@ func (s *Service) handleConn(conn net.Conn) {
 	case opWake:
 		s.Wake()
 		json.NewEncoder(conn).Encode(response{OK: true})
-	case opWait:
-		seconds := req.Seconds
-		if seconds < 1 || seconds > maxWaitSeconds {
-			seconds = maxWaitSeconds
-		}
-		conn.SetDeadline(time.Now().Add(time.Duration(seconds+5) * time.Second))
-		woke := s.wait(req.TabID, time.Duration(seconds)*time.Second)
-		json.NewEncoder(conn).Encode(response{OK: true, Woke: woke})
 	default:
 		json.NewEncoder(conn).Encode(response{Error: "threadsvc: unknown op " + req.Op})
 	}
 }
 
-// Signals waiting listeners and delivers typed nudges to supported tabs with pending rows.
+// Delivers typed nudges to supported tabs with pending rows.
 func (s *Service) Wake() {
 	tabs, err := s.store.PendingTabs()
 	if err != nil {
 		return
 	}
 	for _, tab := range tabs {
-		s.signal(tab)
 		s.deliver.DeliverTab(tab)
-	}
-}
-
-func (s *Service) signal(tabID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, ch := range s.waiters[tabID] {
-		select {
-		case ch <- struct{}{}:
-		default:
-		}
-	}
-}
-
-func (s *Service) wait(tabID string, timeout time.Duration) bool {
-	ch := make(chan struct{}, 1)
-	s.mu.Lock()
-	s.waiters[tabID] = append(s.waiters[tabID], ch)
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		list := s.waiters[tabID]
-		for i, c := range list {
-			if c == ch {
-				s.waiters[tabID] = append(list[:i], list[i+1:]...)
-				break
-			}
-		}
-		if len(s.waiters[tabID]) == 0 {
-			delete(s.waiters, tabID)
-		}
-	}()
-
-	if pending, err := s.store.PendingForTab(tabID); err == nil && len(pending) > 0 {
-		return true
-	}
-	select {
-	case <-ch:
-		return true
-	case <-time.After(timeout):
-		return false
 	}
 }
 
@@ -219,18 +161,6 @@ func Wake(socketPath string) error {
 		return errors.New(resp.Error)
 	}
 	return nil
-}
-
-// Blocks until the tab has pending rows or the seconds elapse; an error means the service is not reachable.
-func Wait(socketPath, tabID string, seconds int) (bool, error) {
-	resp, err := call(socketPath, request{Op: opWait, TabID: tabID, Seconds: seconds}, time.Duration(seconds+5)*time.Second)
-	if err != nil {
-		return false, err
-	}
-	if !resp.OK {
-		return false, errors.New(resp.Error)
-	}
-	return resp.Woke, nil
 }
 
 func call(socketPath string, req request, deadline time.Duration) (response, error) {

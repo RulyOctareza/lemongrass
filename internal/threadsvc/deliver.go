@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// Five attempts within roughly ten minutes with the backoff below, then the row stays pending for a hook or listener.
+	// Five attempts within roughly ten minutes with the backoff below, then the row stays pending for a hook.
 	MaxAttempts = 5
 
 	baseBackoff = 30 * time.Second
