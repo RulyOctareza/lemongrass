@@ -111,3 +111,16 @@ func TestComposePromptNamesTheRoleThreadAndAssignment(t *testing.T) {
 		t.Error("the thinker prompt asks for a listener")
 	}
 }
+
+func TestComposeAddedPromptTellsTheThinkerToCatchUp(t *testing.T) {
+	added := ComposeAddedPrompt("docs", "schema-review", "lead", []string{"lgrass-howtobe-thinker"}, "Write docs.")
+	plain := ComposePrompt("docs", "schema-review", "lead", []string{"lgrass-howtobe-thinker"}, "Write docs.")
+	for _, want := range []string{"already working before you joined", "lgrass workgroup thread --all", "wait for the leader's go", "Write docs."} {
+		if !strings.Contains(added, want) {
+			t.Errorf("added prompt missing %q", want)
+		}
+	}
+	if strings.Contains(plain, "before you joined") {
+		t.Error("a founding thinker was told it joined late")
+	}
+}

@@ -63,6 +63,8 @@ COMMANDS
   workgroup create <path-to-config>
                                      Declares a workgroup from a YAML or JSON config and asks the human to approve it in the
                                      lemongrass app; approved thinkers open as tabs next to this one, and this tab is the leader
+  workgroup add <path-to-config>   Leader only: proposes more thinkers for this tab's live workgroup from a config that lists
+                                     only thinkers; once the human approves they open as tabs and join the group thread
   workgroup disband <id>            Ends a workgroup; only its leader may. Tabs stay open and the thread stays readable
   workgroup thread [--all] [--before <message-id>] [--limit N]
                                      Reads this tab's workgroup thread, post to it with thread post

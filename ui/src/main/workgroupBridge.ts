@@ -15,8 +15,8 @@ import {
 // The socket `lgrass workgroup create` talks to. A proposal waits in the app for the human and,
 // once approved, returns a one-time token. Only that token spawns tabs, and it spawns exactly what was shown.
 
-const MAX_COLEADERS = 5
-const MAX_PROMPT_CHARS = 4000
+// The composed prompt is lgrass's role header, up to about 1300 characters with the longest names and skills, plus the config's 3000 character assignment.
+const MAX_PROMPT_CHARS = 5000
 const TOKEN_TTL_MS = 5 * 60_000
 const SPAWN_ACK_TIMEOUT_MS = 15_000
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -32,6 +32,9 @@ interface Proposal {
   leader_tab_id: string
   leader_label: string
   group_name: string
+  // Set when the members join a live group instead of starting one.
+  group_id?: number
+  existing_members?: string[]
   members: {
     tab_id: string
     label: string
@@ -75,8 +78,17 @@ function validate(p: Proposal): string | null {
   if (!UUID.test(p.leader_tab_id ?? '')) return 'the leader tab id is not valid'
   if (!LABEL.test(p.leader_label ?? '')) return 'the leader label is not valid'
   if (typeof p.group_name !== 'string' || !p.group_name) return 'no group name'
-  if (!Array.isArray(p.members) || p.members.length < 1 || p.members.length > MAX_COLEADERS) {
-    return `a group needs 1 to ${MAX_COLEADERS} thinkers`
+  if (!Array.isArray(p.members) || p.members.length < 1)
+    return 'a proposal needs at least one thinker'
+  if (p.group_id !== undefined) {
+    if (!Number.isSafeInteger(p.group_id) || p.group_id < 1) return 'the workgroup id is not valid'
+    if (
+      !Array.isArray(p.existing_members) ||
+      p.existing_members.length < 1 ||
+      !p.existing_members.every((label) => typeof label === 'string' && LABEL.test(label))
+    ) {
+      return 'the current member list is not valid'
+    }
   }
   for (const m of p.members) {
     if (!UUID.test(m.tab_id ?? '')) return 'a thinker tab id is not valid'
@@ -121,9 +133,16 @@ function writeProposalFile(p: Proposal): string | null {
 
 function describe(p: Proposal, file: string | null): { message: string; detail: string } {
   return {
-    message: `The agent in tab "${p.leader_label}" wants to start the workgroup "${p.group_name}" with ${p.members.length} thinker${p.members.length === 1 ? '' : 's'}.`,
+    message: describeAsk(p),
     detail: file ? `Full text: ${file}` : 'The full text could not be written to a file.'
   }
+}
+
+function describeAsk(p: Proposal): string {
+  const count = `${p.members.length} thinker${p.members.length === 1 ? '' : 's'}`
+  if (p.group_id !== undefined)
+    return `The agent in tab "${p.leader_label}" wants to add ${count} to the workgroup "${p.group_name}".`
+  return `The agent in tab "${p.leader_label}" wants to start the workgroup "${p.group_name}" with ${count}.`
 }
 
 function askNative(p: Proposal): Promise<boolean> {
@@ -171,6 +190,7 @@ async function askHuman(
       groupName: p.group_name,
       leaderTabId: p.leader_tab_id,
       leaderLabel: p.leader_label,
+      ...(p.group_id !== undefined ? { existingMembers: p.existing_members } : {}),
       members: p.members.map((m) => ({
         label: m.label,
         vendor: m.vendor,

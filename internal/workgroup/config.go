@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	MaxThinkers = 5
-	MaxSkills   = 8
+	MaxSkills = 8
 
 	// Every thinker loads this skill, so a config never has to list it.
 	ThinkerSkill      = session.ThinkerSkill
@@ -59,11 +58,9 @@ func Load(path string) (Config, error) {
 }
 
 func Parse(data []byte, baseDir string) (Config, error) {
-	var cfg Config
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
-		return Config{}, fmt.Errorf("workgroup: parsing config: %w", err)
+	cfg, err := decode(data)
+	if err != nil {
+		return Config{}, err
 	}
 
 	cfg.Name = strings.TrimSpace(cfg.Name)
@@ -79,36 +76,80 @@ func Parse(data []byte, baseDir string) (Config, error) {
 	if !labelPattern.MatchString(cfg.LeaderLabel) {
 		return Config{}, fmt.Errorf("workgroup: leader_label %q must be 1 to 30 letters, digits, dashes or underscores", cfg.LeaderLabel)
 	}
-	if len(cfg.Thinkers) == 0 {
-		return Config{}, errors.New("workgroup: the config lists no thinkers")
+	if err := validateThinkers(cfg.Thinkers, []string{cfg.LeaderLabel}, baseDir); err != nil {
+		return Config{}, err
 	}
-	if len(cfg.Thinkers) > MaxThinkers {
-		return Config{}, fmt.Errorf("workgroup: %d thinkers listed and the limit is %d", len(cfg.Thinkers), MaxThinkers)
-	}
+	return cfg, nil
+}
 
-	seen := map[string]bool{strings.ToLower(cfg.LeaderLabel): true}
-	for i := range cfg.Thinkers {
-		c := &cfg.Thinkers[i]
+// LoadAddition reads the config of `lgrass workgroup add`, which lists only thinkers, since the group's name and leader come from the live group. A new label must not repeat any of taken, the group's current labels.
+func LoadAddition(path string, taken []string) (Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("workgroup: reading config: %w", err)
+	}
+	return ParseAddition(data, filepath.Dir(path), taken)
+}
+
+func ParseAddition(data []byte, baseDir string, taken []string) (Config, error) {
+	cfg, err := decode(data)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.Name != "" || cfg.LeaderLabel != "" {
+		return Config{}, errors.New("workgroup: an add config lists only thinkers; the group's name and leader come from the live group")
+	}
+	if err := validateThinkers(cfg.Thinkers, taken, baseDir); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+func decode(data []byte) (Config, error) {
+	var cfg Config
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return Config{}, fmt.Errorf("workgroup: parsing config: %w", err)
+	}
+	return cfg, nil
+}
+
+// Checks each thinker in place and reads its prompt_file. A label may not repeat another thinker's or any of taken, compared ignoring case.
+func validateThinkers(thinkers []Thinker, taken []string, baseDir string) error {
+	if len(thinkers) == 0 {
+		return errors.New("workgroup: the config lists no thinkers")
+	}
+	takenSet := map[string]bool{}
+	for _, label := range taken {
+		takenSet[strings.ToLower(label)] = true
+	}
+	seen := map[string]bool{}
+	for i := range thinkers {
+		c := &thinkers[i]
 		if !labelPattern.MatchString(c.Label) {
-			return Config{}, fmt.Errorf("workgroup: thinker %d label %q must be 1 to 30 letters, digits, dashes or underscores", i+1, c.Label)
+			return fmt.Errorf("workgroup: thinker %d label %q must be 1 to 30 letters, digits, dashes or underscores", i+1, c.Label)
+		}
+		if takenSet[strings.ToLower(c.Label)] {
+			return fmt.Errorf("workgroup: label %q is already taken in the group", c.Label)
 		}
 		if seen[strings.ToLower(c.Label)] {
-			return Config{}, fmt.Errorf("workgroup: label %q is used more than once", c.Label)
+			return fmt.Errorf("workgroup: label %q is used more than once", c.Label)
 		}
 		seen[strings.ToLower(c.Label)] = true
 		if !vendors[c.Vendor] {
-			return Config{}, fmt.Errorf("workgroup: thinker %q vendor %q must be claude or codex", c.Label, c.Vendor)
+			return fmt.Errorf("workgroup: thinker %q vendor %q must be claude or codex", c.Label, c.Vendor)
 		}
 		if c.Model != "" && !modelPattern.MatchString(c.Model) {
-			return Config{}, fmt.Errorf("workgroup: thinker %q model %q is not a valid model name", c.Label, c.Model)
+			return fmt.Errorf("workgroup: thinker %q model %q is not a valid model name", c.Label, c.Model)
 		}
 		if len(c.Skills) > MaxSkills {
-			return Config{}, fmt.Errorf("workgroup: thinker %q lists %d skills and the limit is %d", c.Label, len(c.Skills), MaxSkills)
+			return fmt.Errorf("workgroup: thinker %q lists %d skills and the limit is %d", c.Label, len(c.Skills), MaxSkills)
 		}
 		var skills []string
 		for _, name := range c.Skills {
 			if !skillPattern.MatchString(name) {
-				return Config{}, fmt.Errorf("workgroup: thinker %q skill %q is not a valid skill name", c.Label, name)
+				return fmt.Errorf("workgroup: thinker %q skill %q is not a valid skill name", c.Label, name)
 			}
 			if name != ThinkerSkill && !containsString(skills, name) {
 				skills = append(skills, name)
@@ -116,7 +157,7 @@ func Parse(data []byte, baseDir string) (Config, error) {
 		}
 		c.Skills = skills
 		if (c.Prompt == "") == (c.PromptFile == "") {
-			return Config{}, fmt.Errorf("workgroup: thinker %q needs exactly one of prompt and prompt_file", c.Label)
+			return fmt.Errorf("workgroup: thinker %q needs exactly one of prompt and prompt_file", c.Label)
 		}
 		if c.PromptFile != "" {
 			file := c.PromptFile
@@ -125,19 +166,19 @@ func Parse(data []byte, baseDir string) (Config, error) {
 			}
 			text, err := os.ReadFile(file)
 			if err != nil {
-				return Config{}, fmt.Errorf("workgroup: thinker %q prompt_file: %w", c.Label, err)
+				return fmt.Errorf("workgroup: thinker %q prompt_file: %w", c.Label, err)
 			}
 			c.Prompt, c.PromptFile = string(text), ""
 		}
 		c.Prompt = strings.TrimSpace(c.Prompt)
 		if c.Prompt == "" {
-			return Config{}, fmt.Errorf("workgroup: thinker %q prompt is empty", c.Label)
+			return fmt.Errorf("workgroup: thinker %q prompt is empty", c.Label)
 		}
 		if n := utf8.RuneCountInString(c.Prompt); n > MaxPromptRunes {
-			return Config{}, fmt.Errorf("workgroup: thinker %q prompt is %d characters and the limit is %d", c.Label, n, MaxPromptRunes)
+			return fmt.Errorf("workgroup: thinker %q prompt is %d characters and the limit is %d", c.Label, n, MaxPromptRunes)
 		}
 	}
-	return cfg, nil
+	return nil
 }
 
 func containsString(list []string, v string) bool {

@@ -34,14 +34,17 @@ type SpawnMember struct {
 }
 
 type Request struct {
-	Op          string        `json:"op"`
-	ProjectPath string        `json:"project_path,omitempty"`
-	LeaderTabID string        `json:"leader_tab_id,omitempty"`
-	LeaderLabel string        `json:"leader_label,omitempty"`
-	GroupName   string        `json:"group_name,omitempty"`
-	Members     []SpawnMember `json:"members,omitempty"`
-	Token       string        `json:"token,omitempty"`
-	TabID       string        `json:"tab_id,omitempty"`
+	Op          string `json:"op"`
+	ProjectPath string `json:"project_path,omitempty"`
+	LeaderTabID string `json:"leader_tab_id,omitempty"`
+	LeaderLabel string `json:"leader_label,omitempty"`
+	GroupName   string `json:"group_name,omitempty"`
+	// GroupID is set when the members join a live group rather than start a new one, and ExistingMembers then names who is already in it.
+	GroupID         int64         `json:"group_id,omitempty"`
+	ExistingMembers []string      `json:"existing_members,omitempty"`
+	Members         []SpawnMember `json:"members,omitempty"`
+	Token           string        `json:"token,omitempty"`
+	TabID           string        `json:"tab_id,omitempty"`
 }
 
 type Response struct {
@@ -129,10 +132,20 @@ func NewTabID() string {
 
 // The text a thinker starts with: its role, the skills it must load, and its assignment. It holds no ids that are only known after the group exists, so the human approves the exact final text.
 func ComposePrompt(label, groupName, leaderLabel string, skills []string, assignment string) string {
+	return composePrompt(label, groupName, leaderLabel, skills, assignment, "")
+}
+
+// ComposeAddedPrompt is ComposePrompt for a thinker added to a live group, who must catch up on a thread that started without it.
+func ComposeAddedPrompt(label, groupName, leaderLabel string, skills []string, assignment string) string {
+	return composePrompt(label, groupName, leaderLabel, skills, assignment,
+		" The group was already working before you joined, so read the whole group thread first with `lgrass workgroup thread --all`, paging back with `--before` until its first message.")
+}
+
+func composePrompt(label, groupName, leaderLabel string, skills []string, assignment, joined string) string {
 	text := fmt.Sprintf("You are the thinker \"%s\" in the lemongrass workgroup \"%s\", led by the leader \"%s\". "+
 		"Before any other tool call, load these skills: %s. Until you have, every tool except `lgrass` commands is denied. "+
-		"Then run `lgrass workgroup thread` to see your group and the group thread. "+
+		"Then run `lgrass workgroup thread` to see your group and the group thread.%s "+
 		"Before you change anything, post your plan to the group thread and wait for the leader's go.",
-		label, groupName, leaderLabel, strings.Join(skills, ", "))
+		label, groupName, leaderLabel, strings.Join(skills, ", "), joined)
 	return text + "\n\nYour assignment:\n\n" + assignment
 }

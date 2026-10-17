@@ -41,6 +41,7 @@ var (
 	ErrNoSuchGroup   = errors.New("session: no such workgroup in this project")
 	ErrAlreadyInside = errors.New("session: a tab can belong to only one live workgroup")
 	ErrNameTaken     = errors.New("session: a workgroup already has this name")
+	ErrLabelTaken    = errors.New("session: a member of this workgroup already has this label")
 )
 
 type rowQuerier interface {
@@ -222,6 +223,77 @@ func (s *Store) LiveMembership(tabID string) (Group, Member, error) {
 		}
 	}
 	return Group{}, Member{}, ErrNoSuchGroup
+}
+
+// AddMembers joins thinkers to a live group in one transaction. A label is unique within the group ignoring case, and a tab can be in only one live group.
+func (s *Store) AddMembers(groupID int64, thinkers []Member) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var disbanded sql.NullString
+	err = tx.QueryRow(`SELECT disbanded_at FROM lg_groups WHERE id = ? AND project_id = ?`, groupID, s.projectID).Scan(&disbanded)
+	if err == sql.ErrNoRows {
+		return ErrNoSuchGroup
+	}
+	if err != nil {
+		return err
+	}
+	if disbanded.Valid {
+		return fmt.Errorf("session: workgroup %d is disbanded", groupID)
+	}
+
+	rows, err := tx.Query(`SELECT label FROM lg_group_members WHERE group_id = ?`, groupID)
+	if err != nil {
+		return err
+	}
+	labels := map[string]bool{}
+	for rows.Next() {
+		var label string
+		if err := rows.Scan(&label); err != nil {
+			rows.Close()
+			return err
+		}
+		labels[strings.ToLower(label)] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, m := range thinkers {
+		if labels[strings.ToLower(m.Label)] {
+			return fmt.Errorf("%w (%q)", ErrLabelTaken, m.Label)
+		}
+		labels[strings.ToLower(m.Label)] = true
+		var one int
+		err := tx.QueryRow(`
+			SELECT 1 FROM lg_group_members m JOIN lg_groups g ON g.id = m.group_id
+			WHERE m.tab_id = ? AND g.project_id = ? AND g.disbanded_at IS NULL
+		`, m.TabID, s.projectID).Scan(&one)
+		if err == nil {
+			return fmt.Errorf("%w (%s)", ErrAlreadyInside, TabLabel(m.TabID))
+		}
+		if err != sql.ErrNoRows {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO lg_group_members (group_id, tab_id, role, label, vendor, prompt, skills) VALUES (?, ?, ?, ?, ?, ?, ?)`, groupID, m.TabID, RoleThinker, m.Label, m.Vendor, m.Prompt, strings.Join(m.Skills, ",")); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// Removes members whose tabs never opened, so a failed spawn leaves the group as it was.
+func (s *Store) DeleteMembers(groupID int64, tabIDs []string) error {
+	for _, tab := range tabIDs {
+		if _, err := s.db.Exec(`DELETE FROM lg_group_members WHERE group_id = ? AND tab_id = ? AND role = ? AND group_id IN (SELECT id FROM lg_groups WHERE project_id = ?)`, groupID, tab, RoleThinker, s.projectID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Keeps the thread and its messages, so a disbanded group stays readable.

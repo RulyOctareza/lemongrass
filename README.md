@@ -17,7 +17,7 @@ It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. C
 
 ### Agents work as a team, across vendors
 
-A leader agent declares a workgroup of one to five thinkers, each running Claude Code or Codex, with `lgrass workgroup create`.
+A leader agent declares a workgroup of one or more thinkers, each running Claude Code or Codex, with `lgrass workgroup create`, and can add thinkers to the live group with `lgrass workgroup add`.
 
 - **The human approves what starts.** A proposal raises an OS notification and waits in an approval modal that shows every thinker's complete starting text before anything spawns. The human picks the account each Claude thinker runs on. Approval issues a one-time token, and that token is the only path that opens the members' tabs.
 - **Plan first.** A thinker posts its plan to the group thread and waits for the leader's go before it changes anything. A gate denies every tool except `lgrass` commands until the skills the thinker was configured with are loaded.

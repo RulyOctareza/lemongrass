@@ -17,9 +17,22 @@ type action struct {
 }
 
 var domains = map[string]map[string]action{
+	"leader": {
+		"addmember": {summary: "Add thinkers to your live workgroup: `lgrass how leader addmember`", run: static("leader/addmember.md")},
+	},
 	"task": {
 		"close": {summary: "Close a finished scratchpad task: `lgrass how task close <slug>`", run: taskClose},
 	},
+}
+
+// static serves an action that has one branch and takes no arguments.
+func static(path string) func(root string, args []string) (string, error) {
+	return func(_ string, args []string) (string, error) {
+		if len(args) > 0 {
+			return "", fmt.Errorf("how: %s takes no arguments", strings.TrimSuffix(path, ".md"))
+		}
+		return fragment(path, nil) + "\n", nil
+	}
 }
 
 // Render resolves args to a domain listing, an action listing, or an action's instructions for the project at root.

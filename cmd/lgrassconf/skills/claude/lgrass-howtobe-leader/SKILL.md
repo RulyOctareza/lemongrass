@@ -23,7 +23,7 @@ thinkers:
     prompt: The assignment, or use prompt_file: with a path relative to the config.
 ```
 
-- `name` is required and names the group in the app. It must differ from every other workgroup's name, disbanded ones included. 1 to 5 thinkers. A label is letters, digits, `-` and `_`, up to 30 characters. The vendor is `claude` or `codex`. Every skill must be installed for that vendor. A prompt is up to 3000 characters.
+- `name` is required and names the group in the app. It must differ from every other workgroup's name, disbanded ones included. At least one thinker, with no upper limit. A label is letters, digits, `-` and `_`, up to 30 characters. The vendor is `claude` or `codex`. Every skill must be installed for that vendor. A prompt is up to 3000 characters.
 - A tab belongs to one live group at a time. The thinker skill is added for every thinker, so do not list it.
 - The human sees each assignment in full before approving, so write it for them too.
 - If the human declines, the command prints their reason when they gave one. Read it and change the proposal, and do not resend the same one. A withdrawn proposal means nobody answered, so ask the human before trying again.
@@ -44,6 +44,10 @@ Never review a thinker's code or output on your own. Ask for plans, not reviews.
 ## Talk to the group
 
 Run `lgrass workgroup thread` to see the thinkers and what is new, and note the thread id to post with `lgrass thread post`. Mention whoever a message is for.
+
+## More procedures
+
+`lgrass how leader` lists your other procedures, each printed when you need it. When the work needs an area or a view that no current thinker owns, add a thinker to the live group rather than disbanding and starting over: `lgrass how leader addmember` gives the steps.
 
 ## Finish
 

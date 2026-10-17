@@ -281,6 +281,8 @@ export interface WorkgroupPending {
   groupName: string
   leaderTabId: string
   leaderLabel: string
+  // Present when the proposal adds thinkers to a live group: who is already in it.
+  existingMembers?: string[]
   members: WorkgroupPendingMember[]
   createdAt: number
 }

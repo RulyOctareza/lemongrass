@@ -1,6 +1,7 @@
 package workgroup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,7 +84,6 @@ func TestParseRejectsInvalidConfigs(t *testing.T) {
 		"no prompt":          "name: t\nthinkers:\n  - {label: a, vendor: claude}",
 		"missing file":       "name: t\nthinkers:\n  - {label: a, vendor: claude, prompt_file: nope.md}",
 		"prompt too long":    "name: t\nthinkers:\n  - {label: a, vendor: claude, prompt: " + long + "}",
-		"too many":           "name: t\nthinkers:\n" + strings.Repeat("  - {label: a, vendor: claude, prompt: x}\n", MaxThinkers+1),
 		"not yaml":           "name: t\nthinkers: [unclosed",
 	}
 	for name, body := range cases {
@@ -149,5 +149,44 @@ func TestCheckSkillsInstalledPerVendor(t *testing.T) {
 	}
 	if err := (Config{Thinkers: []Thinker{{Label: "a", Vendor: "claude"}}}).CheckSkillsInstalled(t.TempDir()); err == nil {
 		t.Error("a home with no skills passed the check")
+	}
+}
+
+func TestParseAdditionTakesOnlyThinkersWithFreshLabels(t *testing.T) {
+	taken := []string{"lead", "reviewer"}
+	cfg, err := ParseAddition([]byte("thinkers:\n  - {label: tester, vendor: codex, prompt: Write tests.}\n  - {label: docs, vendor: claude, prompt: Write docs.}"), t.TempDir(), taken)
+	if err != nil {
+		t.Fatalf("ParseAddition: %v", err)
+	}
+	if len(cfg.Thinkers) != 2 || cfg.Thinkers[0].Label != "tester" || cfg.Name != "" {
+		t.Errorf("cfg = %+v", cfg)
+	}
+
+	cases := map[string]string{
+		"name given":      "name: other\nthinkers:\n  - {label: a, vendor: claude, prompt: x}",
+		"leader given":    "leader_label: boss\nthinkers:\n  - {label: a, vendor: claude, prompt: x}",
+		"no thinkers":     "thinkers: []",
+		"label taken":     "thinkers:\n  - {label: Reviewer, vendor: claude, prompt: x}",
+		"leader taken":    "thinkers:\n  - {label: lead, vendor: claude, prompt: x}",
+		"duplicate label": "thinkers:\n  - {label: a, vendor: claude, prompt: x}\n  - {label: a, vendor: codex, prompt: y}",
+	}
+	for name, body := range cases {
+		if _, err := ParseAddition([]byte(body), t.TempDir(), taken); err == nil {
+			t.Errorf("%s accepted", name)
+		} else if !strings.HasPrefix(err.Error(), "workgroup: ") {
+			t.Errorf("%s error %q lacks the package prefix", name, err)
+		}
+	}
+}
+
+func TestParseHasNoUpperThinkerLimit(t *testing.T) {
+	var body strings.Builder
+	body.WriteString("name: big\nthinkers:\n")
+	for i := 0; i < 12; i++ {
+		fmt.Fprintf(&body, "  - {label: t%d, vendor: claude, prompt: x}\n", i)
+	}
+	cfg, err := Parse([]byte(body.String()), t.TempDir())
+	if err != nil || len(cfg.Thinkers) != 12 {
+		t.Errorf("Parse of 12 thinkers = %d, %v", len(cfg.Thinkers), err)
 	}
 }

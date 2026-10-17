@@ -24,6 +24,11 @@ function thinkerCount(request: WorkgroupPending): string {
   return `${count} thinker${count === 1 ? '' : 's'}`
 }
 
+// Every request names its kind, so an addition to a live group is never read as a new one.
+function kindLabel(request: WorkgroupPending): string {
+  return request.existingMembers ? 'Adding thinkers' : 'New workgroup'
+}
+
 function focusDecline(): void {
   void nextTick(() => declineButton.value?.focus())
 }
@@ -75,7 +80,12 @@ watch(
               :class="{ selected: request.requestId === approvals.selectedId }"
               @click="approvals.selectedId = request.requestId"
             >
-              <span class="request-name">{{ request.groupName }}</span>
+              <span class="request-title">
+                <span class="request-name">{{ request.groupName }}</span>
+                <span class="kind-pill" :class="{ addition: request.existingMembers }">
+                  {{ kindLabel(request) }}
+                </span>
+              </span>
               <span class="request-meta">
                 {{ projectName(request) }}, {{ thinkerCount(request) }}
               </span>
@@ -86,19 +96,28 @@ watch(
 
       <section v-if="selected" class="reading">
         <header class="reading-head">
-          <h2 class="reading-title">{{ selected.groupName }}</h2>
+          <div class="reading-title-row">
+            <h2 class="reading-title">{{ selected.groupName }}</h2>
+            <span class="kind-pill" :class="{ addition: selected.existingMembers }">
+              {{ kindLabel(selected) }}
+            </span>
+          </div>
           <dl class="facts">
             <div class="fact">
               <dt>Project</dt>
               <dd>{{ projectName(selected) }}</dd>
             </div>
             <div class="fact">
-              <dt>Started by</dt>
+              <dt>{{ selected.existingMembers ? 'Leader' : 'Started by' }}</dt>
               <dd>{{ selected.leaderLabel }}</dd>
             </div>
             <div class="fact">
-              <dt>Thinkers</dt>
+              <dt>{{ selected.existingMembers ? 'New thinkers' : 'Thinkers' }}</dt>
               <dd>{{ selected.members.length }}</dd>
+            </div>
+            <div v-if="selected.existingMembers" class="fact">
+              <dt>Already in the group</dt>
+              <dd>{{ selected.existingMembers.join(', ') }}</dd>
             </div>
           </dl>
         </header>
@@ -252,7 +271,15 @@ watch(
   color: var(--color-fg-accent);
 }
 
+.request-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .request-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -281,7 +308,32 @@ watch(
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
+.reading-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.kind-pill {
+  flex-shrink: 0;
+  padding: 0 var(--space-2);
+  background: var(--color-surface-3);
+  border-radius: var(--radius-pill);
+  color: var(--color-fg-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.kind-pill.addition {
+  background: var(--color-sapphire-muted);
+  color: var(--color-sapphire);
+}
+
 .reading-title {
+  min-width: 0;
   overflow-wrap: anywhere;
   color: var(--color-fg-primary);
   font-family: var(--font-display);

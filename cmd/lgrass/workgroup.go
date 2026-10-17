@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/faizalv/lemongrass/internal/session"
 	"github.com/faizalv/lemongrass/internal/workgroup"
@@ -12,12 +13,14 @@ import (
 
 func cmdWorkgroup(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: lgrass workgroup <create|disband|thread|list> ...")
+		fmt.Fprintln(os.Stderr, "usage: lgrass workgroup <create|add|disband|thread|list> ...")
 		os.Exit(1)
 	}
 	switch args[0] {
 	case "create":
 		cmdWorkgroupCreate(args[1:])
+	case "add":
+		cmdWorkgroupAdd(args[1:])
 	case "disband":
 		cmdWorkgroupDisband(args[1:])
 	case "thread":
@@ -98,6 +101,99 @@ func cmdWorkgroupCreate(args []string) {
 	for _, m := range members {
 		fmt.Printf("  %s (%s) tab %s\n", m.Label, m.Vendor, m.TabID)
 	}
+}
+
+func cmdWorkgroupAdd(args []string) {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: lgrass workgroup add <path-to-config>")
+		os.Exit(1)
+	}
+	if tabID == "" {
+		fmt.Fprintf(os.Stderr, "lgrass workgroup: adding thinkers needs a lemongrass tab, %s is not set\n", tabIDEnv)
+		os.Exit(1)
+	}
+
+	store := openStore()
+	defer store.Close()
+	group, me, err := store.LiveMembership(tabID)
+	if err != nil || me.Role != session.RoleLeader {
+		fmt.Fprintln(os.Stderr, "lgrass workgroup: only the leader of a live workgroup can add thinkers to it")
+		os.Exit(1)
+	}
+	current, err := store.GroupMembers(group.ID)
+	if err != nil {
+		fail(err)
+	}
+	labels := make([]string, len(current))
+	for i, m := range current {
+		labels[i] = m.Label
+	}
+
+	cfg, err := workgroup.LoadAddition(args[0], labels)
+	if err != nil {
+		fail(err)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		if err := cfg.CheckSkillsInstalled(home); err != nil {
+			fail(err)
+		}
+	}
+
+	members := make([]workgroup.SpawnMember, len(cfg.Thinkers))
+	for i, c := range cfg.Thinkers {
+		members[i] = workgroup.SpawnMember{
+			TabID:  workgroup.NewTabID(),
+			Label:  c.Label,
+			Vendor: c.Vendor,
+			Model:  c.Model,
+			Prompt: workgroup.ComposeAddedPrompt(c.Label, group.Name, me.Label, c.RequiredSkills(), c.Prompt),
+			Skills: c.RequiredSkills(),
+		}
+	}
+	req := workgroup.Request{ProjectPath: currentProject().Path, LeaderTabID: tabID, LeaderLabel: me.Label, GroupName: group.Name, GroupID: group.ID, ExistingMembers: labels, Members: members}
+
+	fmt.Println("lgrass: waiting for the human to approve the new thinkers in the lemongrass app.")
+	answer, err := workgroup.Propose(workgroup.AppSocketPath(), req)
+	if err != nil {
+		fail(err)
+	}
+	if !answer.Approved {
+		fmt.Fprintln(os.Stderr, declinedMessage(answer))
+		os.Exit(1)
+	}
+
+	if err := store.AddMembers(group.ID, toMembers(members, cfg.Thinkers)); err != nil {
+		fail(err)
+	}
+	if err := workgroup.Spawn(workgroup.AppSocketPath(), answer.Token); err != nil {
+		tabs := make([]string, len(members))
+		for i, m := range members {
+			tabs[i] = m.TabID
+		}
+		store.DeleteMembers(group.ID, tabs)
+		fail(err)
+	}
+	if _, err := store.PostMessage(tabID, group.ThreadID, joinMessage(members)); err == nil {
+		notifyTargets(store)
+	}
+
+	fmt.Printf("added to workgroup %d, group thread %s.\n", group.ID, group.ThreadID)
+	for _, m := range members {
+		fmt.Printf("  %s (%s) tab %s\n", m.Label, m.Vendor, m.TabID)
+	}
+}
+
+// Posted with no mention, so every member hears it, the new ones included.
+func joinMessage(members []workgroup.SpawnMember) string {
+	names := make([]string, len(members))
+	for i, m := range members {
+		names[i] = fmt.Sprintf("%s (%s)", m.Label, m.Vendor)
+	}
+	joins := " joins the group as a new thinker"
+	if len(members) > 1 {
+		joins = " join the group as new thinkers"
+	}
+	return "lgrass: " + strings.Join(names, ", ") + joins + ", approved by the human."
 }
 
 func toMembers(spawn []workgroup.SpawnMember, thinkers []workgroup.Thinker) []session.Member {

@@ -23,3 +23,14 @@ func TestDeclinedMessageSeparatesReasonNoReasonAndWithdrawal(t *testing.T) {
 		}
 	}
 }
+
+func TestJoinMessageNamesEveryNewThinker(t *testing.T) {
+	one := joinMessage([]workgroup.SpawnMember{{Label: "docs", Vendor: "codex"}})
+	if one != "lgrass: docs (codex) joins the group as a new thinker, approved by the human." {
+		t.Errorf("one = %q", one)
+	}
+	two := joinMessage([]workgroup.SpawnMember{{Label: "docs", Vendor: "codex"}, {Label: "perf", Vendor: "claude"}})
+	if !strings.Contains(two, "docs (codex), perf (claude) join the group") || strings.Contains(two, "!>>") {
+		t.Errorf("two = %q", two)
+	}
+}
