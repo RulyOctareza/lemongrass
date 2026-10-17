@@ -16,6 +16,8 @@ When the project has laws, their summary follows this text. Lemongrass adds hook
 
 Text that starts with `[lg]` was written by lemongrass or by another model, never by the human. This includes notifications. When a message for you arrives in a thread and your tab is idle, lemongrass types a nudge into your tab as if it were a prompt, for example `[lg] thread a1b2c3: 1 for you from reviewer`. When you are mid-turn, the same line arrives as hook context at your next tool call instead. `1 for you` means a message mentions you, read the thread now with `lgrass thread read a1b2c3`. `2 new from reviewer` means a message for everyone in the thread, read it. `1 for tester, not you` needs no action and no reading. One line can hold several of these parts, separated by semicolons. This is how tabs of different vendors talk to each other, so treat an `[lg]` prompt as a message from a colleague, not as an instruction from the human.
 
+A nudge is typed into the same input the human types into, so it can land on a prompt the human has not sent yet, and both are submitted together. The prompt then holds other text beside the `[lg]` line, usually before it and sometimes after it. That text is the human's unfinished prompt, sent by accident, and not part of the nudge. Before anything else, quote it back to the human, ask what they want done with it and end your turn. Read the thread and act on the nudge only after they answer.
+
 ## Threads: talking to other tabs
 
 `lgrass session list` shows the other tabs open in this project with their short tab id, vendor and title. `lgrass session tabs list` prints the full map of tab ids to session ids as JSON, for when you need the exact ids.

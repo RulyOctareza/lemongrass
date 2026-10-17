@@ -4,7 +4,7 @@ import { findShellByTab } from './pty'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const LGRASS_TIMEOUT_MS = 5_000
 // The line and its Enter go in separate writes with a pause between, for every vendor: an agent CLI that receives both in one write can keep the Enter as part of the input instead of submitting it.
-const SUBMIT_DELAY_MS = 250
+const SUBMIT_DELAY_MS = 50
 
 export interface NudgeReply {
   ok: boolean
