@@ -11,7 +11,7 @@ It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. C
 `lgrass db` and `lgrass rester` send queries and HTTP calls through a vault daemon. The vault is the only process that decrypts anything. The agent holds a six-character channel id that means nothing without the vault's own mapping.
 
 - **Databases (MySQL, MariaDB, Postgres).** The vault parses each statement and checks the tables it actually touches against the channel's scope, so a query that joins a table outside the scope is refused. DDL and multi-statement calls are refused. A write runs as a dry run first and commits in a separate call, and an `UPDATE` or `DELETE` without a `WHERE` clause is refused. Database errors are redacted before the agent sees them.
-- **HTTP APIs.** A domain holds a base URL, a login endpoint and many users, each with credentials or a pasted token. The vault logs in, keeps the token in locked memory and never on disk, injects it into each request, and logs in again once when a token has gone stale. A channel grants a list of methods and excludes method and path pairs. A request path is resolved onto the domain's base URL and cannot address another host.
+- **HTTP APIs.** A domain holds a base URL, a login endpoint and many users, each with credentials or a pasted token. The vault logs in, keeps the token in locked memory and never on disk, injects it into each request, and logs in again once when a token has gone stale. A channel grants a list of methods and excludes method and path pairs. A request path is resolved onto the domain's base URL and cannot address another host. A call can add its own headers, upload a file or form, and save a response body to disk without the agent seeing its bytes.
 - **Lifetime.** Channels expire, and a revoke takes effect at the vault. Database writes are recorded in an audit table with a 7-day retention.
 - **Managed from one place.** The Connector tab creates, tests and revokes connections and channels behind a single vault passphrase unlock with auto-lock.
 
@@ -19,20 +19,24 @@ It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. C
 
 A leader agent declares a workgroup of one to five thinkers, each running Claude Code or Codex, with `lgrass workgroup create`.
 
-- **The human approves what starts.** Every thinker's complete starting text is shown before anything spawns. Approval issues a one-time token, and that token is the only path that opens the members' tabs.
+- **The human approves what starts.** A proposal raises an OS notification and waits in an approval modal that shows every thinker's complete starting text before anything spawns. The human picks the account each Claude thinker runs on. Approval issues a one-time token, and that token is the only path that opens the members' tabs.
 - **Plan first.** A thinker posts its plan to the group thread and waits for the leader's go before it changes anything. A gate denies every tool except `lgrass` commands until the skills the thinker was configured with are loaded.
 - **Real conversation.** Members share a thread with mentions, unread-only reads, and notices delivered through each agent's own hooks. Any member can address any other directly.
-- **Persistent.** Membership survives a tab closing and an app restart. A sidebar panel shows each group's members and whether their tabs are online. A disbanded group's thread stays readable.
+- **Persistent.** Membership survives a tab closing and an app restart. The sidebar lists each live group, and a workgroup tab shows its members, whether their tabs are online and the thread. A closed member reopens with its saved session and its own account. A disbanded group's thread stays readable.
 
 ### Bypass mode with a guard that stays on
 
-Claude Code tabs start with `--dangerously-skip-permissions`, so an agent does not stall on prompts. A `PreToolUse` hook enforces a catalog of dangerous operations instead, in the categories Git, Deletion, System, Network, Infrastructure, Database clients and Lemongrass itself. A refused call returns an approval message to the agent and is not silently dropped. A user policy edited in the Vault tab's Safety pane is sealed in the vault, and the hook reads it from there.
+Claude Code tabs start with `--dangerously-skip-permissions`, so an agent does not stall on prompts. A `PreToolUse` hook enforces a catalog of dangerous operations instead, in the categories Git, Deletion, System, Network, Infrastructure, Database clients and Lemongrass itself. A refused call returns an approval message to the agent and is not silently dropped. A user policy edited in the Vault tab's Safety pane is sealed in the vault, and the hook reads it from there. Writes into Claude Code's memory folders wait behind a sign word, and a held call runs once with `lgrass replay` after signing.
 
 ### Project rules arrive at the start of every session
 
-A `SessionStart` hook delivers the project's laws summary and gates tool calls behind required skills. Sessions in the same project know about each other, and the hook warns when two tabs touch the same file.
+Every Claude tab starts with an orientation and the project's laws summary in its system prompt, so tabs of one project read them from the prompt cache. The orientation covers the `lgrass` commands, what the guard blocks, and how knowledge splits: the code and its comments are committed and owned by the team, while books are each person's own. It also says what a good comment is. A `SessionStart` hook delivers the laws to a resumed session and to Codex. Sessions in the same project know about each other, and the hook warns when two tabs touch the same file.
 
 The convention behind this is [bibliothek](https://github.com/faizalv/bibliothek): a skill plus a `biblio/{scratchpad,laws,handover,books}/` folder layout, developed in its own repository and usable without Lemongrass. Lemongrass pins it as a git submodule and puts its text into the system prompt of every Claude tab, so Claude tabs never load it as a skill. The app shows that folder as a tree and reader beside the terminal panes. The scratchpad is editable in a WYSIWYG editor that autosaves, enforced on the server side. The other folders are read-only.
+
+### Run several Claude accounts
+
+The Settings dialog adds Claude accounts, each with its own config folder beside the primary `~/.claude`. The New shell dialog picks the account for a Claude tab, and the strip under the shell shows which one it runs on. A tab resumes on the account it started with. When that account has been deleted, the tab does not start until the human closes it or moves it to the primary. Hooks, skills and shared folders are kept in place for every account.
 
 ### Share books and tasks with someone else's agent
 
@@ -47,19 +51,20 @@ Panes are `xterm.js` in the renderer over `node-pty` in the main process, the st
 Built:
 
 - The vault, `lgrass db` reads and writes, `lgrass rester`, and the Connector tab.
-- Workgroups with Claude Code members, the thread layer, and the workgroup panel.
+- Workgroups with Claude Code members, the thread layer, the approval modal and the workgroup pane.
+- Several Claude accounts, picked per tab and per workgroup thinker.
 - The guard for Claude Code, unit tested and denying live in a tab. The sealed-policy round trip through the Safety pane has not been run live.
 - The bibliothek browser and editor, and the Git panel.
 
 In progress:
 
-- The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. The app screen is temporary, and it has not yet been read through a real ngrok tunnel by a real client. Search and an `lgrass node` client for Lemongrass users are planned.
+- The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. Its transport has been checked over a live tunnel with curl. The app screen is temporary, and a real MCP client, live revoke and expiry have not been run yet. Search and an `lgrass node` client for Lemongrass users are planned.
 - A wire-protocol proxy so a whole app can point its own database driver at a local port. Port allocation and the MySQL handshake listener are done. Query execution and the Postgres listener are not.
-- A Decisions section in the Vault tab that replaces the native dialog for workgroup approvals.
 - Codex as a workgroup member. Its gate depends on a listener heartbeat that is unverified under Codex's default sandbox.
 
 Planned:
 
+- `lgrass ask`: an agent asks the human for a channel or a command, answered in an in-app modal opened from an OS notification.
 - An audit of `lgrass rester` calls and of `lgrass db` reads.
 - An investigator role for cheap, read-only workgroup members.
 

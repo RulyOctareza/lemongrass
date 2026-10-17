@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 import type { WorkgroupInfo, WorkgroupPending, WorkspaceTab } from '../../preload/types'
 import type { ProjectRef } from './workspace'
+import { accountStore } from './accounts'
 
 export interface WorkgroupState {
   groups: WorkgroupInfo[]
@@ -65,7 +66,16 @@ export const approvals = reactive<{
   busy: boolean
   reasons: Record<string, string>
   declining: Record<string, boolean>
-}>({ pending: [], open: false, selectedId: null, busy: false, reasons: {}, declining: {} })
+  accounts: Record<string, string[]>
+}>({
+  pending: [],
+  open: false,
+  selectedId: null,
+  busy: false,
+  reasons: {},
+  declining: {},
+  accounts: {}
+})
 
 export function isWorkgroupMember(projectId: string, tabId: string): boolean {
   return (states[projectId]?.groups ?? []).some((group) =>
@@ -99,6 +109,10 @@ function setPending(next: WorkgroupPending[]): void {
     if (!next.some((request) => request.requestId === requestId))
       delete approvals.declining[requestId]
   }
+  for (const requestId of Object.keys(approvals.accounts)) {
+    if (!next.some((request) => request.requestId === requestId))
+      delete approvals.accounts[requestId]
+  }
   if (next.length === 0) approvals.open = false
   if (!next.some((request) => request.requestId === approvals.selectedId)) {
     approvals.selectedId = next[0]?.requestId ?? null
@@ -115,11 +129,21 @@ export function closeApprovals(): void {
   approvals.open = false
 }
 
+// Starts every Claude thinker on the leader's account ('' for primary) the first time a request is shown.
+export function ensureAccountChoices(request: WorkgroupPending, leaderAccount: string): void {
+  if (approvals.accounts[request.requestId]) return
+  approvals.accounts[request.requestId] = request.members.map((member) =>
+    member.vendor === 'claude' ? leaderAccount : ''
+  )
+}
+
 export async function decideApproval(requestId: string, approved: boolean): Promise<void> {
   approvals.busy = true
   try {
     const reason = approved ? undefined : approvals.reasons[requestId]
-    await window.api.workgroup.decide(requestId, approved, reason)
+    const choices = approvals.accounts[requestId]
+    const accounts = approved && choices && accountStore.items.length > 0 ? [...choices] : undefined
+    await window.api.workgroup.decide(requestId, approved, reason, accounts)
   } finally {
     approvals.busy = false
   }

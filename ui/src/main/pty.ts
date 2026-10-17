@@ -4,6 +4,7 @@ import { join } from 'path'
 import * as pty from 'node-pty'
 import { randomUUID } from 'crypto'
 import { registerTab } from './tabSessions'
+import { ACCOUNT_NAME } from './accountNames'
 import { orientationLaunch, type OrientationRole } from './orientation'
 import { startupTrimArgs, startupTrimEnv } from './startupTrim'
 
@@ -39,8 +40,6 @@ interface ManagedShell {
 // Terminal replies such as focus and cursor reports start with an escape byte and are not typing.
 const ESCAPE = 27
 const HUMAN_QUIET_MS = 5_000
-
-const ACCOUNT_NAME = /^[a-z0-9-]{1,32}$/
 
 const shells = new Map<string, ManagedShell>()
 const stopping = new Map<string, Promise<void>>()

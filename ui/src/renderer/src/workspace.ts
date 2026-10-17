@@ -10,7 +10,7 @@ import {
   setShellArgs,
   setShellResume
 } from './shellRegistry'
-import { preferredAccount, setPreferredAccount } from './accounts'
+import { accountIsDeleted, preferredAccount, setPreferredAccount } from './accounts'
 import { defaultGroupColor, groupColorVar, isGroupColor, type GroupColor } from './groupColors'
 import { isWorkgroupMember, tabGroup, workgroupStateOf } from './workgroups'
 import {
@@ -696,6 +696,32 @@ onShellExit((tabId) => {
   }
 })
 
+const THINKER_ACCOUNTS_KEY = 'lemongrass.thinkerAccounts'
+
+// A closed thinker's tab leaves the layout, so its account is kept here by tab id for a reopen.
+function thinkerAccounts(): Record<string, string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(THINKER_ACCOUNTS_KEY) ?? '{}')
+    return saved && typeof saved === 'object' ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+function rememberThinkerAccounts(entries: Record<string, string>): void {
+  try {
+    localStorage.setItem(THINKER_ACCOUNTS_KEY, JSON.stringify({ ...thinkerAccounts(), ...entries }))
+  } catch {
+    return
+  }
+}
+
+export function shellAccountOf(projectPath: string, tabId: string): string {
+  const project = [...projectRefs.values()].find((ref) => ref.path === projectPath)
+  const tab = project ? tabsOf(project.id).find((candidate) => candidate.id === tabId) : undefined
+  return tab?.kind === 'shell' && tab.account && !accountIsDeleted(tab.account) ? tab.account : ''
+}
+
 // A positional prompt starts the session with it as the first message, which extra system prompt text does not.
 // Reopens a closed member in the leader's pane under its original tab id, resuming the saved session when there is one.
 export async function reopenWorkgroupMember(
@@ -710,7 +736,13 @@ export async function reopenWorkgroupMember(
   if (args) setShellResume(member.tabId, args)
 
   const leaderTab = tabsOf(project.id).find((candidate) => candidate.id === leaderTabId)
-  const account = leaderTab?.kind === 'shell' ? leaderTab.account : undefined
+  const remembered = thinkerAccounts()[member.tabId]
+  const account =
+    remembered !== undefined
+      ? remembered
+      : leaderTab?.kind === 'shell'
+        ? leaderTab.account
+        : undefined
   const tab: ShellTab = {
     id: member.tabId,
     kind: 'shell',
@@ -765,9 +797,12 @@ function spawnWorkgroup(request: WorkgroupSpawnRequest): WorkgroupSpawnResult {
   if (!leaderLeaf) return { ok: false, error: 'the leader tab is not in the workspace' }
 
   const leaderTab = leaderLeaf.tabs.find((tab) => tab.id === request.leaderTabId)
-  const account = leaderTab?.kind === 'shell' ? leaderTab.account : undefined
+  const leaderAccount = leaderTab?.kind === 'shell' ? leaderTab.account : undefined
+  const remembered: Record<string, string> = {}
   let next = root
   for (const member of request.members) {
+    const account = request.accountsChosen ? member.account : leaderAccount
+    if (member.vendor === 'claude') remembered[member.tabId] = account ?? ''
     const tab: ShellTab = {
       id: member.tabId,
       kind: 'shell',
@@ -780,6 +815,7 @@ function spawnWorkgroup(request: WorkgroupSpawnRequest): WorkgroupSpawnResult {
     setShellArgs(tab.id, workgroupArgs(member))
     next = tree.addTab(next, leaderLeaf.id, tab)
   }
+  rememberThinkerAccounts(remembered)
   commit(project, tree.setActiveTab(next, leaderLeaf.id, request.leaderTabId))
   return { ok: true }
 }

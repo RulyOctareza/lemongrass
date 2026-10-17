@@ -234,12 +234,15 @@ export interface WorkgroupSpawnMember {
   vendor: string
   model?: string
   prompt: string
+  account?: string
 }
 
 export interface WorkgroupSpawnRequest {
   requestId: string
   projectPath: string
   leaderTabId: string
+  // False when the approval carried no account choices, so Claude thinkers take the leader's account.
+  accountsChosen: boolean
   members: WorkgroupSpawnMember[]
 }
 
@@ -275,6 +278,7 @@ export interface WorkgroupPending {
   requestId: string
   projectPath: string
   groupName: string
+  leaderTabId: string
   leaderLabel: string
   members: WorkgroupPendingMember[]
   createdAt: number

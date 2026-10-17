@@ -2,11 +2,13 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { WorkgroupPending, WorkgroupPendingMember } from '../preload/types'
 import { cleanReason } from './workgroupReason'
+import { cleanThinkerAccounts } from './accountNames'
 import { notifyApprovalWaiting } from './workgroupNotify'
 
 export interface ApprovalRequest {
   projectPath: string
   groupName: string
+  leaderTabId: string
   leaderLabel: string
   members: WorkgroupPendingMember[]
 }
@@ -15,6 +17,7 @@ export interface ApprovalAnswer {
   approved: boolean
   reason?: string
   withdrawn?: boolean
+  accounts?: string[]
 }
 
 interface Entry {
@@ -52,11 +55,17 @@ export function registerApprovalHandlers(getWindow: () => BrowserWindow | undefi
   ipcMain.handle('workgroup:pending', (): WorkgroupPending[] => list())
   ipcMain.handle(
     'workgroup:decide',
-    (_event, payload: { requestId: string; approved: boolean; reason?: string }): boolean => {
+    (
+      _event,
+      payload: { requestId: string; approved: boolean; reason?: string; accounts?: unknown }
+    ): boolean => {
       const entry = entries.get(String(payload?.requestId))
       if (!entry) return false
-      if (payload.approved === true) entry.settle({ approved: true })
-      else entry.settle({ approved: false, reason: cleanReason(payload.reason) })
+      if (payload.approved === true) {
+        const accounts = cleanThinkerAccounts(payload.accounts, entry.info.members.length)
+        if (accounts === null) return false
+        entry.settle({ approved: true, accounts })
+      } else entry.settle({ approved: false, reason: cleanReason(payload.reason) })
       return true
     }
   )

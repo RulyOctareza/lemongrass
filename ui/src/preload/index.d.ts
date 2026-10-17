@@ -41,7 +41,12 @@ interface Api {
     onSpawn: (callback: (request: WorkgroupSpawnRequest) => void) => () => void
     reportSpawn: (requestId: string, result: WorkgroupSpawnResult) => void
     pending: () => Promise<WorkgroupPending[]>
-    decide: (requestId: string, approved: boolean, reason?: string) => Promise<boolean>
+    decide: (
+      requestId: string,
+      approved: boolean,
+      reason?: string,
+      accounts?: string[]
+    ) => Promise<boolean>
     onPendingChange: (callback: (pending: WorkgroupPending[]) => void) => () => void
     onOpenApprovals: (callback: () => void) => () => void
     list: (projectPath: string) => Promise<WorkgroupInfo[]>

@@ -47,6 +47,7 @@ interface Proposal {
 interface Approved {
   projectPath: string
   leaderTabId: string
+  accountsChosen: boolean
   members: WorkgroupSpawnMember[]
   expires: number
 }
@@ -168,6 +169,7 @@ async function askHuman(
     {
       projectPath: p.project_path,
       groupName: p.group_name,
+      leaderTabId: p.leader_tab_id,
       leaderLabel: p.leader_label,
       members: p.members.map((m) => ({
         label: m.label,
@@ -201,13 +203,18 @@ async function handlePropose(
   approvals.set(token, {
     projectPath: p.project_path,
     leaderTabId: p.leader_tab_id,
-    members: p.members.map((m) => ({
-      tabId: m.tab_id,
-      label: m.label,
-      vendor: m.vendor,
-      model: m.model || undefined,
-      prompt: m.prompt
-    })),
+    accountsChosen: answer.accounts !== undefined,
+    members: p.members.map((m, index) => {
+      const account = m.vendor === 'claude' ? answer.accounts?.[index] : undefined
+      return {
+        tabId: m.tab_id,
+        label: m.label,
+        vendor: m.vendor,
+        model: m.model || undefined,
+        prompt: m.prompt,
+        ...(account ? { account } : {})
+      }
+    }),
     expires: Date.now() + TOKEN_TTL_MS
   })
   return { ok: true, approved: true, token }
@@ -248,6 +255,7 @@ async function handleSpawn(
       requestId,
       projectPath: approved.projectPath,
       leaderTabId: approved.leaderTabId,
+      accountsChosen: approved.accountsChosen,
       members: approved.members
     })
   })

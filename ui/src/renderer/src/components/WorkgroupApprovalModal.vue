@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import AppModal from './AppModal.vue'
-import { approvals, closeApprovals, decideApproval } from '../workgroups'
+import { approvals, closeApprovals, decideApproval, ensureAccountChoices } from '../workgroups'
+import { accountStore } from '../accounts'
+import { shellAccountOf } from '../workspace'
 import { renderSafeMarkdown } from '../safeMarkdown'
 import type { WorkgroupPending } from '../../../preload/types'
 
@@ -34,6 +36,15 @@ function onDecline(requestId: string): void {
   }
   void decideApproval(requestId, false)
 }
+
+watch(
+  selected,
+  (request) => {
+    if (request)
+      ensureAccountChoices(request, shellAccountOf(request.projectPath, request.leaderTabId))
+  },
+  { immediate: true }
+)
 
 watch(
   () => [approvals.open, approvals.selectedId],
@@ -107,6 +118,34 @@ watch(
             <div v-if="member.skills.length" class="skills">
               <span class="skills-label">Must load</span>
               <span v-for="skill in member.skills" :key="skill" class="chip">{{ skill }}</span>
+            </div>
+            <div
+              v-if="
+                member.vendor === 'claude' &&
+                accountStore.items.length > 0 &&
+                approvals.accounts[selected.requestId]
+              "
+              class="account"
+            >
+              <span :id="`account-${selected.requestId}-${index}`" class="account-label">
+                Account
+              </span>
+              <div
+                class="segmented"
+                role="radiogroup"
+                :aria-labelledby="`account-${selected.requestId}-${index}`"
+              >
+                <button
+                  v-for="name in ['', ...accountStore.items.map((account) => account.name)]"
+                  :key="name || 'primary'"
+                  type="button"
+                  role="radio"
+                  :aria-checked="approvals.accounts[selected.requestId][index] === name"
+                  @click="approvals.accounts[selected.requestId][index] = name"
+                >
+                  {{ name || 'primary' }}
+                </button>
+              </div>
             </div>
             <p class="assignment-label">Assignment</p>
             <!-- eslint-disable-next-line vue/no-v-html -->
@@ -321,7 +360,55 @@ watch(
   margin-top: var(--space-3);
 }
 
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-3);
+}
+
+.segmented button {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-fg-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.segmented button:hover {
+  color: var(--color-fg-primary);
+}
+
+.segmented button[aria-checked='true'] {
+  background: var(--color-surface-1);
+  color: var(--color-fg-primary);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmented button:focus-visible {
+  outline: 1px solid var(--color-amber);
+  outline-offset: 1px;
+}
+
 .skills-label,
+.account-label,
 .assignment-label {
   color: var(--color-fg-muted);
   font-size: var(--text-xs);

@@ -247,8 +247,13 @@ const workgroup = {
   reportSpawn: (requestId: string, result: WorkgroupSpawnResult): void =>
     ipcRenderer.send('workgroup:spawn-result', { requestId, ...result }),
   pending: (): Promise<WorkgroupPending[]> => ipcRenderer.invoke('workgroup:pending'),
-  decide: (requestId: string, approved: boolean, reason?: string): Promise<boolean> =>
-    ipcRenderer.invoke('workgroup:decide', { requestId, approved, reason }),
+  decide: (
+    requestId: string,
+    approved: boolean,
+    reason?: string,
+    accounts?: string[]
+  ): Promise<boolean> =>
+    ipcRenderer.invoke('workgroup:decide', { requestId, approved, reason, accounts }),
   onPendingChange: (callback: (pending: WorkgroupPending[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, pending: WorkgroupPending[]): void =>
       callback(pending)
