@@ -58,6 +58,13 @@ func FormatTaskCloseDeny(slug string) string {
 		"Run `lgrass how task close " + slug + "`, follow its steps, then archive."
 }
 
+func FormatTempWriteDeny(target string) string {
+	return "lgrass: writing " + target + " is blocked, because the system temp dir is wiped by a reboot or power cut. " +
+		"In a bibliothek project every file the work produces goes in its task directory: task documents at biblio/scratchpad/<task-slug>/, " +
+		"and scripts, downloads, dumps and command output in biblio/scratchpad/<task-slug>/dump/, each download in its own new directory there. " +
+		"Reading from the temp dir is still allowed."
+}
+
 func FormatPlanModeDeny() string {
 	return "lgrass: EnterPlanMode is banned in a bibliothek project. Plan the bibliothek way instead: work it out in biblio/scratchpad/<task-slug>/ (prd.md/plan.md), then present the plan directly in this response and wait for explicit confirmation before changing anything."
 }

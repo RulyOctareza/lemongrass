@@ -197,6 +197,9 @@ func hookPreToolUse(store *session.Store, payload hookEvent, projectPath string)
 		if deny := closeGateDeny(store, payload); deny != "" {
 			return newHookResult("PreToolUse", "deny", []string{deny})
 		}
+		if deny := tempWriteDeny(payload, projectPath); deny != "" {
+			return newHookResult("PreToolUse", "deny", []string{deny})
+		}
 	}
 
 	var parts []string

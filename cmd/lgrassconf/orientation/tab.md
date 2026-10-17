@@ -8,6 +8,8 @@ You run in a terminal tab of the lemongrass app, in the project's directory. Oth
 
 The project root has a folder named `biblio` that holds the project's working knowledge: the scratchpad with task plans, the laws, the handovers of paused work and the books. It is gitignored, so search tools skip it, and you list it directly when you need it. It follows the bibliothek convention, whose full text comes at the end of this prompt. That text is the bibliothek skill, so never load the skill.
 
+Claude Code's own prompt names a scratchpad directory under the system temp dir and says to use it for temporary files. Do not use it in a project with `biblio`, because a reboot or power cut wipes it and nobody else can see it. Every file your work produces goes in its task directory under `biblio/scratchpad/`, with scripts, downloads, dumps and command output in the task's `dump/` folder and each download in its own new directory there. Writes into the temp dir are denied there. Reading from it still works, since Claude Code saves long tool output in it.
+
 ## What reaches you
 
 When the project has laws, their summary follows this text. Lemongrass adds hooks to your session. At session start a hook gives you any pending notifications. While you work, hooks add short notes after tool calls, such as how many other tabs are open.

@@ -10,13 +10,13 @@ var bibliothekTips = []string{
 	"bibliothek tip: handover is temporary, permanence is a book entry.",
 	"bibliothek tip: finishing a task includes writing its book chapter, same as running its tests.",
 	"bibliothek tip: memory only ever points at biblio/handover/<task>.md or biblio/books/toc.md -- never a hardcoded book path.",
-	"bibliothek tip: scratchpad is disposable working notes, not where a decided design lives.",
+	"bibliothek tip: scratchpad holds every file a task's work produces, raw material in the task's dump/ folder, and becomes the permanent record in the archive once the task closes.",
 	"bibliothek tip: check biblio/books/toc.md before researching something from scratch -- it might already be covered.",
 	"bibliothek tip: a handover's Status section is the truth, its Log is history only -- don't read the Log for current state.",
 	"bibliothek tip: once a handover's work is done, archive it -- biblio/handover/ should only ever hold what's still in flight.",
 	"bibliothek tip: tags are one word each -- a compound idea is multiple tags, not one hyphenated tag.",
 	"bibliothek tip: a plan for work that hasn't started lives in scratchpad -- a handover's Status section tracks an already-open task, not a future one.",
-	"bibliothek tip: scratchpad is editable by the model too, not just the user -- it's a working space for planning and debugging, not only somewhere the user drops notes.",
+	"bibliothek tip: scratchpad is editable by the model too, not just the user. It is the working space for planning, debugging and every work file, not only somewhere the user drops notes.",
 }
 
 func RandomTip() string {
