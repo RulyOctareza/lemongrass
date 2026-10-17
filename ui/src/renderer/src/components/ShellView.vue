@@ -10,6 +10,7 @@ import {
   startFreshShell,
   type ShellSpec
 } from '../shellRegistry'
+import AppButton from './AppButton.vue'
 
 const props = defineProps<{
   spec: ShellSpec
@@ -36,17 +37,17 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
         The account {{ shellAccountGone[spec.id] }} was deleted, so this tab can't continue under
         it. Continuing on the primary account bills the primary and sends this conversation to it.
       </span>
-      <button class="ghost-button" @click="closeFailedShell(spec.id)">Close tab</button>
-      <button class="primary-button" @click="continueOnPrimary(spec.id)">
+      <AppButton class="close-tab" @click="closeFailedShell(spec.id)">Close tab</AppButton>
+      <AppButton variant="primary" @click="continueOnPrimary(spec.id)">
         Continue on primary
-      </button>
+      </AppButton>
     </div>
     <div v-else-if="shellRestoreFailures[spec.id]" class="restore-failure">
       <span class="restore-message">
         This tab could not resume its previous session. The agent's message is shown above.
       </span>
-      <button class="ghost-button" @click="closeFailedShell(spec.id)">Close tab</button>
-      <button class="primary-button" @click="startFreshShell(spec.id)">Start a new session</button>
+      <AppButton class="close-tab" @click="closeFailedShell(spec.id)">Close tab</AppButton>
+      <AppButton variant="primary" @click="startFreshShell(spec.id)">Start a new session</AppButton>
     </div>
   </div>
 </template>
@@ -93,34 +94,8 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   font-size: var(--text-xs);
 }
 
-.ghost-button,
-.primary-button {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover {
-  color: var(--color-fg-primary);
+/* The failure bar sits on surface-2, so the ghost hover needs one step brighter to show. */
+.restore-failure .close-tab:hover:not(:disabled) {
   background: var(--color-surface-3);
-}
-
-.primary-button {
-  background: var(--color-amber);
-  border: none;
-  color: var(--color-black);
-}
-
-.primary-button:hover {
-  background: var(--color-amber-dim);
 }
 </style>

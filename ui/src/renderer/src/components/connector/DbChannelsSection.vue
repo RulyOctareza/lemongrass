@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import type { VaultChannel } from '../../../../preload/types'
+import AppButton from '../AppButton.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -284,15 +285,16 @@ onUnmounted(() => {
   <div ref="rootEl" class="section">
     <div class="section-toolbar">
       <p class="hint">Scoped, short-lived access to a connection. The newest channel is first.</p>
-      <button
+      <AppButton
         v-if="!showCreateForm"
-        class="primary-button new-channel-button"
+        variant="primary"
+        class="new-channel-button"
         :disabled="connections.length === 0"
         :title="connections.length === 0 ? 'Add a connection first' : ''"
         @click="openCreateForm"
       >
         + New channel
-      </button>
+      </AppButton>
     </div>
 
     <div v-if="showCreateForm" class="inline-section">
@@ -400,14 +402,14 @@ onUnmounted(() => {
 
       <p v-if="createError" class="error-text">{{ createError }}</p>
       <div class="create-actions">
-        <button class="ghost-button" @click="cancelCreate">Cancel</button>
-        <button
-          class="primary-button"
+        <AppButton @click="cancelCreate">Cancel</AppButton>
+        <AppButton
+          variant="primary"
           :disabled="!newChannelName.trim() || !newDbName.trim() || creating"
           @click="submitCreate"
         >
           {{ creating ? 'Creating...' : 'Create' }}
-        </button>
+        </AppButton>
       </div>
     </div>
 
@@ -464,24 +466,23 @@ onUnmounted(() => {
             {{ statusFor(channel) }}
           </span>
           <div v-if="activatingId !== channel.ID" class="channel-actions">
-            <button
-              class="ghost-button"
+            <AppButton
               :disabled="!vaultUnlocked"
               title="Create a new channel from this one"
               @click="openCopyForm(channel)"
             >
               Copy
-            </button>
-            <button class="ghost-button" @click="openActivate(channel.ID)">
+            </AppButton>
+            <AppButton @click="openActivate(channel.ID)">
               {{ statusFor(channel) === 'expired' ? 'Activate' : 'Rotate' }}
-            </button>
-            <button
-              class="ghost-button danger"
+            </AppButton>
+            <AppButton
+              variant="danger"
               :disabled="revokingId === channel.ID"
               @click="revoke(channel.ID)"
             >
               {{ revokingId === channel.ID ? 'Removing...' : 'Remove' }}
-            </button>
+            </AppButton>
           </div>
         </div>
 
@@ -494,8 +495,8 @@ onUnmounted(() => {
             autofocus
             @keydown.enter="submitActivate"
           />
-          <button class="ghost-button" @click="cancelActivate">Cancel</button>
-          <button class="primary-button" :disabled="activating" @click="submitActivate">
+          <AppButton @click="cancelActivate">Cancel</AppButton>
+          <AppButton variant="primary" :disabled="activating" @click="submitActivate">
             {{
               statusFor(channel) === 'expired'
                 ? activating
@@ -505,7 +506,7 @@ onUnmounted(() => {
                   ? 'Rotating...'
                   : 'Rotate'
             }}
-          </button>
+          </AppButton>
         </div>
         <p v-if="activatingId === channel.ID" class="hint">
           Channel stays open for {{ activateTtlMinutes }} minutes before it needs reactivating.

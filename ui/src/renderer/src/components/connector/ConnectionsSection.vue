@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
+import AppButton from '../AppButton.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -283,13 +284,14 @@ watch(
   <div class="section">
     <div class="section-toolbar">
       <p class="hint">Saved database credentials. Channels are created from a connection.</p>
-      <button
+      <AppButton
         v-if="!showConnectionForm"
-        class="primary-button new-channel-button"
+        variant="primary"
+        class="new-channel-button"
         @click="openConnectionForm"
       >
         + New connection
-      </button>
+      </AppButton>
     </div>
 
     <div v-if="showConnectionForm" class="inline-section">
@@ -356,9 +358,9 @@ watch(
       </div>
 
       <div class="test-row">
-        <button class="ghost-button" :disabled="!canTestNewConnection" @click="testNewConnection">
+        <AppButton :disabled="!canTestNewConnection" @click="testNewConnection">
           {{ newConnectionTestStatus === 'testing' ? 'Testing...' : 'Test connection' }}
-        </button>
+        </AppButton>
         <span
           class="test-status"
           :class="{
@@ -380,9 +382,9 @@ watch(
       <p v-if="connectionFormError" class="error-text">{{ connectionFormError }}</p>
 
       <div class="create-actions">
-        <button class="ghost-button" @click="cancelConnectionForm">Cancel</button>
-        <button
-          class="primary-button"
+        <AppButton @click="cancelConnectionForm">Cancel</AppButton>
+        <AppButton
+          variant="primary"
           :disabled="
             !newConnectionName.trim() ||
             !vaultUnlocked ||
@@ -399,7 +401,7 @@ watch(
           @click="submitConnection"
         >
           {{ creatingConnection ? 'Saving...' : 'Save' }}
-        </button>
+        </AppButton>
       </div>
     </div>
 
@@ -420,29 +422,27 @@ watch(
           </span>
         </div>
         <div class="channel-actions">
-          <button
-            class="ghost-button"
+          <AppButton
             :disabled="!vaultUnlocked || rowStatus[name] === 'verifying'"
             :title="!vaultUnlocked ? 'Unlock the vault first' : ''"
             @click="testRow(name)"
           >
             {{ rowStatus[name] === 'verifying' ? 'Testing...' : 'Test' }}
-          </button>
-          <button
-            class="ghost-button"
+          </AppButton>
+          <AppButton
             :disabled="!vaultUnlocked || loadingConnectionName === name"
             :title="!vaultUnlocked ? 'Unlock the vault first' : ''"
             @click="openConnectionEdit(name)"
           >
             {{ loadingConnectionName === name ? 'Loading...' : 'Edit' }}
-          </button>
-          <button
-            class="ghost-button danger"
+          </AppButton>
+          <AppButton
+            variant="danger"
             :disabled="deletingConnectionName === name"
             @click="deleteConnection(name)"
           >
             {{ deletingConnectionName === name ? 'Deleting...' : 'Delete' }}
-          </button>
+          </AppButton>
         </div>
       </div>
     </div>

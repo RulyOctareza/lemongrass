@@ -2,6 +2,7 @@
 import { computed, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import type { VaultPolicy, VaultPolicyRule } from '../../../../preload/types'
+import AppButton from '../AppButton.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -166,9 +167,9 @@ watch(
         What agents may run in a lemongrass tab. The policy is sealed in the vault, so an agent
         cannot change it. Rules marked Locked protect lemongrass itself.
       </p>
-      <button class="ghost-button" :disabled="loading || saving" @click="resetToDefaults">
+      <AppButton :disabled="loading || saving" @click="resetToDefaults">
         Reset to defaults
-      </button>
+      </AppButton>
     </div>
 
     <p v-if="loadError" class="error-text">{{ loadError }}</p>
@@ -210,7 +211,7 @@ watch(
             placeholder="e.g. make"
             @keydown.enter="addBinary"
           />
-          <button class="ghost-button" :disabled="!newBinary.trim()" @click="addBinary">Add</button>
+          <AppButton :disabled="!newBinary.trim()" @click="addBinary">Add</AppButton>
         </div>
         <p v-if="binaryError" class="error-text">{{ binaryError }}</p>
         <div v-if="binaries.length" class="chip-row">
@@ -236,7 +237,7 @@ watch(
             placeholder="e.g. ~/private"
             @keydown.enter="addPath"
           />
-          <button class="ghost-button" :disabled="!newPath.trim()" @click="addPath">Add</button>
+          <AppButton :disabled="!newPath.trim()" @click="addPath">Add</AppButton>
         </div>
         <p v-if="pathError" class="error-text">{{ pathError }}</p>
         <div v-if="paths.length" class="chip-row">
@@ -250,9 +251,9 @@ watch(
       </div>
 
       <div class="create-actions">
-        <button class="primary-button" :disabled="!dirty || saving" @click="save">
+        <AppButton variant="primary" :disabled="!dirty || saving" @click="save">
           {{ saving ? 'Saving...' : 'Save policy' }}
-        </button>
+        </AppButton>
         <span v-if="savedNotice && !dirty" class="test-status test-status-ok">
           {{ savedNotice }}
         </span>

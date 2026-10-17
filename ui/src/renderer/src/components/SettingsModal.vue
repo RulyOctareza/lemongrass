@@ -8,6 +8,7 @@ import {
   addAccount,
   removeAccount
 } from '../accounts'
+import AppButton from './AppButton.vue'
 
 const emit = defineEmits<{
   close: []
@@ -94,7 +95,7 @@ async function onRemove(name: string): Promise<void> {
             autocomplete="off"
             aria-label="New account name"
           />
-          <button type="submit" class="primary-button" :disabled="!canAdd">Add account</button>
+          <AppButton type="submit" variant="primary" :disabled="!canAdd">Add account</AppButton>
         </form>
         <p v-if="nameError || addError" class="field-error">{{ nameError || addError }}</p>
       </section>
@@ -263,27 +264,6 @@ async function onRemove(name: string): Promise<void> {
 .name-input:focus {
   outline: none;
   border-color: var(--color-amber);
-}
-
-.primary-button {
-  padding: var(--space-1) var(--space-4);
-  background: var(--color-amber);
-  border: none;
-  border-radius: var(--radius-pill);
-  color: var(--color-black);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-.primary-button:hover:not(:disabled) {
-  background: var(--color-amber-dim);
-}
-
-.primary-button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .field-error {

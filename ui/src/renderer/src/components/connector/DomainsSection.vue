@@ -4,6 +4,7 @@ import AppModal from '../AppModal.vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import { collidingUserName, userHandle } from '../../userHandle'
 import type { VaultDomain, VaultDomainUser, VaultLoginFieldType } from '../../../../preload/types'
+import AppButton from '../AppButton.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -410,13 +411,14 @@ watch(
       <p class="hint">
         Saved HTTP hosts with their login and users. HTTP channels are created from a domain.
       </p>
-      <button
+      <AppButton
         v-if="!showDomainForm"
-        class="primary-button new-channel-button"
+        variant="primary"
+        class="new-channel-button"
         @click="openDomainForm"
       >
         + New domain
-      </button>
+      </AppButton>
     </div>
 
     <div v-if="showDomainForm" class="inline-section">
@@ -561,7 +563,7 @@ watch(
                 ×
               </button>
             </div>
-            <button type="button" class="ghost-button" @click="addDomainHeader">+ Header</button>
+            <AppButton type="button" @click="addDomainHeader">+ Header</AppButton>
           </div>
         </div>
       </div>
@@ -575,7 +577,7 @@ watch(
             class="users-search"
             placeholder="Search name or tag"
           />
-          <button type="button" class="ghost-button" @click="addUserDraft">+ User</button>
+          <AppButton type="button" @click="addUserDraft">+ User</AppButton>
         </div>
         <p v-if="newDomainUsers.length > 0 && visibleUsers.length === 0" class="empty">
           No user matches.
@@ -678,19 +680,16 @@ watch(
                   ×
                 </button>
               </div>
-              <button type="button" class="ghost-button" @click="addUserField(userIndex)">
-                + Field
-              </button>
+              <AppButton type="button" @click="addUserField(userIndex)"> + Field </AppButton>
             </div>
 
             <div class="test-row">
-              <button
-                class="ghost-button"
+              <AppButton
                 :disabled="user.testStatus === 'testing'"
                 @click="testUserDraft(userIndex)"
               >
                 {{ user.testStatus === 'testing' ? 'Testing...' : 'Test login' }}
-              </button>
+              </AppButton>
               <span
                 class="test-status"
                 :class="{
@@ -713,9 +712,9 @@ watch(
               >
                 !
               </button>
-              <button type="button" class="ghost-button danger" @click="removeUserDraft(userIndex)">
+              <AppButton type="button" variant="danger" @click="removeUserDraft(userIndex)">
                 Remove user
-              </button>
+              </AppButton>
             </div>
           </template>
         </div>
@@ -724,14 +723,14 @@ watch(
       <div class="create-actions form-action-bar">
         <p v-if="!vaultUnlocked" class="hint">Unlock the vault above before saving.</p>
         <p v-if="domainFormError" class="error-text">{{ domainFormError }}</p>
-        <button class="ghost-button" @click="cancelDomainForm">Cancel</button>
-        <button
-          class="primary-button"
+        <AppButton @click="cancelDomainForm">Cancel</AppButton>
+        <AppButton
+          variant="primary"
           :disabled="!canSubmitDomain || creatingDomain"
           @click="submitDomain"
         >
           {{ creatingDomain ? 'Saving...' : 'Save' }}
-        </button>
+        </AppButton>
       </div>
     </div>
 
@@ -745,29 +744,27 @@ watch(
           <span class="channel-db">{{ name }}</span>
         </div>
         <div class="channel-actions">
-          <button
-            class="ghost-button"
+          <AppButton
             :disabled="!vaultUnlocked || loadingDomainName === name"
             :title="!vaultUnlocked ? 'Unlock the vault first' : 'Create a new domain from this one'"
             @click="openDomainCopy(name)"
           >
             Copy
-          </button>
-          <button
-            class="ghost-button"
+          </AppButton>
+          <AppButton
             :disabled="!vaultUnlocked || loadingDomainName === name"
             :title="!vaultUnlocked ? 'Unlock the vault first' : ''"
             @click="openDomainEdit(name)"
           >
             {{ loadingDomainName === name ? 'Loading...' : 'Edit' }}
-          </button>
-          <button
-            class="ghost-button danger"
+          </AppButton>
+          <AppButton
+            variant="danger"
             :disabled="deletingDomainName === name"
             @click="deleteDomain(name)"
           >
             {{ deletingDomainName === name ? 'Deleting...' : 'Delete' }}
-          </button>
+          </AppButton>
         </div>
       </div>
     </div>

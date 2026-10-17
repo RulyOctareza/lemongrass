@@ -12,6 +12,7 @@ import {
 } from '../workspace'
 import { accountStore } from '../accounts'
 import { SHELL_AGENTS, shellAgentById } from '../shellAgents'
+import AppButton from './AppButton.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -91,8 +92,8 @@ const showAccounts = computed(
       </template>
       <p v-if="selectedAgentWarning" class="agent-warning">{{ selectedAgentWarning }}</p>
       <template #footer>
-        <button class="ghost-button" @click="cancelShellPicker">Cancel</button>
-        <button class="primary-button" @click="confirmShellPicker()">Open</button>
+        <AppButton @click="cancelShellPicker">Cancel</AppButton>
+        <AppButton variant="primary" @click="confirmShellPicker()">Open</AppButton>
       </template>
     </AppModal>
   </div>
@@ -207,39 +208,5 @@ const showAccounts = computed(
   color: var(--color-amber);
   font-size: var(--text-sm);
   line-height: var(--leading-relaxed);
-}
-
-.ghost-button,
-.primary-button {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover {
-  color: var(--color-fg-primary);
-  background: var(--color-surface-2);
-}
-
-.primary-button {
-  background: var(--color-amber);
-  border: none;
-  color: var(--color-black);
-}
-
-.primary-button:hover {
-  background: var(--color-amber-dim);
 }
 </style>

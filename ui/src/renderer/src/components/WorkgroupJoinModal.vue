@@ -2,8 +2,9 @@
 import { nextTick, ref, watch } from 'vue'
 import AppModal from './AppModal.vue'
 import { closeJoin, confirmJoin, joining } from '../workgroups'
+import AppButton from './AppButton.vue'
 
-const cancelButton = ref<HTMLButtonElement | null>(null)
+const cancelButton = ref<InstanceType<typeof AppButton> | null>(null)
 
 watch(
   () => joining.draft,
@@ -48,15 +49,15 @@ watch(
     <p v-else-if="joining.error" class="error">{{ joining.error }}</p>
     <template #footer>
       <template v-if="joining.notice">
-        <button ref="cancelButton" class="primary-button" @click="closeJoin">Close</button>
+        <AppButton ref="cancelButton" variant="primary" @click="closeJoin">Close</AppButton>
       </template>
       <template v-else>
-        <button ref="cancelButton" class="ghost-button" :disabled="joining.busy" @click="closeJoin">
+        <AppButton ref="cancelButton" :disabled="joining.busy" @click="closeJoin">
           Cancel
-        </button>
-        <button class="primary-button" :disabled="joining.busy" @click="confirmJoin">
+        </AppButton>
+        <AppButton variant="primary" :disabled="joining.busy" @click="confirmJoin">
           {{ joining.busy ? 'Adding...' : 'Approve' }}
-        </button>
+        </AppButton>
       </template>
     </template>
   </AppModal>
@@ -116,51 +117,5 @@ watch(
 
 .error {
   color: var(--color-error);
-}
-
-.ghost-button,
-.primary-button {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover:not(:disabled) {
-  color: var(--color-fg-primary);
-  background: var(--color-surface-2);
-}
-
-.ghost-button:focus-visible,
-.primary-button:focus-visible {
-  outline: 2px solid var(--color-fg-accent);
-  outline-offset: 2px;
-}
-
-.primary-button {
-  background: var(--color-amber);
-  border: none;
-  color: var(--color-black);
-}
-
-.primary-button:hover:not(:disabled) {
-  background: var(--color-amber-dim);
-}
-
-.ghost-button:disabled,
-.primary-button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 </style>

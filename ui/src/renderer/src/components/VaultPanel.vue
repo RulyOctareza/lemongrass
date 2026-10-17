@@ -14,6 +14,7 @@ import DbChannelsSection from './connector/DbChannelsSection.vue'
 import DomainsSection from './connector/DomainsSection.vue'
 import HttpChannelsSection from './connector/HttpChannelsSection.vue'
 import PolicySection from './safety/PolicySection.vue'
+import AppButton from './AppButton.vue'
 
 const props = defineProps<{
   active: boolean
@@ -132,22 +133,18 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
                 autofocus
                 @keydown.enter="unlockVault"
               />
-              <button
-                class="primary-button"
+              <AppButton
+                variant="primary"
                 :disabled="!unlockInput || unlocking"
                 @click="unlockVault"
               >
                 {{ unlocking ? 'Checking...' : 'Unlock' }}
-              </button>
+              </AppButton>
             </div>
             <p v-if="unlockError" class="error-text">{{ unlockError }}</p>
-            <button
-              v-if="unlockMode === 'enter'"
-              class="ghost-button reset-link"
-              @click="openResetConfirm"
-            >
+            <AppButton v-if="unlockMode === 'enter'" class="reset-link" @click="openResetConfirm">
               Forgot your passphrase?
-            </button>
+            </AppButton>
           </template>
 
           <template v-else>
@@ -157,10 +154,10 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
             </p>
             <p v-if="resetError" class="error-text">{{ resetError }}</p>
             <div class="unlock-row">
-              <button class="ghost-button" @click="cancelResetConfirm">Cancel</button>
-              <button class="ghost-button danger" :disabled="resetting" @click="confirmReset">
+              <AppButton @click="cancelResetConfirm">Cancel</AppButton>
+              <AppButton variant="danger" :disabled="resetting" @click="confirmReset">
                 {{ resetting ? 'Resetting...' : 'Reset vault' }}
-              </button>
+              </AppButton>
             </div>
           </template>
         </div>
@@ -239,7 +236,7 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
           </button>
           <div class="nav-lock">
             <span class="unlock-status">Vault unlocked</span>
-            <button class="ghost-button" @click="lockVaultSession">Lock</button>
+            <AppButton @click="lockVaultSession">Lock</AppButton>
           </div>
         </nav>
 

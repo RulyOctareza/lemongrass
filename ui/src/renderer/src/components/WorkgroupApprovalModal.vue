@@ -6,8 +6,9 @@ import { accountStore } from '../accounts'
 import { shellAccountOf } from '../workspace'
 import { renderSafeMarkdown } from '../safeMarkdown'
 import type { WorkgroupPending } from '../../../preload/types'
+import AppButton from './AppButton.vue'
 
-const declineButton = ref<HTMLButtonElement | null>(null)
+const declineButton = ref<InstanceType<typeof AppButton> | null>(null)
 const reasonInput = ref<HTMLTextAreaElement | null>(null)
 
 const selected = computed((): WorkgroupPending | undefined =>
@@ -188,21 +189,20 @@ watch(
         </div>
 
         <footer class="action-bar">
-          <button
+          <AppButton
             ref="declineButton"
-            class="ghost-button"
             :disabled="approvals.busy"
             @click="onDecline(selected.requestId)"
           >
             Decline
-          </button>
-          <button
-            class="primary-button"
+          </AppButton>
+          <AppButton
+            variant="primary"
             :disabled="approvals.busy"
             @click="decideApproval(selected.requestId, true)"
           >
             Approve
-          </button>
+          </AppButton>
         </footer>
       </section>
     </div>
@@ -610,50 +610,5 @@ watch(
   justify-content: flex-end;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-6);
-}
-
-.ghost-button,
-.primary-button {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover:not(:disabled) {
-  color: var(--color-fg-primary);
-  background: var(--color-surface-2);
-}
-
-.ghost-button:focus-visible {
-  outline: 2px solid var(--color-fg-accent);
-  outline-offset: 2px;
-}
-
-.primary-button {
-  background: var(--color-amber);
-  border: none;
-  color: var(--color-black);
-}
-
-.primary-button:hover:not(:disabled) {
-  background: var(--color-amber-dim);
-}
-
-.ghost-button:disabled,
-.primary-button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 </style>

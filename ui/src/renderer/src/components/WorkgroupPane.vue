@@ -17,6 +17,7 @@ import type {
   WorkgroupMemberInfo,
   WorkgroupThreadMessage
 } from '../../../preload/types'
+import AppButton from './AppButton.vue'
 
 const POLL_MS = 4000
 const PAGE = 50
@@ -39,7 +40,7 @@ const more = ref(false)
 const threadError = ref<string | null>(null)
 const loadingOlder = ref(false)
 const scroller = ref<HTMLDivElement>()
-const cancelButton = ref<HTMLButtonElement | null>(null)
+const cancelButton = ref<InstanceType<typeof AppButton> | null>(null)
 
 const color = computed(() => groupColorOf(props.project.id, props.groupId))
 
@@ -199,7 +200,7 @@ onBeforeUnmount(() => clearInterval(timer))
             />
           </div>
         </div>
-        <button v-if="live" class="danger-button" @click="confirming = true">Disband</button>
+        <AppButton v-if="live" variant="danger" @click="confirming = true">Disband</AppButton>
       </header>
 
       <p v-if="state.error" class="pane-error">{{ state.error }}</p>
@@ -255,15 +256,10 @@ onBeforeUnmount(() => clearInterval(timer))
     >
       <p>Its tabs stay open and its thread stays readable.</p>
       <template #footer>
-        <button
-          ref="cancelButton"
-          class="ghost-button"
-          :disabled="state.busy"
-          @click="confirming = false"
-        >
+        <AppButton ref="cancelButton" :disabled="state.busy" @click="confirming = false">
           Cancel
-        </button>
-        <button class="danger-button" :disabled="state.busy" @click="onDisband">Disband</button>
+        </AppButton>
+        <AppButton variant="danger" :disabled="state.busy" @click="onDisband">Disband</AppButton>
       </template>
     </AppModal>
   </div>
@@ -504,48 +500,5 @@ onBeforeUnmount(() => clearInterval(timer))
   line-height: var(--leading-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.ghost-button,
-.danger-button {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover:not(:disabled) {
-  color: var(--color-fg-primary);
-  background: var(--color-surface-2);
-}
-
-.ghost-button:focus-visible {
-  outline: 2px solid var(--color-fg-accent);
-  outline-offset: 2px;
-}
-
-.danger-button {
-  background: transparent;
-  border: 1px solid var(--color-error);
-  color: var(--color-error);
-}
-
-.danger-button:hover:not(:disabled) {
-  background: var(--color-error-muted);
-}
-
-.ghost-button:disabled,
-.danger-button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 </style>

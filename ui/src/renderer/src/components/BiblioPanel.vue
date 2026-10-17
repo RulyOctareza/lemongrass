@@ -9,6 +9,7 @@ import VaultEntry from './VaultEntry.vue'
 import WorkgroupPanel from './WorkgroupPanel.vue'
 import { activePath, closeUnder, openFile, type ProjectRef } from '../workspace'
 import type { BiblioTree } from '../../../preload/types'
+import AppButton from './AppButton.vue'
 
 const props = defineProps<{
   tree: BiblioTree | null
@@ -199,14 +200,10 @@ function onGutterUp(): void {
         @image-pending="(url, file) => pendingImages.set(url, file)"
       />
       <template #footer>
-        <button class="ghost-button" @click="cancelCreate">Cancel</button>
-        <button
-          class="primary-button"
-          :disabled="!newTitle.trim() || creating"
-          @click="submitCreate"
-        >
+        <AppButton @click="cancelCreate">Cancel</AppButton>
+        <AppButton variant="primary" :disabled="!newTitle.trim() || creating" @click="submitCreate">
           {{ creating ? 'Creating...' : 'Create' }}
-        </button>
+        </AppButton>
       </template>
     </AppModal>
   </div>
@@ -232,45 +229,6 @@ function onGutterUp(): void {
 .title-input:focus {
   outline: none;
   border-color: var(--color-amber);
-}
-
-.ghost-button,
-.primary-button {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover {
-  color: var(--color-fg-primary);
-  background: var(--color-surface-2);
-}
-
-.primary-button {
-  background: var(--color-amber);
-  border: none;
-  color: var(--color-black);
-}
-
-.primary-button:hover:not(:disabled) {
-  background: var(--color-amber-dim);
-}
-
-.primary-button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .biblio-tree {

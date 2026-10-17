@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { commitChanges, gitStateOf, isChecked, refreshGit, setAllChecked, toggleFile } from '../git'
 import { activeDiffPath, openDiff, type ProjectRef } from '../workspace'
 import type { GitFile, GitFileKind } from '../../../preload/types'
+import AppButton from './AppButton.vue'
 
 const POLL_MS = 5000
 
@@ -209,21 +210,22 @@ watch(() => props.project.id, refresh)
         <p v-if="state.error" class="git-error lg-scroll">{{ state.error }}</p>
         <p v-if="hint" class="git-hint">{{ hint }}</p>
         <div class="git-actions">
-          <button
-            class="ghost-button"
+          <AppButton
+            class="git-action"
             :disabled="!canCommit"
             @click="commitChanges(project, false)"
           >
             Commit
-          </button>
-          <button
-            class="primary-button"
+          </AppButton>
+          <AppButton
+            variant="primary"
+            class="git-action"
             :disabled="!canPush"
             :title="pushTitle"
             @click="commitChanges(project, true)"
           >
             Commit and push
-          </button>
+          </AppButton>
         </div>
       </template>
     </div>
@@ -476,45 +478,9 @@ watch(() => props.project.id, refresh)
   padding-bottom: var(--space-1);
 }
 
-.ghost-button,
-.primary-button {
+/* The two actions split the narrow sidebar evenly, so they take less side padding than elsewhere. */
+.git-actions .git-action {
   flex: 1;
   padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover:not(:disabled) {
-  color: var(--color-fg-primary);
-  background: var(--color-surface-2);
-}
-
-.primary-button {
-  background: var(--color-amber);
-  border: none;
-  color: var(--color-black);
-}
-
-.primary-button:hover:not(:disabled) {
-  background: var(--color-amber-dim);
-}
-
-.ghost-button:disabled,
-.primary-button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 </style>

@@ -81,11 +81,16 @@ test('Codex writes the notice before a separately delayed Enter', async () => {
   assert.deepEqual(f.writes, [NOTICE, '\r'])
 })
 
-test('Claude submits with its existing single write', async () => {
+test('Claude gets the same separately delayed Enter', async () => {
   const f = fixture('claude')
-  assert.equal((await f.handleNudge('/tmp/lgrassd', TAB_ID)).typed, true)
-  assert.deepEqual(f.writes, [NOTICE + '\r'])
-  assert.equal(f.timers.length, 0)
+  const result = f.handleNudge('/tmp/lgrassd', TAB_ID)
+  await Promise.resolve()
+  assert.deepEqual(f.writes, [NOTICE])
+  assert.equal(f.timers.length, 1)
+  assert.equal(f.timers[0].delay, 250)
+  f.timers[0].callback()
+  assert.equal((await result).typed, true)
+  assert.deepEqual(f.writes, [NOTICE, '\r'])
 })
 
 test('human typing defers the notice before consuming or writing it', async () => {

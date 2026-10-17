@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import AppModal from './AppModal.vue'
 import type { NodeGrantView, NodeIssued, NodeState } from '../../../preload/types'
+import AppButton from './AppButton.vue'
 
 const emit = defineEmits<{
   close: []
@@ -172,7 +173,7 @@ function when(iso?: string): string {
         <p v-else-if="status?.running" class="status on">
           Open until {{ when(status.until) }} at
           <code>{{ nodeURL }}</code>
-          <button class="ghost-button" @click="copy(nodeURL)">Copy</button>
+          <AppButton @click="copy(nodeURL)">Copy</AppButton>
         </p>
         <p v-else class="status">Closed.</p>
         <p v-if="status?.error" class="error">{{ status.error }}</p>
@@ -207,7 +208,7 @@ function when(iso?: string): string {
             Port
             <input v-model.number="tunnel.localPort" type="number" placeholder="7457" />
           </label>
-          <button class="ghost-button" :disabled="busy" @click="saveTunnel">Save</button>
+          <AppButton :disabled="busy" @click="saveTunnel">Save</AppButton>
         </div>
 
         <div class="row">
@@ -221,17 +222,11 @@ function when(iso?: string): string {
                 <option :value="24">24 hours</option>
               </select>
             </label>
-            <button
-              class="primary-button"
-              :disabled="busy || status?.daemonDown"
-              @click="openTunnel"
-            >
+            <AppButton variant="primary" :disabled="busy || status?.daemonDown" @click="openTunnel">
               {{ busy ? 'Opening...' : 'Open tunnel' }}
-            </button>
+            </AppButton>
           </template>
-          <button v-else class="ghost-button" :disabled="busy" @click="closeTunnel">
-            Close tunnel
-          </button>
+          <AppButton v-else :disabled="busy" @click="closeTunnel"> Close tunnel </AppButton>
         </div>
       </section>
 
@@ -242,7 +237,7 @@ function when(iso?: string): string {
         </p>
         <div class="copy-block">
           <code>{{ issued.token }}</code>
-          <button class="ghost-button" @click="copy(issued.token)">Copy</button>
+          <AppButton @click="copy(issued.token)">Copy</AppButton>
         </div>
         <p v-if="!nodeURL" class="note">
           Open the tunnel to fill in the URL, or replace NODE_URL by hand.
@@ -250,14 +245,14 @@ function when(iso?: string): string {
         <p class="note">Claude Code</p>
         <div class="copy-block">
           <code>{{ claudeCommand }}</code>
-          <button class="ghost-button" @click="copy(claudeCommand)">Copy</button>
+          <AppButton @click="copy(claudeCommand)">Copy</AppButton>
         </div>
         <p class="note">Other MCP clients</p>
         <div class="copy-block">
           <pre>{{ mcpJSON }}</pre>
-          <button class="ghost-button" @click="copy(mcpJSON)">Copy</button>
+          <AppButton @click="copy(mcpJSON)">Copy</AppButton>
         </div>
-        <button class="ghost-button" @click="issued = null">Done</button>
+        <AppButton @click="issued = null">Done</AppButton>
       </section>
 
       <section>
@@ -272,10 +267,8 @@ function when(iso?: string): string {
               {{ when(g.lastUsed) }}.
             </span>
           </div>
-          <button v-if="!g.revoked" class="ghost-button" :disabled="busy" @click="revoke(g.id)">
-            Revoke
-          </button>
-          <button v-else class="ghost-button" :disabled="busy" @click="remove(g.id)">Remove</button>
+          <AppButton v-if="!g.revoked" :disabled="busy" @click="revoke(g.id)"> Revoke </AppButton>
+          <AppButton v-else :disabled="busy" @click="remove(g.id)">Remove</AppButton>
         </div>
       </section>
 
@@ -325,9 +318,9 @@ function when(iso?: string): string {
           </div>
         </div>
         <div class="row">
-          <button class="primary-button" :disabled="busy || pickedCount === 0" @click="issue">
+          <AppButton variant="primary" :disabled="busy || pickedCount === 0" @click="issue">
             Issue token
-          </button>
+          </AppButton>
         </div>
       </section>
     </div>
@@ -491,38 +484,6 @@ pre {
   gap: var(--space-1);
   color: var(--color-fg-primary);
   word-break: break-all;
-}
-
-.ghost-button,
-.primary-button {
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  color: var(--color-fg-secondary);
-}
-
-.ghost-button:hover {
-  color: var(--color-fg-primary);
-  background: var(--color-surface-2);
-}
-
-.primary-button {
-  background: var(--color-amber);
-  border: none;
-  color: var(--color-black);
-}
-
-.primary-button:hover {
-  background: var(--color-amber-dim);
 }
 
 button:disabled {

@@ -2,6 +2,7 @@
 import { nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import type { VaultHTTPChannel, VaultHTTPScope } from '../../../../preload/types'
+import AppButton from '../AppButton.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -228,15 +229,16 @@ onUnmounted(() => {
   <div ref="rootEl" class="section">
     <div class="section-toolbar">
       <p class="hint">Scoped, short-lived access to a domain. The newest channel is first.</p>
-      <button
+      <AppButton
         v-if="!showHTTPCreateForm"
-        class="primary-button new-channel-button"
+        variant="primary"
+        class="new-channel-button"
         :disabled="domains.length === 0"
         :title="domains.length === 0 ? 'Add a domain first' : ''"
         @click="openHTTPCreateForm"
       >
         + New channel
-      </button>
+      </AppButton>
     </div>
 
     <div v-if="showHTTPCreateForm" class="inline-section">
@@ -302,23 +304,23 @@ onUnmounted(() => {
                 ×
               </button>
             </div>
-            <button type="button" class="ghost-button" @click="addExclusion">+ Exclusion</button>
+            <AppButton type="button" @click="addExclusion">+ Exclusion</AppButton>
           </div>
         </div>
       </div>
 
       <p v-if="createHTTPError" class="error-text">{{ createHTTPError }}</p>
       <div class="create-actions">
-        <button class="ghost-button" @click="cancelHTTPCreate">Cancel</button>
-        <button
-          class="primary-button"
+        <AppButton @click="cancelHTTPCreate">Cancel</AppButton>
+        <AppButton
+          variant="primary"
           :disabled="
             !newHTTPChannelName.trim() || !newHTTPChannelDomain.trim() || creatingHTTPChannel
           "
           @click="submitHTTPCreate"
         >
           {{ creatingHTTPChannel ? 'Creating...' : 'Create' }}
-        </button>
+        </AppButton>
       </div>
     </div>
 
@@ -378,24 +380,23 @@ onUnmounted(() => {
             {{ statusForHTTP(channel) }}
           </span>
           <div v-if="activatingHTTPId !== channel.ID" class="channel-actions">
-            <button
-              class="ghost-button"
+            <AppButton
               :disabled="!vaultUnlocked"
               title="Create a new channel from this one"
               @click="openHTTPCopyForm(channel)"
             >
               Copy
-            </button>
-            <button class="ghost-button" @click="openHTTPActivate(channel.ID)">
+            </AppButton>
+            <AppButton @click="openHTTPActivate(channel.ID)">
               {{ statusForHTTP(channel) === 'expired' ? 'Activate' : 'Rotate' }}
-            </button>
-            <button
-              class="ghost-button danger"
+            </AppButton>
+            <AppButton
+              variant="danger"
               :disabled="revokingHTTPId === channel.ID"
               @click="revokeHTTP(channel.ID)"
             >
               {{ revokingHTTPId === channel.ID ? 'Removing...' : 'Remove' }}
-            </button>
+            </AppButton>
           </div>
         </div>
 
@@ -408,8 +409,8 @@ onUnmounted(() => {
             autofocus
             @keydown.enter="submitHTTPActivate"
           />
-          <button class="ghost-button" @click="cancelHTTPActivate">Cancel</button>
-          <button class="primary-button" :disabled="activatingHTTP" @click="submitHTTPActivate">
+          <AppButton @click="cancelHTTPActivate">Cancel</AppButton>
+          <AppButton variant="primary" :disabled="activatingHTTP" @click="submitHTTPActivate">
             {{
               statusForHTTP(channel) === 'expired'
                 ? activatingHTTP
@@ -419,7 +420,7 @@ onUnmounted(() => {
                   ? 'Rotating...'
                   : 'Rotate'
             }}
-          </button>
+          </AppButton>
         </div>
         <p v-if="activatingHTTPId === channel.ID" class="hint">
           Channel stays open for {{ activateHTTPTtlMinutes }} minutes before it needs reactivating.
