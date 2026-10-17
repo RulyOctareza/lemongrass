@@ -150,6 +150,7 @@ function send(sender: WebContents | undefined, channel: string, payload: unknown
 
 const watchDebounce = 400
 const watchers = new Map<string, FSWatcher>()
+const rootWatchers = new Map<string, FSWatcher>()
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 // True for scratchpad/ and everything under it except scratchpad/archive, which only a model may change.
@@ -187,9 +188,44 @@ function watchBiblio(
   }
 }
 
+function isBiblioDir(biblioRoot: string): boolean {
+  try {
+    return statSync(biblioRoot).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function unwatch(map: Map<string, FSWatcher>, projectPath: string): void {
+  map.get(projectPath)?.close()
+  map.delete(projectPath)
+}
+
+// Watches the project root for biblio/ to appear, because the recursive watch needs an existing directory.
+function watchForBiblio(projectPath: string, getSender: () => WebContents | undefined): void {
+  if (rootWatchers.has(projectPath)) return
+  const biblioRoot = join(projectPath, 'biblio')
+  const found = (): void => {
+    unwatch(rootWatchers, projectPath)
+    send(getSender(), 'biblio:changed', projectPath)
+  }
+  try {
+    const watcher = watch(projectPath, (_event, filename) => {
+      if (filename === 'biblio' && isBiblioDir(biblioRoot)) found()
+    })
+    watcher.on('error', () => unwatch(rootWatchers, projectPath))
+    rootWatchers.set(projectPath, watcher)
+  } catch {
+    return
+  }
+  if (isBiblioDir(biblioRoot)) found()
+}
+
 export function closeBiblioWatchers(): void {
   for (const watcher of watchers.values()) watcher.close()
   watchers.clear()
+  for (const watcher of rootWatchers.values()) watcher.close()
+  rootWatchers.clear()
   for (const timer of debounceTimers.values()) clearTimeout(timer)
   debounceTimers.clear()
 }
@@ -199,8 +235,13 @@ export function registerBiblioHandlers(getSender: () => WebContents | undefined)
 
   ipcMain.handle('biblio:tree', (_event, projectPath: string): BiblioTree | null => {
     const biblioRoot = join(projectPath, 'biblio')
+    if (!isBiblioDir(biblioRoot)) {
+      unwatch(watchers, projectPath)
+      watchForBiblio(projectPath, getSender)
+      return null
+    }
+    unwatch(rootWatchers, projectPath)
     try {
-      if (!statSync(biblioRoot).isDirectory()) return null
       const root = realpathSync(biblioRoot)
       watchBiblio(root, projectPath, getSender)
       const children = ensureScratchpad(walk(root, root))

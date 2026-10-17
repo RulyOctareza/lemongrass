@@ -20,10 +20,7 @@ import type { Project, BiblioTree } from '../../preload/types'
 const projects = ref<Project[]>([])
 const activeProjectId = ref<string | null>(null)
 
-// Fetched on first visit and kept live afterward by onBiblioChanged, via the
-// main-process watcher started on that first fetch. A biblio/ dir that
-// doesn't exist yet on first visit still needs that project re-selected once
-// it's been created, since nothing is watching the project root for it.
+// Fetched on first visit and kept live by onBiblioChanged, including a biblio/ created after that visit.
 const biblioByProject = reactive<Record<string, BiblioTree | null>>({})
 const loadedProjects = reactive<Record<string, boolean>>({})
 const sidebarCollapsed = ref(false)
