@@ -46,6 +46,18 @@ func TestNotificationContextIgnoresTabsWithNothingOrNoTab(t *testing.T) {
 	}
 }
 
+func TestUserPromptSubmitCarriesHeldNotifications(t *testing.T) {
+	store := storeWithPendingMention(t)
+
+	result := hookUserPromptSubmit(store, hookEvent{SessionID: "s", TabID: notifyTabTarget})
+	if result.EventName != "UserPromptSubmit" || !strings.Contains(result.AdditionalContext, ": 1 for you") {
+		t.Fatalf("UserPromptSubmit = %+v, want the held nudge", result)
+	}
+	if again := hookUserPromptSubmit(store, hookEvent{SessionID: "s", TabID: notifyTabTarget}); again.hasOutput() {
+		t.Errorf("the next prompt repeated the nudge: %q", again.AdditionalContext)
+	}
+}
+
 func TestPostToolUseAndSessionStartCarryTheNudge(t *testing.T) {
 	store := storeWithPendingMention(t)
 

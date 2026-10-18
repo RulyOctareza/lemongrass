@@ -9,6 +9,7 @@ import { isTrustedProject } from './projects'
 import { writeTrust } from './projectTrust'
 import { orientationLaunch, type OrientationRole } from './orientation'
 import { startupTrimArgs, startupTrimEnv } from './startupTrim'
+import { classifyInput } from './humanInput'
 
 // Every shell spawns an agent binary directly, never a login shell. Codex
 // receives repeated Ctrl+C during a graceful tab or app shutdown, so it can
@@ -39,8 +40,7 @@ interface ManagedShell {
   lastInputAt: number
 }
 
-// Terminal replies such as focus and cursor reports start with an escape byte and are not typing.
-const ESCAPE = 27
+// A typed nudge waits this long after the human's last keystroke so it does not land mid-word. A plain Enter ends the wait, and anything still held reaches the model with the human's next prompt through the UserPromptSubmit hook.
 const HUMAN_QUIET_MS = 5_000
 
 const shells = new Map<string, ManagedShell>()
@@ -126,7 +126,9 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
   ipcMain.on('pty:write', (_event, { id, data }: { id: string; data: string }) => {
     const shell = shells.get(id)
     if (!shell) return
-    if (data.charCodeAt(0) !== ESCAPE) shell.lastInputAt = Date.now()
+    const kind = classifyInput(data)
+    if (kind === 'typing') shell.lastInputAt = Date.now()
+    else if (kind === 'enter') shell.lastInputAt = 0
     shell.process.write(data)
   })
 

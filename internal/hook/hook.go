@@ -98,6 +98,8 @@ func Run(args []string, tabID string) {
 		result = hookPreToolUse(store, payload, proj.Path)
 	case "PostToolUse":
 		result = hookPostToolUse(store, payload, proj.Path)
+	case "UserPromptSubmit":
+		result = hookUserPromptSubmit(store, payload)
 	}
 	adapter.emit(result)
 }
@@ -290,6 +292,11 @@ func hookPostToolUse(store *session.Store, payload hookEvent, projectPath string
 	}
 
 	return newHookResult("PostToolUse", "", parts)
+}
+
+// The app holds typed nudges while the human writes a draft, so the human's own prompt carries whatever was held.
+func hookUserPromptSubmit(store *session.Store, payload hookEvent) hookResult {
+	return newHookResult("UserPromptSubmit", "", notificationContext(store, payload.TabID))
 }
 
 func hasBiblio(projectPath string) bool {
