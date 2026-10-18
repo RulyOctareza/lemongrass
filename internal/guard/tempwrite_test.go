@@ -24,47 +24,18 @@ func tempWriteSetup(t *testing.T) (project, tmp, home string) {
 	return project, tmp, home
 }
 
-func TestTempWriteShellCommands(t *testing.T) {
+func TestTempWriteLeavesShellCommandsAlone(t *testing.T) {
 	project, tmp, home := tempWriteSetup(t)
 	x := filepath.Join(tmp, "x")
-	cases := []struct {
-		command string
-		want    string
-	}{
-		{"echo hi > " + x, x},
-		{"echo hi >> " + x, x},
-		{"cat > " + x + " <<'EOF'\nwork\nEOF", x},
-		{"echo hi | tee -a " + x, x},
-		{"cp a.txt " + tmp, tmp},
-		{"mv -f a.txt b.txt " + x, x},
-		{"cp -t " + tmp + " a.txt", tmp},
-		{"install -m 644 a.txt " + x, x},
-		{"mkdir -p " + x, x},
-		{"touch " + x, x},
-		{"mktemp", "$TMPDIR/"},
-		{"mktemp -d", "$TMPDIR/"},
-		{"mktemp /tmp/work.XXXX", "/tmp/work.XXXX"},
-		{"mktemp -t work.XXXX", "$TMPDIR/work.XXXX"},
-		{"cd " + tmp + " && echo hi > notes.md", "notes.md"},
-		{"echo hi > $TMPDIR/x", "$TMPDIR/x"},
-		{`echo hi > "${TMPDIR}/x"`, "$TMPDIR/x"},
-		{"echo hi > link/x", "link/x"},
-		{"bash -c 'echo hi > " + x + "'", x},
-
-		{"cat " + x, ""},
-		{"ls " + tmp, ""},
-		{"echo hi > /dev/null", ""},
-		{"echo hi > biblio/scratchpad/task/dump/x", ""},
-		{"cp " + x + " biblio/scratchpad/task/dump/", ""},
-		{"mktemp -p biblio/scratchpad/task/dump", ""},
-		{"mkdir -m 700 biblio/scratchpad/task/dump/run", ""},
-		{"echo hi > $OUT/x", ""},
-		{"cd " + tmp + " && ls", ""},
-	}
-	for _, c := range cases {
-		got := TempWrite(Input{Tool: "Bash", Command: c.command, Cwd: project, Home: home, ProjectRoot: project}, []string{tmp, "/tmp"})
-		if got != c.want {
-			t.Errorf("TempWrite(%q) = %q, want %q", c.command, got, c.want)
+	for _, command := range []string{
+		"echo hi > " + x,
+		"cat > " + x + " <<'EOF'\nwork\nEOF",
+		"cargo build --target-dir " + tmp,
+		"curl -o " + x + " https://example.com",
+		"mktemp -d",
+	} {
+		if got := TempWrite(Input{Tool: "Bash", Command: command, Cwd: project, Home: home, ProjectRoot: project}, []string{tmp, "/tmp"}); got != "" {
+			t.Errorf("TempWrite(%q) = %q, want shell writes left alone", command, got)
 		}
 	}
 }

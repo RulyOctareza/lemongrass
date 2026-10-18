@@ -60,9 +60,9 @@ func FormatTaskCloseDeny(slug string) string {
 
 func FormatTempWriteDeny(target string) string {
 	return "lgrass: writing " + target + " is blocked, because the system temp dir is wiped by a reboot or power cut. " +
-		"In a bibliothek project every file the work produces goes in its task directory: task documents at biblio/scratchpad/<task-slug>/, " +
-		"and scripts, downloads, dumps and command output in biblio/scratchpad/<task-slug>/dump/, each download in its own new directory there. " +
-		"Reading from the temp dir is still allowed."
+		"In a bibliothek project work that is expensive to produce, such as a PoC, goes in biblio/scratchpad/<task-slug>/dump/, " +
+		"and task documents at biblio/scratchpad/<task-slug>/. " +
+		"Shell commands can still write test builds, logs and probes into the temp dir."
 }
 
 func FormatPlanModeDeny() string {

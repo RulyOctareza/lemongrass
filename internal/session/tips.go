@@ -10,7 +10,7 @@ var bibliothekTips = []string{
 	"bibliothek tip: handover is temporary, permanence is a book entry.",
 	"bibliothek tip: finishing a task includes writing its book chapter, same as running its tests.",
 	"bibliothek tip: memory only ever points at biblio/handover/<task>.md or biblio/books/toc.md -- never a hardcoded book path.",
-	"bibliothek tip: scratchpad holds every file a task's work produces, raw material in the task's dump/ folder, and becomes the permanent record in the archive once the task closes.",
+	"bibliothek tip: a task's dump/ folder holds work expensive to produce, such as a PoC. Test builds, logs and probes go to the system temp dir. The task directory becomes the permanent record in the archive once the task closes.",
 	"bibliothek tip: check biblio/books/toc.md before researching something from scratch -- it might already be covered.",
 	"bibliothek tip: a handover's Status section is the truth, its Log is history only -- don't read the Log for current state.",
 	"bibliothek tip: once a handover's work is done, archive it -- biblio/handover/ should only ever hold what's still in flight.",

@@ -18,7 +18,6 @@ func TestTempWritesAreDeniedInABibliothekProject(t *testing.T) {
 	}{
 		{"Write", map[string]string{"file_path": target, "content": "wip"}},
 		{"Edit", map[string]string{"file_path": target}},
-		{"Bash", map[string]string{"command": "cat > " + target + " <<'EOF'\nwip\nEOF"}},
 	} {
 		event := preTool(gateTabOutside, call.tool, call.input)
 		event.Cwd = dir
@@ -29,7 +28,7 @@ func TestTempWritesAreDeniedInABibliothekProject(t *testing.T) {
 	}
 }
 
-func TestTempGateLeavesReadsPlainProjectsAndScratchpadAlone(t *testing.T) {
+func TestTempGateLeavesReadsShellWritesPlainProjectsAndScratchpadAlone(t *testing.T) {
 	store, _ := storeWithGroup(t, nil)
 	biblioDir := projectWithBiblio(t)
 	plainDir := t.TempDir()
@@ -43,6 +42,7 @@ func TestTempGateLeavesReadsPlainProjectsAndScratchpadAlone(t *testing.T) {
 	}{
 		{"read in a bibliothek project", biblioDir, "Read", map[string]string{"file_path": target}},
 		{"cat in a bibliothek project", biblioDir, "Bash", map[string]string{"command": "cat " + target}},
+		{"shell write in a bibliothek project", biblioDir, "Bash", map[string]string{"command": "go test ./... > " + target}},
 		{"write in a plain project", plainDir, "Write", map[string]string{"file_path": target, "content": "wip"}},
 		{"write into the task dump", biblioDir, "Write", map[string]string{"file_path": filepath.Join(biblioDir, "biblio", "scratchpad", "task", "dump", "plan.md"), "content": "wip"}},
 	}
