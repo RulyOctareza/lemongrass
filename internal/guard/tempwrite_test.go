@@ -12,7 +12,7 @@ func tempWriteSetup(t *testing.T) (project, tmp, home string) {
 	project = filepath.Join(base, "proj")
 	tmp = filepath.Join(base, "tmp")
 	home = filepath.Join(base, "home")
-	for _, dir := range []string{filepath.Join(project, "biblio", "scratchpad", "task", "dump"), tmp, home} {
+	for _, dir := range []string{filepath.Join(project, "biblio", "scratchpad", "task"), tmp, home} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -50,9 +50,9 @@ func TestTempWriteFileTools(t *testing.T) {
 	if got := TempWrite(Input{Tool: "Read", Paths: []string{x}, Cwd: project, Home: home, ProjectRoot: project}, roots); got != "" {
 		t.Errorf("a Read of the temp dir was caught: %q", got)
 	}
-	inside := filepath.Join(project, "biblio", "scratchpad", "task", "dump", "plan.md")
+	inside := filepath.Join(project, "biblio", "scratchpad", "task", "plan.md")
 	if got := TempWrite(Input{Tool: "Write", Paths: []string{inside}, Writes: true, Cwd: project, Home: home, ProjectRoot: project}, roots); got != "" {
-		t.Errorf("a Write into the task dump was caught: %q", got)
+		t.Errorf("a Write into the task directory was caught: %q", got)
 	}
 }
 

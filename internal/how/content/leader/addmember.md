@@ -2,7 +2,7 @@
 
 Add a thinker when the work needs an area or a view that no current thinker owns, such as a second reviewer or someone for a part of the code nobody holds. Do not add one to speed up a thinker who already owns the work, since thinkers share one working tree and two in the same files collide.
 
-1. Write a config that lists only the new thinkers. The group's name and your leader label come from the live group, so the config must not carry `name` or `leader_label`. Keep it in your task's `dump/` folder, for example `biblio/scratchpad/<task-slug>/dump/add-docs.yaml`:
+1. Write a config that lists only the new thinkers. The group's name and your leader label come from the live group, so the config must not carry `name` or `leader_label`. Keep it in your task directory, for example `biblio/scratchpad/<task-slug>/add-docs.yaml`:
 
    ```yaml
    thinkers:

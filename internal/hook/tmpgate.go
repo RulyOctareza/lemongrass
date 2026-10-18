@@ -7,7 +7,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/session"
 )
 
-// tempWriteDeny denies a file tool writing into the system temp dir in a bibliothek project, since a reboot or power cut wipes it and what the model authors, such as a PoC, is expensive to redo. Shell writes stay open so test builds, logs and probes can live there instead of wearing the drive.
+// tempWriteDeny denies a file tool writing into the system temp dir in a bibliothek project, since a reboot or power cut wipes it and a file the model writes itself is costly to lose. Shell writes stay open so what a command regenerates lives there instead of wearing the drive.
 func tempWriteDeny(payload hookEvent, projectPath string) string {
 	if !isMemoryWriteTool(payload.ToolName) {
 		return ""

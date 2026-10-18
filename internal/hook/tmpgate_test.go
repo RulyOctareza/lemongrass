@@ -22,8 +22,8 @@ func TestTempWritesAreDeniedInABibliothekProject(t *testing.T) {
 		event := preTool(gateTabOutside, call.tool, call.input)
 		event.Cwd = dir
 		result := hookPreToolUse(store, event, dir)
-		if result.PermissionDecision != "deny" || !strings.Contains(result.PermissionDecisionReason, "biblio/scratchpad/<task-slug>/dump/") {
-			t.Errorf("%s into the temp dir was not denied with the dump pointer: %+v", call.tool, result)
+		if result.PermissionDecision != "deny" || !strings.Contains(result.PermissionDecisionReason, "biblio/scratchpad/<task-slug>/") {
+			t.Errorf("%s into the temp dir was not denied with the task directory pointer: %+v", call.tool, result)
 		}
 	}
 }
@@ -44,7 +44,7 @@ func TestTempGateLeavesReadsShellWritesPlainProjectsAndScratchpadAlone(t *testin
 		{"cat in a bibliothek project", biblioDir, "Bash", map[string]string{"command": "cat " + target}},
 		{"shell write in a bibliothek project", biblioDir, "Bash", map[string]string{"command": "go test ./... > " + target}},
 		{"write in a plain project", plainDir, "Write", map[string]string{"file_path": target, "content": "wip"}},
-		{"write into the task dump", biblioDir, "Write", map[string]string{"file_path": filepath.Join(biblioDir, "biblio", "scratchpad", "task", "dump", "plan.md"), "content": "wip"}},
+		{"write into the task directory", biblioDir, "Write", map[string]string{"file_path": filepath.Join(biblioDir, "biblio", "scratchpad", "task", "plan.md"), "content": "wip"}},
 	}
 	for _, c := range cases {
 		event := preTool(gateTabOutside, c.tool, c.input)

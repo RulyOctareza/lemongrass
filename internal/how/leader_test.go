@@ -14,7 +14,7 @@ func TestLeaderAddMemberIsListedAndRenders(t *testing.T) {
 		t.Fatalf("actions = %q", out)
 	}
 	out := render(t, root, "leader", "addmember")
-	for _, want := range []string{"lgrass workgroup add <path-to-config>", "thinkers:", "dump/", "must not carry `name`"} {
+	for _, want := range []string{"lgrass workgroup add <path-to-config>", "thinkers:", "biblio/scratchpad/<task-slug>/add-docs.yaml", "must not carry `name`"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("addmember missing %q", want)
 		}

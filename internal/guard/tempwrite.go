@@ -21,7 +21,7 @@ func TempRoots() []string {
 	return roots
 }
 
-// TempWrite returns the first path a file tool writes inside one of roots, or "" when it writes none there. Shell commands are not judged, since what they write (test builds, logs, probes) can be regenerated, while a file the model authors, such as a PoC, is expensive to lose to a reboot. A path inside in.ProjectRoot never counts, so a project that itself lives in a temp dir can still be worked on.
+// TempWrite returns the first path a file tool writes inside one of roots, or "" when it writes none there. Shell commands are not judged, since what they write can be regenerated, while a file the model writes itself is costly to lose to a reboot. A path inside in.ProjectRoot never counts, so a project that itself lives in a temp dir can still be worked on.
 func TempWrite(in Input, roots []string) string {
 	if len(roots) == 0 || in.Command != "" || !in.Writes {
 		return ""
