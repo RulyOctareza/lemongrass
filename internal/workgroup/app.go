@@ -66,7 +66,6 @@ type JoinGrant struct {
 	ProjectPath string `json:"project_path"`
 	GroupID     int64  `json:"group_id"`
 	TabID       string `json:"tab_id"`
-	Label       string `json:"label"`
 }
 
 // The socket the lemongrass app listens on for group requests.

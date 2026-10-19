@@ -4,6 +4,7 @@ import AppModal from './AppModal.vue'
 import { bodyParts, type BodyPart } from '../mentions'
 import { disbandWorkgroup, refreshWorkgroups, workgroupStateOf } from '../workgroups'
 import { GROUP_COLORS, groupColorVar } from '../groupColors'
+import { shellTitles } from '../shellRegistry'
 import {
   focusTab,
   groupColorOf,
@@ -20,6 +21,8 @@ import type {
 import AppButton from './AppButton.vue'
 
 const POLL_MS = 4000
+// The author lemongrass posts system messages under, session.SystemAuthor in the store.
+const SYSTEM_AUTHOR = 'lgrass'
 const PAGE = 50
 
 const props = defineProps<{
@@ -67,8 +70,18 @@ function onMember(member: WorkgroupMemberInfo): void {
   else if (group.value) void reopenWorkgroupMember(props.project, member, group.value.leaderTabId)
 }
 
+// A collaborator's label is its short tab id, because its tab title is written by a model; the title is shown to the human only.
+function displayName(tabId: string, label: string): string {
+  const member = group.value?.members.find((m) => m.tabId === tabId)
+  return member?.role === 'collaborator' ? (shellTitles[tabId] ?? label) : label
+}
+
 function messageParts(body: string): BodyPart[] {
-  return bodyParts(body, group.value?.members ?? [])
+  const members = (group.value?.members ?? []).map((m) => ({
+    tabId: m.tabId,
+    label: displayName(m.tabId, m.label)
+  }))
+  return bodyParts(body, members)
 }
 
 function formatTime(value: string): string {
@@ -214,7 +227,7 @@ onBeforeUnmount(() => clearInterval(timer))
             @click="onMember(member)"
           >
             <span class="member-role" :class="member.role">{{ ROLE_LABELS[member.role] }}</span>
-            <span class="member-name">{{ member.label }}</span>
+            <span class="member-name">{{ displayName(member.tabId, member.label) }}</span>
             <span class="member-vendor">{{ member.vendor }}</span>
             <span class="member-state" :class="{ online: online(member) }">
               {{ online(member) ? 'Online' : 'Offline' }}
@@ -231,9 +244,14 @@ onBeforeUnmount(() => clearInterval(timer))
           </button>
           <p v-if="threadError" class="pane-error">{{ threadError }}</p>
           <p v-else-if="messages.length === 0" class="pane-note">No messages yet.</p>
-          <article v-for="message in messages" :key="message.id" class="message">
+          <article
+            v-for="message in messages"
+            :key="message.id"
+            class="message"
+            :class="{ system: message.tabId === SYSTEM_AUTHOR }"
+          >
             <header class="message-head">
-              <span class="message-label">{{ message.label }}</span>
+              <span class="message-label">{{ displayName(message.tabId, message.label) }}</span>
               <time class="message-time">{{ formatTime(message.createdAt) }}</time>
             </header>
             <p class="message-body">
@@ -482,6 +500,16 @@ onBeforeUnmount(() => clearInterval(timer))
   color: var(--color-fg-accent);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
+}
+
+.message.system {
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.message.system .message-label,
+.message.system .message-body {
+  color: var(--color-fg-secondary);
 }
 
 .message-time {

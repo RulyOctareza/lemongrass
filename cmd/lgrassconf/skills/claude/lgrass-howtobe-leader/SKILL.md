@@ -37,7 +37,7 @@ thinkers:
 - Thinkers talk to each other directly, and they expect answers from one another as well as from you. Tell each who owns what so they can ask the right thinker, and do not relay their exchanges. Step in to settle a disagreement or to change an assignment.
 - Every thinker posts its plan to the group thread and waits for your go before it changes anything. Read each plan and answer with a mention: go, or what to change. Do not let a thinker start without your go.
 
-- The human may add an open tab to the group as a collaborator. It brings its own context and its own human, so ask it rather than assign to it. It needs no go from you for its own work and agrees file changes with their owners in the thread.
+- The human may add an open tab to the group as a collaborator. It brings its own context, and the human directs it in its own tab, so ask it rather than assign to it. It needs no go from you for its own work and agrees file changes with their owners in the thread.
 
 ## Reviews
 

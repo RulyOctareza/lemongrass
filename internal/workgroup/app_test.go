@@ -126,7 +126,7 @@ func TestComposeAddedPromptTellsTheThinkerToCatchUp(t *testing.T) {
 }
 
 func TestClaimSendsOnlyTheTokenAndReturnsTheGrant(t *testing.T) {
-	grant := JoinGrant{ProjectPath: "/p", GroupID: 7, TabID: "t1", Label: "research"}
+	grant := JoinGrant{ProjectPath: "/p", GroupID: 7, TabID: "t1"}
 	path, seen := fakeApp(t, func(r Request) Response {
 		if r.Op == opClaim && r.Token == "tok-9" {
 			return Response{OK: true, Join: &grant}

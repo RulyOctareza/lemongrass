@@ -88,6 +88,50 @@ func (s *Store) CreateThread(tabID, title, content string) (string, error) {
 	return threadID, tx.Commit()
 }
 
+// SystemAuthor stands in for a tab id on messages lemongrass posts itself, so no member is the author and every member is notified.
+const SystemAuthor = "lgrass"
+
+// Posts a lemongrass message to a live group's thread for every member, with no mentions.
+func (s *Store) PostSystemMessage(threadID string, content string) (Message, error) {
+	if err := validateMessage(content); err != nil {
+		return Message{}, err
+	}
+	thread, err := s.ThreadByID(threadID)
+	if err != nil {
+		return Message{}, err
+	}
+	if thread.GroupID == 0 {
+		return Message{}, fmt.Errorf("session: thread %s is not a workgroup thread", threadID)
+	}
+	group, err := s.GroupByID(thread.GroupID)
+	if err != nil {
+		return Message{}, err
+	}
+	if !group.Live() {
+		return Message{}, fmt.Errorf("session: workgroup %d is disbanded", group.ID)
+	}
+	members, err := s.GroupMembers(group.ID)
+	if err != nil {
+		return Message{}, err
+	}
+	notify := make([]string, len(members))
+	for i, m := range members {
+		notify[i] = m.TabID
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Message{}, err
+	}
+	defer tx.Rollback()
+
+	msg, err := insertMessage(tx, s.projectID, threadID, SystemAuthor, content, nil, notify, now())
+	if err != nil {
+		return Message{}, err
+	}
+	return msg, tx.Commit()
+}
+
 func (s *Store) PostMessage(tabID string, threadID string, content string) (Message, error) {
 	if err := validateMessage(content); err != nil {
 		return Message{}, err

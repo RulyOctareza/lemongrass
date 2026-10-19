@@ -26,7 +26,7 @@ func TestDeclinedMessageSeparatesReasonNoReasonAndWithdrawal(t *testing.T) {
 
 func TestJoinMessageNamesEveryNewThinker(t *testing.T) {
 	one := joinMessage([]workgroup.SpawnMember{{Label: "docs", Vendor: "codex"}})
-	if one != "lgrass: docs (codex) joins the group as a new thinker, approved by the human." {
+	if one != "docs (codex) joins the group as a new thinker, approved by the human." {
 		t.Errorf("one = %q", one)
 	}
 	two := joinMessage([]workgroup.SpawnMember{{Label: "docs", Vendor: "codex"}, {Label: "perf", Vendor: "claude"}})
@@ -36,8 +36,8 @@ func TestJoinMessageNamesEveryNewThinker(t *testing.T) {
 }
 
 func TestCollaboratorJoinMessageNamesTheTabWithoutAMention(t *testing.T) {
-	got := collaboratorJoinMessage("research", "codex")
-	if !strings.Contains(got, "research (codex)") || !strings.Contains(got, "collaborator") || strings.Contains(got, "!>>") {
+	got := collaboratorJoinMessage("4341002a", "codex")
+	if !strings.Contains(got, "4341002a (codex)") || !strings.Contains(got, "collaborator") || strings.Contains(got, "!>>") {
 		t.Errorf("message = %q", got)
 	}
 }

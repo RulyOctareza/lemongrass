@@ -32,10 +32,6 @@ watch(
         <dd>{{ joining.draft.groupName }}</dd>
       </div>
       <div class="fact">
-        <dt>Label</dt>
-        <dd>{{ joining.draft.label }}</dd>
-      </div>
-      <div class="fact">
         <dt>Joins as</dt>
         <dd><span class="role-pill">Collaborator</span></dd>
       </div>

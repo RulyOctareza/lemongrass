@@ -175,7 +175,7 @@ func cmdWorkgroupAdd(args []string) {
 		store.DeleteMembers(group.ID, tabs)
 		fail(err)
 	}
-	if _, err := store.PostMessage(tabID, group.ThreadID, joinMessage(members)); err == nil {
+	if _, err := store.PostSystemMessage(group.ThreadID, joinMessage(members)); err == nil {
 		notifyTargets(store)
 	}
 
@@ -211,11 +211,6 @@ func cmdWorkgroupJoin(args []string) {
 		fmt.Fprintln(os.Stderr, "lgrass workgroup: the approved join belongs to another project")
 		os.Exit(1)
 	}
-	if !workgroup.ValidLabel(grant.Label) {
-		fmt.Fprintf(os.Stderr, "lgrass workgroup: label %q must be 1 to 30 letters, digits, dashes or underscores\n", grant.Label)
-		os.Exit(1)
-	}
-
 	store := openStore()
 	defer store.Close()
 	group, err := store.GroupByID(grant.GroupID)
@@ -234,37 +229,39 @@ func cmdWorkgroupJoin(args []string) {
 	if _, err := store.LiveGroupForTab(grant.TabID); err == nil {
 		fail(session.ErrAlreadyInside)
 	}
+	// A tab title is written by a model, so the label models read is the short tab id; the app shows the title to the human.
+	label := session.ShortID(grant.TabID)
 	members, err := store.GroupMembers(group.ID)
 	if err != nil {
 		fail(err)
 	}
 	for _, m := range members {
-		if strings.EqualFold(m.Label, grant.Label) {
-			fail(fmt.Errorf("%w (%q)", session.ErrLabelTaken, grant.Label))
+		if strings.EqualFold(m.Label, label) {
+			fail(fmt.Errorf("%w (%q)", session.ErrLabelTaken, label))
 		}
 	}
 
 	// Posted before the row exists, so the joining tab is not woken by its own arrival; the app types its first prompt.
-	if _, err := store.PostMessage(group.LeaderTabID, group.ThreadID, collaboratorJoinMessage(grant.Label, vendor)); err != nil {
+	if _, err := store.PostSystemMessage(group.ThreadID, collaboratorJoinMessage(label, vendor)); err != nil {
 		fail(err)
 	}
-	if err := store.AddCollaborator(group.ID, session.Member{TabID: grant.TabID, Label: grant.Label, Vendor: vendor}); err != nil {
+	if err := store.AddCollaborator(group.ID, session.Member{TabID: grant.TabID, Label: label, Vendor: vendor}); err != nil {
 		fail(err)
 	}
 	notifyTargets(store)
 
 	if asJSON {
-		json.NewEncoder(os.Stdout).Encode(map[string]any{"group_id": group.ID, "thread_id": group.ThreadID, "label": grant.Label})
+		json.NewEncoder(os.Stdout).Encode(map[string]any{"group_id": group.ID, "thread_id": group.ThreadID, "label": label})
 		return
 	}
-	fmt.Printf("%s joined workgroup %d as a collaborator, group thread %s.\n", grant.Label, group.ID, group.ThreadID)
+	fmt.Printf("%s joined workgroup %d as a collaborator, group thread %s.\n", label, group.ID, group.ThreadID)
 }
 
 func collaboratorJoinMessage(label, vendor string) string {
-	return fmt.Sprintf("lgrass: the human added %s (%s) to the group as a collaborator. It brings its own work, and its human still directs it.", label, vendor)
+	return fmt.Sprintf("%s (%s) joined as a collaborator. It keeps its own context and work, and the human directs it in its own tab.", label, vendor)
 }
 
-// Posted with no mention, so every member hears it, the new ones included.
+// Posted by lemongrass with no mention, so every member hears it, the leader and the new thinkers included.
 func joinMessage(members []workgroup.SpawnMember) string {
 	names := make([]string, len(members))
 	for i, m := range members {
@@ -274,7 +271,7 @@ func joinMessage(members []workgroup.SpawnMember) string {
 	if len(members) > 1 {
 		joins = " join the group as new thinkers"
 	}
-	return "lgrass: " + strings.Join(names, ", ") + joins + ", approved by the human."
+	return strings.Join(names, ", ") + joins + ", approved by the human."
 }
 
 func toMembers(spawn []workgroup.SpawnMember, thinkers []workgroup.Thinker) []session.Member {

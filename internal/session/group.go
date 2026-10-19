@@ -10,7 +10,7 @@ import (
 const (
 	RoleLeader  = "leader"
 	RoleThinker = "thinker"
-	// A collaborator is an open tab the human added to a live group. It keeps its own context and its own human, so it takes no assignment and no leader's go for its own work.
+	// A collaborator is an open tab the human added to a live group. It keeps its own context, and the human directs it in its own tab, so it takes no assignment and no leader's go for its own work.
 	RoleCollaborator = "collaborator"
 
 	// Every thinker loads this skill.

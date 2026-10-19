@@ -322,7 +322,6 @@ export interface WorkgroupJoinRequest {
   projectPath: string
   groupId: number
   tabId: string
-  label: string
 }
 
 export interface WorkgroupJoinResult {

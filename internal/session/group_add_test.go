@@ -81,3 +81,39 @@ func TestAddCollaboratorJoinsWithItsOwnRoleAndNoAssignment(t *testing.T) {
 		t.Errorf("header = %q", h)
 	}
 }
+
+func TestSystemMessageNotifiesEveryMemberTheLeaderIncluded(t *testing.T) {
+	store := openTestStore(t)
+	g, _ := store.CreateGroup("g", Member{TabID: tabA, Label: "lead", Vendor: "claude"}, []Member{{TabID: tabB, Label: "reviewer", Vendor: "claude"}})
+
+	msg, err := store.PostSystemMessage(g.ThreadID, "4341002a (claude) joined as a collaborator.")
+	if err != nil {
+		t.Fatalf("PostSystemMessage: %v", err)
+	}
+	if msg.TabID != SystemAuthor {
+		t.Errorf("author = %q, want %q", msg.TabID, SystemAuthor)
+	}
+	for _, tab := range []string{tabA, tabB} {
+		pending, err := store.PendingForTab(tab)
+		if err != nil || len(pending) != 1 || pending[0].All.Count != 1 {
+			t.Errorf("PendingForTab(%s) = %+v, %v, want one message for everyone", tab, pending, err)
+		}
+	}
+	if labels := store.Labels([]string{SystemAuthor}); labels[SystemAuthor] != SystemAuthor {
+		t.Errorf("system author label = %q, want %q", labels[SystemAuthor], SystemAuthor)
+	}
+}
+
+func TestSystemMessageRefusesAdHocAndDisbandedThreads(t *testing.T) {
+	store := openTestStore(t)
+	store.RegisterTab(tabA, "claude")
+	adHoc, _ := store.CreateThread(tabA, "title", "hello")
+	if _, err := store.PostSystemMessage(adHoc, "hi"); err == nil {
+		t.Error("system message accepted in an ad hoc thread")
+	}
+	g, _ := store.CreateGroup("g", Member{TabID: tabB, Label: "lead", Vendor: "claude"}, nil)
+	store.DisbandGroup(g.ID)
+	if _, err := store.PostSystemMessage(g.ThreadID, "hi"); err == nil {
+		t.Error("system message accepted in a disbanded group")
+	}
+}

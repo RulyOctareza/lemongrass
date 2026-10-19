@@ -63,7 +63,7 @@ interface Reply {
   typed?: boolean
   reason?: string
   withdrawn?: boolean
-  join?: { project_path: string; group_id: number; tab_id: string; label: string }
+  join?: { project_path: string; group_id: number; tab_id: string }
 }
 
 const approvals = new Map<string, Approved>()
@@ -72,7 +72,6 @@ export interface JoinGrant {
   projectPath: string
   groupId: number
   tabId: string
-  label: string
 }
 
 const JOIN_TTL_MS = 60_000
@@ -97,8 +96,7 @@ function handleClaim(token: string): Reply {
     join: {
       project_path: join.projectPath,
       group_id: join.groupId,
-      tab_id: join.tabId,
-      label: join.label
+      tab_id: join.tabId
     }
   }
 }

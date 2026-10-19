@@ -160,7 +160,6 @@ export interface JoinDraft {
   tabId: string
   tabTitle: string
   vendor: string
-  label: string
 }
 
 // notice is set once the tab has joined but something after the join fell short, so the modal offers only Close.
@@ -172,7 +171,6 @@ export const joining = reactive<{
 }>({ draft: null, busy: false, error: null, notice: null })
 
 const JOINABLE_COMMANDS: Record<string, string> = { claude: 'claude', codex: 'codex' }
-const LABEL_MAX = 30
 
 // A Claude or Codex shell in no live group can be added; Cursor and plain shells have no hooks, so no gate would hold them.
 export function joinVendor(projectId: string, tab: WorkspaceTab): string | null {
@@ -182,22 +180,6 @@ export function joinVendor(projectId: string, tab: WorkspaceTab): string | null 
 
 export function liveGroupsOf(projectId: string): WorkgroupInfo[] {
   return states[projectId]?.groups ?? []
-}
-
-// The tab title reduced to the member label pattern and made unique in the group, falling back to the vendor name.
-export function joinLabel(title: string, vendor: string, group: WorkgroupInfo): string {
-  const cleaned = title
-    .replace(/[^A-Za-z0-9_-]+/g, '-')
-    .replace(/^[-_]+|[-_]+$/g, '')
-    .slice(0, LABEL_MAX)
-  const base = /^[A-Za-z0-9]/.test(cleaned) ? cleaned : vendor
-  const taken = new Set(group.members.map((member) => member.label.toLowerCase()))
-  if (!taken.has(base.toLowerCase())) return base
-  for (let n = 2; ; n++) {
-    const suffix = `-${n}`
-    const candidate = base.slice(0, LABEL_MAX - suffix.length) + suffix
-    if (!taken.has(candidate.toLowerCase())) return candidate
-  }
 }
 
 export function openJoin(
@@ -216,8 +198,7 @@ export function openJoin(
     groupName: group.name,
     tabId: tab.id,
     tabTitle,
-    vendor,
-    label: joinLabel(tabTitle, vendor, group)
+    vendor
   }
 }
 
@@ -237,8 +218,7 @@ export async function confirmJoin(): Promise<void> {
     const result = await window.api.workgroup.join({
       projectPath: draft.project.path,
       groupId: draft.groupId,
-      tabId: draft.tabId,
-      label: draft.label
+      tabId: draft.tabId
     })
     if (!result.ok) {
       joining.error = result.error ?? 'The tab could not join the workgroup.'
