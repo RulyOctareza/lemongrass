@@ -131,10 +131,19 @@ export interface VaultHTTPChannelWithShortId {
   shortId: string
 }
 
+// The global policy uses only binaries and paths. A project's may also exclude global entries.
 export interface VaultPolicy {
   rules: Record<string, 'allow' | 'deny' | 'approval'>
   binaries: string[]
   paths: string[]
+  exclude_binaries: string[]
+  exclude_paths: string[]
+}
+
+// A project missing from projects has nothing stored: the defaults plus the global policy.
+export interface VaultPolicies {
+  global: VaultPolicy
+  projects: Record<string, VaultPolicy>
 }
 
 export interface VaultPolicyRule {

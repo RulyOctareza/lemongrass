@@ -389,10 +389,13 @@ async function revokeHTTPChannel(id: string): Promise<void> {
   await vaultCall<void>('revoke_http', { id })
 }
 
+// The global policy uses only binaries and paths. A project's may also exclude global entries.
 export interface Policy {
   rules: Record<string, 'allow' | 'deny' | 'approval'>
   binaries: string[]
   paths: string[]
+  exclude_binaries: string[]
+  exclude_paths: string[]
 }
 
 export interface PolicyRule {
@@ -408,26 +411,48 @@ async function policyCatalog(): Promise<PolicyRule[]> {
   return rules ?? []
 }
 
-// Reads the sealed policy back for the editor. Nothing stored comes back as an empty policy.
-async function getPolicy(passphrase: string): Promise<Policy> {
-  const { policy } = await vaultCall<{ policy?: Partial<Policy> }>('get_policy', {
-    root_secret: passphrase
-  })
+export interface Policies {
+  global: Policy
+  projects: Record<string, Policy>
+}
+
+function normalizePolicy(policy?: Partial<Policy>): Policy {
   return {
     rules: policy?.rules ?? {},
     binaries: policy?.binaries ?? [],
-    paths: policy?.paths ?? []
+    paths: policy?.paths ?? [],
+    exclude_binaries: policy?.exclude_binaries ?? [],
+    exclude_paths: policy?.exclude_paths ?? []
   }
 }
 
-// The vault validates the policy, seals it under the passphrase and makes it the active one.
-async function putPolicy(passphrase: string, policy: Policy): Promise<void> {
-  await vaultCall<void>('put_policy', { root_secret: passphrase, policy })
+// The policy is not secret, so reading it needs no passphrase. A project missing from projects has nothing stored: the defaults plus the global policy.
+async function listPolicies(): Promise<Policies> {
+  const { global, projects } = await vaultCall<{
+    global?: Partial<Policy>
+    projects?: Record<string, Partial<Policy>>
+  }>('list_policies')
+  const out: Record<string, Policy> = {}
+  for (const [id, policy] of Object.entries(projects ?? {})) out[id] = normalizePolicy(policy)
+  return { global: normalizePolicy(global), projects: out }
 }
 
-// Loads the stored policy into the daemon's memory so the hook can enforce it.
-async function activatePolicy(passphrase: string): Promise<void> {
-  await vaultCall<void>('activate_policy', { root_secret: passphrase })
+// A null projectId saves the global policy. The vault validates it and checks the passphrase.
+async function putPolicy(
+  passphrase: string,
+  projectId: string | null,
+  policy: Policy
+): Promise<void> {
+  await vaultCall<void>('put_policy', {
+    root_secret: passphrase,
+    project_id: projectId ?? undefined,
+    policy
+  })
+}
+
+// Moves a policy sealed by an earlier version into the readable policy file. A no-op once done.
+async function migratePolicy(passphrase: string): Promise<void> {
+  await vaultCall<void>('migrate_policy', { root_secret: passphrase })
 }
 
 export function registerVaultHandlers(): void {
@@ -506,9 +531,11 @@ export function registerVaultHandlers(): void {
   ipcMain.handle('vault:revokeHTTPChannel', (_event, id: string) => revokeHTTPChannel(id))
 
   ipcMain.handle('vault:policyCatalog', () => policyCatalog())
-  ipcMain.handle('vault:getPolicy', (_event, passphrase: string) => getPolicy(passphrase))
-  ipcMain.handle('vault:putPolicy', (_event, passphrase: string, policy: Policy) =>
-    putPolicy(passphrase, policy)
+  ipcMain.handle('vault:listPolicies', () => listPolicies())
+  ipcMain.handle(
+    'vault:putPolicy',
+    (_event, passphrase: string, projectId: string | null, policy: Policy) =>
+      putPolicy(passphrase, projectId, policy)
   )
-  ipcMain.handle('vault:activatePolicy', (_event, passphrase: string) => activatePolicy(passphrase))
+  ipcMain.handle('vault:migratePolicy', (_event, passphrase: string) => migratePolicy(passphrase))
 }

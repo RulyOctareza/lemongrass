@@ -2,6 +2,7 @@ package guard
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -145,5 +146,50 @@ func TestCatalogListing(t *testing.T) {
 		if !seen[id] {
 			t.Errorf("rule %q missing from the catalog listing", id)
 		}
+	}
+}
+
+func TestCombineLayersGlobalUnderTheProject(t *testing.T) {
+	global := Policy{Binaries: []string{"make", "cowsay"}, Paths: []string{"~/private", "/data"}, Rules: map[string]string{"git-add": "allow"}}
+	project := Policy{
+		Rules:           map[string]string{"git-commit": "allow"},
+		Binaries:        []string{"figlet", "MAKE"},
+		Paths:           []string{"~/notes"},
+		ExcludeBinaries: []string{"Cowsay"},
+		ExcludePaths:    []string{"/data"},
+	}
+	got := Combine(global, project)
+	if strings.Join(got.Binaries, ",") != "make,figlet" {
+		t.Errorf("binaries = %v", got.Binaries)
+	}
+	if strings.Join(got.Paths, ",") != "~/private,~/notes" {
+		t.Errorf("paths = %v", got.Paths)
+	}
+	if len(got.Rules) != 1 || got.Rules["git-commit"] != "allow" {
+		t.Errorf("rules = %v, want the project's only", got.Rules)
+	}
+	if len(got.ExcludeBinaries)+len(got.ExcludePaths) != 0 {
+		t.Errorf("exclusions leaked into the combined policy: %+v", got)
+	}
+	if empty := Combine(global, Policy{}); strings.Join(empty.Binaries, ",") != "make,cowsay" || len(empty.Rules) != 0 {
+		t.Errorf("project with nothing stored = %+v", empty)
+	}
+}
+
+func TestValidateGlobalHoldsCustomRulesOnly(t *testing.T) {
+	if err := (Policy{Binaries: []string{"make"}, Paths: []string{"~/x"}}).ValidateGlobal(); err != nil {
+		t.Errorf("lists only = %v", err)
+	}
+	for _, p := range []Policy{
+		{Rules: map[string]string{"git-add": "allow"}},
+		{ExcludeBinaries: []string{"make"}},
+		{ExcludePaths: []string{"~/x"}},
+	} {
+		if err := p.ValidateGlobal(); !errors.Is(err, ErrInvalidPolicy) {
+			t.Errorf("ValidateGlobal(%+v) = %v", p, err)
+		}
+	}
+	if err := (Policy{ExcludeBinaries: []string{"a/b"}}).Validate(); err == nil {
+		t.Error("an exclusion with a slash passed")
 	}
 }

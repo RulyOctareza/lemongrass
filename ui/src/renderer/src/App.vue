@@ -198,7 +198,12 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <SettingsModal v-if="settingsOpen" @close="settingsOpen = false" />
+    <SettingsModal
+      v-if="settingsOpen"
+      :projects="projects"
+      :active-project-id="activeProjectId"
+      @close="settingsOpen = false"
+    />
     <WorkgroupApprovalModal />
     <WorkgroupJoinModal />
     <ProjectTrustModal

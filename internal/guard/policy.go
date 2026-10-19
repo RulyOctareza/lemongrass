@@ -28,11 +28,13 @@ const (
 	maxPolicyPaths    = 200
 )
 
-// Policy is the user's changes on top of the built-in catalog.
+// Policy is the user's changes on top of the built-in catalog. Stored, it is one scope: the global policy uses only Binaries and Paths, and a project's may also exclude global entries. Combine turns the two into the one Decide enforces.
 type Policy struct {
-	Rules    map[string]string `json:"rules,omitempty"`
-	Binaries []string          `json:"binaries,omitempty"`
-	Paths    []string          `json:"paths,omitempty"`
+	Rules           map[string]string `json:"rules,omitempty"`
+	Binaries        []string          `json:"binaries,omitempty"`
+	Paths           []string          `json:"paths,omitempty"`
+	ExcludeBinaries []string          `json:"exclude_binaries,omitempty"`
+	ExcludePaths    []string          `json:"exclude_paths,omitempty"`
 }
 
 type RuleInfo struct {
@@ -63,8 +65,53 @@ func (p Policy) Marshal() ([]byte, error) {
 	return json.Marshal(p)
 }
 
+// ValidateGlobal checks a policy meant as the global one, which holds custom rules only.
+func (p Policy) ValidateGlobal() error {
+	if len(p.Rules) > 0 || len(p.ExcludeBinaries) > 0 || len(p.ExcludePaths) > 0 {
+		return fmt.Errorf("%w: the global policy holds only blocked binaries and paths", ErrInvalidPolicy)
+	}
+	return p.Validate()
+}
+
+// Combine is what a project enforces: its own rule modes, the global binaries and paths it does not exclude, and its own binaries and paths.
+func Combine(global, project Policy) Policy {
+	return Policy{
+		Rules:    project.Rules,
+		Binaries: mergeExcluding(global.Binaries, project.ExcludeBinaries, project.Binaries, strings.EqualFold),
+		Paths:    mergeExcluding(global.Paths, project.ExcludePaths, project.Paths, func(a, b string) bool { return a == b }),
+	}
+}
+
+func mergeExcluding(global, exclude, own []string, same func(a, b string) bool) []string {
+	var out []string
+	add := func(value string) {
+		for _, existing := range out {
+			if same(existing, value) {
+				return
+			}
+		}
+		out = append(out, value)
+	}
+	for _, value := range global {
+		excluded := false
+		for _, ex := range exclude {
+			if same(ex, value) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			add(value)
+		}
+	}
+	for _, value := range own {
+		add(value)
+	}
+	return out
+}
+
 func (p Policy) Validate() error {
-	if len(p.Rules) > maxPolicyRules || len(p.Binaries) > maxPolicyBinaries || len(p.Paths) > maxPolicyPaths {
+	if len(p.Rules) > maxPolicyRules || len(p.Binaries)+len(p.ExcludeBinaries) > maxPolicyBinaries || len(p.Paths)+len(p.ExcludePaths) > maxPolicyPaths {
 		return fmt.Errorf("%w: too many entries", ErrInvalidPolicy)
 	}
 	known := knownRules()
@@ -78,6 +125,16 @@ func (p Policy) Validate() error {
 		}
 		if value != overrideAllow && value != overrideDeny && value != overrideApproval {
 			return fmt.Errorf("%w: rule %q has mode %q, want allow, deny or approval", ErrInvalidPolicy, id, value)
+		}
+	}
+	for _, name := range p.ExcludeBinaries {
+		if name == "" || strings.ContainsAny(name, " \t\n/\x00") {
+			return fmt.Errorf("%w: %q is not a binary name", ErrInvalidPolicy, name)
+		}
+	}
+	for _, pattern := range p.ExcludePaths {
+		if pattern == "" || strings.ContainsRune(pattern, 0) {
+			return fmt.Errorf("%w: %q is not a path", ErrInvalidPolicy, pattern)
 		}
 	}
 	for _, name := range p.Binaries {

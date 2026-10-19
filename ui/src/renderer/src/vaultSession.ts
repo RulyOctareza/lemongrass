@@ -46,10 +46,12 @@ export function lockVaultSession(): void {
   clearIdleTimer()
 }
 
+// Every unlock also moves a policy sealed by an earlier version into the readable policy file, which is a no-op once done.
 export function unlockVaultSession(passphrase: string): void {
   vaultSession.passphrase = passphrase
   vaultSession.unlocked = true
   noteVaultActivity()
+  window.api.vault.migratePolicy(passphrase).catch(() => undefined)
 }
 
 export function noteVaultActivity(): void {

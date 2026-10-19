@@ -643,31 +643,38 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			return response{OK: true}, svc.PutPolicy(p.RootSecret, p.Policy)
+			return response{OK: true}, svc.PutPolicy(p.RootSecret, p.ProjectID, p.Policy)
 		})
 
-	case opGetPolicy:
+	case opMigratePolicy:
 		var p rootSecretPayload
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			policy, err := svc.GetPolicy(p.RootSecret)
-			return payloadResponse(policyPayload{Policy: policy}), err
+			return response{OK: true}, svc.MigrateSealedPolicy(p.RootSecret)
 		})
 
-	case opActivatePolicy:
-		var p rootSecretPayload
-		if err := json.Unmarshal(req.Payload, &p); err != nil {
-			return errResponse(err)
+	case opListPolicies:
+		global, projects := svc.Policies()
+		out := policiesPayload{Global: global, Projects: make(map[string]json.RawMessage, len(projects))}
+		for id, p := range projects {
+			out.Projects[id] = p
 		}
-		return adminOp(adminLimiter, func() (response, error) {
-			return response{OK: true}, svc.ActivatePolicy(p.RootSecret)
-		})
+		return payloadResponse(out)
 
 	case opCurrentPolicy:
-		policy, active := svc.ActivePolicy()
-		return payloadResponse(policyPayload{Policy: policy, Active: active})
+		var p currentPolicyPayload
+		if len(req.Payload) > 0 {
+			if err := json.Unmarshal(req.Payload, &p); err != nil {
+				return errResponse(err)
+			}
+		}
+		raw, err := svc.EffectivePolicy(p.ProjectID).Marshal()
+		if err != nil {
+			return errResponse(err)
+		}
+		return payloadResponse(policyPayload{Policy: raw})
 
 	case opPolicyCatalog:
 		return payloadResponse(policyCatalogPayload{Rules: guard.Catalog()})

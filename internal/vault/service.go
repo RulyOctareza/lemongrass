@@ -27,8 +27,8 @@ type Service struct {
 	activeKeys map[ChannelID][]byte
 	onInvalid  []func(ChannelID)
 
-	activePolicy []byte
-	policyLoaded bool
+	policyPath string
+	policy     policyFile
 }
 
 func NewService(dir string) (*Service, error) {
@@ -60,6 +60,7 @@ func NewService(dir string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	policyPath := filepath.Join(dir, policyFileName)
 	return &Service{
 		creds:       creds,
 		channels:    channels,
@@ -69,6 +70,8 @@ func NewService(dir string) (*Service, error) {
 		httpMetaDir: httpMetaDir,
 		rootSalt:    rootSalt,
 		activeKeys:  make(map[ChannelID][]byte),
+		policyPath:  policyPath,
+		policy:      loadPolicies(policyPath),
 	}, nil
 }
 
@@ -163,7 +166,8 @@ func (s *Service) VerifyPassphrase(rootSecret string) error {
 
 // ResetVault permanently discards the canary and every stored credential, domain, and channel
 // of both kinds. The only way back from a forgotten passphrase, since nothing encrypted under
-// it is recoverable without it.
+// it is recoverable without it. The policy file is kept: it is not sealed under the passphrase,
+// and a reset, which needs no passphrase, must not drop the user's own denials.
 func (s *Service) ResetVault() error {
 	channels, err := s.ListChannels()
 	if err != nil {
@@ -192,12 +196,9 @@ func (s *Service) ResetVault() error {
 			return err
 		}
 	}
-	if err := s.policies.Delete(policyEntryName); err != nil {
+	if err := s.policies.Delete(sealedPolicyEntryName); err != nil {
 		return err
 	}
-	s.mu.Lock()
-	s.dropActivePolicyLocked()
-	s.mu.Unlock()
 	return s.canary.Delete(canaryEntryName)
 }
 

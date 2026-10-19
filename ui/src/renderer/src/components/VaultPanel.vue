@@ -13,14 +13,13 @@ import ConnectionsSection from './connector/ConnectionsSection.vue'
 import DbChannelsSection from './connector/DbChannelsSection.vue'
 import DomainsSection from './connector/DomainsSection.vue'
 import HttpChannelsSection from './connector/HttpChannelsSection.vue'
-import PolicySection from './safety/PolicySection.vue'
 import AppButton from './AppButton.vue'
 
 const props = defineProps<{
   active: boolean
 }>()
 
-const activeKind = ref<'database' | 'http' | 'safety'>('database')
+const activeKind = ref<'database' | 'http'>('database')
 const activeDbTab = ref<'connections' | 'channels'>('connections')
 const activeHttpTab = ref<'domains' | 'httpChannels'>('domains')
 
@@ -60,7 +59,6 @@ async function unlockVault(): Promise<void> {
     }
     unlockInput.value = ''
     unlockVaultSession(passphrase)
-    window.api.vault.activatePolicy(passphrase).catch(() => undefined)
   } catch (err) {
     unlockError.value = describeError(err)
   } finally {
@@ -212,28 +210,6 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
             </svg>
             HTTP
           </button>
-          <div class="nav-divider"></div>
-          <button
-            class="nav-item"
-            :class="{ active: activeKind === 'safety' }"
-            @click="activeKind = 'safety'"
-          >
-            <svg
-              class="nav-icon"
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M7 1.5l4.8 1.8v3.6c0 3-2 5-4.8 5.9C4.2 11.9 2.2 9.9 2.2 6.9V3.3L7 1.5z" />
-              <path d="M5 7l1.4 1.4L9 5.8" />
-            </svg>
-            Safety
-          </button>
           <div class="nav-lock">
             <span class="unlock-status">Vault unlocked</span>
             <AppButton @click="lockVaultSession">Lock</AppButton>
@@ -294,10 +270,6 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
                 v-show="activeHttpTab === 'httpChannels'"
                 :visible="shown('http', 'httpChannels')"
               />
-            </div>
-
-            <div v-show="activeKind === 'safety'" class="kind-pane">
-              <PolicySection :visible="props.active && activeKind === 'safety'" />
             </div>
           </div>
         </div>

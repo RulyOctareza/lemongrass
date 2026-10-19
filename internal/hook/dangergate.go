@@ -15,7 +15,8 @@ func dangerDecision(payload hookEvent) *guard.Verdict {
 	if err != nil {
 		home = ""
 	}
-	input := guard.Input{Tool: payload.ToolName, Cwd: payload.Cwd, Home: home, ProjectRoot: launchProjectRoot()}
+	launch := launchProject()
+	input := guard.Input{Tool: payload.ToolName, Cwd: payload.Cwd, Home: home, ProjectRoot: launch.Path}
 	if payload.ToolName == "Bash" {
 		var shell shellToolInput
 		if err := json.Unmarshal(payload.ToolInput, &shell); err != nil {
@@ -26,7 +27,7 @@ func dangerDecision(payload hookEvent) *guard.Verdict {
 		input.Paths = dangerToolPaths(payload)
 		input.Writes = isMemoryWriteTool(payload.ToolName)
 	}
-	return guard.Decide(input, hookPolicy())
+	return guard.Decide(input, hookPolicy(launch.ID))
 }
 
 func dangerToolPaths(payload hookEvent) []string {
@@ -47,15 +48,15 @@ func dangerToolPaths(payload hookEvent) []string {
 	return paths
 }
 
-// launchProjectRoot is the registered project Claude Code was started in, which a cd inside the session does not move.
-func launchProjectRoot() string {
+// launchProject is the registered project Claude Code was started in, which a cd inside the session does not move. It is the zero Project when there is none.
+func launchProject() project.Project {
 	dir := os.Getenv(claudeProjectDirEnv)
 	if dir == "" {
-		return ""
+		return project.Project{}
 	}
 	proj, err := project.Resolve(dir)
 	if err != nil {
-		return ""
+		return project.Project{}
 	}
-	return proj.Path
+	return proj
 }

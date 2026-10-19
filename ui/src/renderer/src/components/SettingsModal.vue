@@ -9,10 +9,19 @@ import {
   removeAccount
 } from '../accounts'
 import AppButton from './AppButton.vue'
+import PolicySection from './safety/PolicySection.vue'
+import type { Project } from '../../../preload/types'
+
+const props = defineProps<{
+  projects: Project[]
+  activeProjectId: string | null
+}>()
 
 const emit = defineEmits<{
   close: []
 }>()
+
+const section = ref<'accounts' | 'safety'>('accounts')
 
 const newName = ref('')
 const addError = ref('')
@@ -45,14 +54,34 @@ async function onRemove(name: string): Promise<void> {
 </script>
 
 <template>
-  <AppModal scope="app" size="md" flush label="Settings" @close="emit('close')">
+  <AppModal scope="app" size="lg" flush label="Settings" @close="emit('close')">
     <div class="settings-layout">
       <aside class="section-list">
         <h3 class="list-title">Settings</h3>
-        <button type="button" class="section-item selected">Claude accounts</button>
+        <button
+          type="button"
+          class="section-item"
+          :class="{ selected: section === 'accounts' }"
+          @click="section = 'accounts'"
+        >
+          Claude accounts
+        </button>
+        <button
+          type="button"
+          class="section-item"
+          :class="{ selected: section === 'safety' }"
+          @click="section = 'safety'"
+        >
+          Safety
+        </button>
       </aside>
 
-      <section class="section-body">
+      <section v-if="section === 'safety'" class="section-body section-body--fixed">
+        <h4 class="section-title">Safety</h4>
+        <PolicySection :projects="props.projects" :active-project-id="props.activeProjectId" />
+      </section>
+
+      <section v-else class="section-body lg-scroll">
         <h4 class="section-title">Claude accounts</h4>
         <p class="section-text">
           Each account has its own login. A new Claude tab asks which account it should run under.
@@ -105,8 +134,9 @@ async function onRemove(name: string): Promise<void> {
 
 <style scoped>
 .settings-layout {
+  flex: 1;
   display: flex;
-  min-height: 380px;
+  min-height: 0;
 }
 
 .section-list {
@@ -146,17 +176,22 @@ async function onRemove(name: string): Promise<void> {
 }
 
 .section-item.selected {
-  background: var(--color-amber-muted);
-  color: var(--color-fg-primary);
+  background: var(--color-surface-2);
+  color: var(--color-fg-accent);
 }
 
 .section-body {
   flex: 1;
   min-width: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-6);
+}
+
+.section-body--fixed {
+  overflow-y: hidden;
 }
 
 .section-title {

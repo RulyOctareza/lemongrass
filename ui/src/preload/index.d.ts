@@ -26,6 +26,7 @@ import type {
   VaultHTTPScope,
   VaultHTTPChannel,
   VaultHTTPChannelWithShortId,
+  VaultPolicies,
   VaultPolicy,
   VaultPolicyRule,
   WorkgroupDisbandResult,
@@ -183,9 +184,9 @@ interface Api {
     ) => Promise<VaultHTTPChannelWithShortId>
     revokeHTTPChannel: (id: string) => Promise<void>
     policyCatalog: () => Promise<VaultPolicyRule[]>
-    getPolicy: (passphrase: string) => Promise<VaultPolicy>
-    putPolicy: (passphrase: string, policy: VaultPolicy) => Promise<void>
-    activatePolicy: (passphrase: string) => Promise<void>
+    listPolicies: () => Promise<VaultPolicies>
+    putPolicy: (passphrase: string, projectId: string | null, policy: VaultPolicy) => Promise<void>
+    migratePolicy: (passphrase: string) => Promise<void>
   }
   windowControls: {
     minimize: () => void

@@ -25,6 +25,8 @@ func NewBackend(dir string) (*Backend, error) {
 		return nil, err
 	}
 	b := NewBackendFor(svc)
+	// A project removed from the registry while the daemon was down loses its policy here. A failed prune leaves the stale entries, which match no project and do no harm.
+	_ = b.pruneProjectPolicies()
 
 	audit, err := channelaudit.Open(filepath.Join(dir, "audit.db"))
 	if err != nil {

@@ -26,7 +26,7 @@ A leader agent declares a workgroup of one or more thinkers, each running Claude
 
 ### Bypass mode with a guard that stays on
 
-Claude Code tabs start with `--dangerously-skip-permissions`, so an agent does not stall on prompts. A `PreToolUse` hook enforces a catalog of dangerous operations instead, in the categories Git, Deletion, System, Network, Infrastructure, Database clients and Lemongrass itself. A refused call returns an approval message to the agent and is not silently dropped. A user policy edited in the Vault tab's Safety pane is sealed in the vault, and the hook reads it from there. Writes into Claude Code's memory folders wait behind a sign word, and a held call runs once with `lgrass replay` after signing.
+Claude Code tabs start with `--dangerously-skip-permissions`, so an agent does not stall on prompts. A `PreToolUse` hook enforces a catalog of dangerous operations instead, in the categories Git, Deletion, System, Network, Infrastructure, Database clients and Lemongrass itself. A refused call returns an approval message to the agent and is not silently dropped. A user policy, global or per project, is edited in the Safety section of Settings, held by the vault daemon, and saved only with the vault passphrase. The hook reads it from the daemon. Writes into Claude Code's memory folders wait behind a sign word, and a held call runs once with `lgrass replay` after signing.
 
 ### Project rules arrive at the start of every session
 
