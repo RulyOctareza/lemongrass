@@ -323,7 +323,7 @@ onBeforeUnmount(() => {
     <div class="tab-header">
       <div
         ref="tabBar"
-        class="tab-bar lg-scroll"
+        class="tab-bar"
         @wheel="onTabBarWheel"
         @dragover="onTabBarDragOver"
         @drop="onTabBarDrop"

@@ -77,10 +77,10 @@ export const GUIDE_CARDS: GuideCard[] = [
     title: 'Node',
     where: 'Vault, then Node, in the sidebar',
     purpose:
-      'Node shares some of your books and scratchpad tasks with someone else\'s agent over a read-only link. You choose what to share, and each person gets a token that expires.',
+      'Node shares some of your books, scratchpad tasks, laws and handovers with someone else\'s agent over a read-only link. Each person gets one token and sets it up once, and you change what it can read at any time.',
     when: 'When someone outside your machine needs to read specific project notes through their own agent.',
     example:
-      'Pick one book and one task to share, issue a token for a colleague, and open the link for two hours.'
+      'Add a token for a colleague, add one book and one task to it, and open the link for two hours.'
   },
   {
     id: 'accounts',

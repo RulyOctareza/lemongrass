@@ -133,6 +133,7 @@ interface Api {
     openTunnel: (hours: number) => Promise<NodeState>
     closeTunnel: () => Promise<NodeState>
     issue: (req: NodeIssueRequest) => Promise<NodeIssued>
+    update: (req: NodeUpdateRequest) => Promise<NodeState>
     revoke: (id: string) => Promise<NodeState>
     remove: (id: string) => Promise<NodeState>
   }

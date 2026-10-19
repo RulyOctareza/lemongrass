@@ -164,10 +164,29 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-surface-2); border-radius: var(--radius-pill); }
-::-webkit-scrollbar-thumb:hover { background: var(--color-surface-3); }
+/* Yellow scrollbars are part of the Lemongrass identity, so every scroll area gets them with no class. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: linear-gradient(var(--color-border-default), var(--color-border-default)) center /
+    1px 100% no-repeat;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-amber-dim);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: var(--color-amber);
+  background-clip: padding-box;
+}
 
 ::selection { background: rgba(245,197,24,0.30); color: var(--color-fg-primary); }
 
@@ -194,25 +213,3 @@ body {
   animation: blink 1s steps(1) infinite;
 }
 
-.lg-scroll::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-
-.lg-scroll::-webkit-scrollbar-track {
-  background: linear-gradient(var(--color-border-default), var(--color-border-default)) center /
-    1px 100% no-repeat;
-}
-
-.lg-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-amber-dim);
-  background-clip: padding-box;
-  border: 3px solid transparent;
-  border-radius: var(--radius-pill);
-}
-
-.lg-scroll::-webkit-scrollbar-thumb:hover,
-.lg-scroll::-webkit-scrollbar-thumb:active {
-  background: var(--color-amber);
-  background-clip: padding-box;
-}

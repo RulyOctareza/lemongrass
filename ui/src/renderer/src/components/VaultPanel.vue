@@ -106,7 +106,7 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
 <template>
   <div class="vault-tab" @click.capture="noteVaultActivity" @keydown.capture="noteVaultActivity">
     <div class="vault-frame" :class="{ 'vault-frame--gate': !vaultUnlocked }">
-      <div v-if="!vaultUnlocked" class="vault-gate lg-scroll">
+      <div v-if="!vaultUnlocked" class="vault-gate">
         <div v-if="!hasPassphraseLoading" class="unlock-panel">
           <template v-if="!showResetConfirm">
             <h4 class="inline-section-title">
@@ -216,7 +216,7 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
           </div>
         </nav>
 
-        <div class="vault-main lg-scroll">
+        <div class="vault-main">
           <div class="vault-content">
             <div v-show="activeKind === 'database'" class="kind-pane">
               <div class="tab-row">

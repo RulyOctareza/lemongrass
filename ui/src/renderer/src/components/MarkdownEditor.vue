@@ -367,12 +367,7 @@ watch(
       <button class="tool" title="Close (Esc)" @click="closeFind">&times;</button>
     </div>
     <p v-if="imageNotice" class="notice">{{ imageNotice }}</p>
-    <EditorContent
-      v-if="editor"
-      class="content lg-scroll"
-      :editor="editor"
-      @click="focusFromBlank"
-    />
+    <EditorContent v-if="editor" class="content" :editor="editor" @click="focusFromBlank" />
   </div>
 </template>
 

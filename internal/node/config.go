@@ -1,4 +1,4 @@
-// Package node serves granted books and scratchpad tasks read-only from ~/.lemongrass/node.json, which only the Electron app writes.
+// Package node serves granted books, scratchpad tasks, laws and handovers read-only from ~/.lemongrass/node.json, which only the Electron app writes.
 package node
 
 import (
@@ -36,11 +36,13 @@ type Grant struct {
 	TokenHash string    `json:"tokenHash"`
 }
 
-// Share lists what a grant may read in one project: books by stable identity, tasks by slug.
+// Share lists what a grant may read in one project: books by stable identity, tasks by slug, laws and handovers by file name without .md.
 type Share struct {
-	Alias string   `json:"alias"`
-	Books []string `json:"books"`
-	Tasks []string `json:"tasks"`
+	Alias     string   `json:"alias"`
+	Books     []string `json:"books"`
+	Tasks     []string `json:"tasks"`
+	Laws      []string `json:"laws,omitempty"`
+	Handovers []string `json:"handovers,omitempty"`
 }
 
 // Tunnel is on while Until is in the future.

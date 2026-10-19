@@ -103,6 +103,24 @@ func TestReadRoutes(t *testing.T) {
 	}
 }
 
+func TestShareEditsTakeEffectOnTheNextRequest(t *testing.T) {
+	e := newEnv(t)
+	const chapter = "/read/garden/books/garden_design%5B2026-01-02%5D/beds%5Bsoil%5D.md"
+	if code, _, _ := e.do(t, "GET", chapter, e.token, ""); code != 200 {
+		t.Fatalf("before edit: %d", code)
+	}
+	e.cfg.Grants[0].Shares = []node.Share{{Alias: "garden", Tasks: []string{"nothing"}}}
+	e.save(t)
+	if code, _, _ := e.do(t, "GET", chapter, e.token, ""); code != 404 {
+		t.Errorf("after removing the book: %d, want 404", code)
+	}
+	e.cfg.Grants[0].Shares = []node.Share{{Alias: "garden", Books: []string{"garden_design[2026-01-02]"}}}
+	e.save(t)
+	if code, _, _ := e.do(t, "GET", chapter, e.token, ""); code != 200 {
+		t.Errorf("after adding it back: %d, want 200", code)
+	}
+}
+
 func TestUnauthorizedAndUniformNotFound(t *testing.T) {
 	e := newEnv(t)
 	for _, tok := range []string{"", "lgn_wrong", "nope"} {

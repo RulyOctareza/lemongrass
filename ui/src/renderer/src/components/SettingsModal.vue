@@ -56,11 +56,11 @@ async function onRemove(name: string): Promise<void> {
 <template>
   <AppModal scope="app" size="lg" flush label="Settings" @close="emit('close')">
     <div class="settings-layout">
-      <aside class="section-list">
-        <h3 class="list-title">Settings</h3>
+      <aside class="settings-nav">
+        <h3 class="settings-nav-title">Settings</h3>
         <button
           type="button"
-          class="section-item"
+          class="settings-nav-item"
           :class="{ selected: section === 'accounts' }"
           @click="section = 'accounts'"
         >
@@ -68,7 +68,7 @@ async function onRemove(name: string): Promise<void> {
         </button>
         <button
           type="button"
-          class="section-item"
+          class="settings-nav-item"
           :class="{ selected: section === 'safety' }"
           @click="section = 'safety'"
         >
@@ -76,34 +76,34 @@ async function onRemove(name: string): Promise<void> {
         </button>
       </aside>
 
-      <section v-if="section === 'safety'" class="section-body section-body--fixed">
-        <h4 class="section-title">Safety</h4>
+      <section v-if="section === 'safety'" class="settings-section settings-section--fixed">
+        <h4 class="settings-title">Safety</h4>
         <PolicySection :projects="props.projects" :active-project-id="props.activeProjectId" />
       </section>
 
-      <section v-else class="section-body lg-scroll">
-        <h4 class="section-title">Claude accounts</h4>
-        <p class="section-text">
+      <section v-else class="settings-section">
+        <h4 class="settings-title">Claude accounts</h4>
+        <p class="settings-text">
           Each account has its own login. A new Claude tab asks which account it should run under.
         </p>
 
-        <ul class="account-rows">
-          <li class="account-row">
-            <span class="account-name">primary</span>
-            <span class="account-dir">{{ PRIMARY_ACCOUNT_DIR }}</span>
-            <span class="primary-badge">Primary</span>
+        <ul class="settings-rows">
+          <li class="settings-row">
+            <span class="settings-row-title">primary</span>
+            <span class="settings-row-meta">{{ PRIMARY_ACCOUNT_DIR }}</span>
+            <span class="settings-badge">Primary</span>
           </li>
           <li
             v-for="account in accountStore.items"
             :key="account.name"
-            class="account-row"
+            class="settings-row"
             @mouseleave="confirmingRemoval = null"
           >
-            <span class="account-name">{{ account.name }}</span>
-            <span class="account-dir">{{ account.dir }}</span>
+            <span class="settings-row-title">{{ account.name }}</span>
+            <span class="settings-row-meta">{{ account.dir }}</span>
             <button
               type="button"
-              class="remove-button"
+              class="settings-action"
               :class="{ confirming: confirmingRemoval === account.name }"
               @click="onRemove(account.name)"
             >
@@ -111,12 +111,12 @@ async function onRemove(name: string): Promise<void> {
             </button>
           </li>
         </ul>
-        <p v-if="removeError" class="field-error">{{ removeError }}</p>
+        <p v-if="removeError" class="settings-error">{{ removeError }}</p>
 
-        <form class="add-form" @submit.prevent="submitAdd">
+        <form class="settings-add" @submit.prevent="submitAdd">
           <input
             v-model="newName"
-            class="name-input"
+            class="settings-input"
             type="text"
             placeholder="Account name"
             maxlength="32"
@@ -126,184 +126,8 @@ async function onRemove(name: string): Promise<void> {
           />
           <AppButton type="submit" variant="primary" :disabled="!canAdd">Add account</AppButton>
         </form>
-        <p v-if="nameError || addError" class="field-error">{{ nameError || addError }}</p>
+        <p v-if="nameError || addError" class="settings-error">{{ nameError || addError }}</p>
       </section>
     </div>
   </AppModal>
 </template>
-
-<style scoped>
-.settings-layout {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-.section-list {
-  flex-shrink: 0;
-  width: 190px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-6) var(--space-3);
-  background: var(--color-surface-0);
-  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
-}
-
-.list-title {
-  padding: 0 var(--space-3) var(--space-3);
-  color: var(--color-fg-primary);
-  font-family: var(--font-display);
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
-}
-
-.section-item {
-  padding: var(--space-2) var(--space-3);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md, 8px);
-  color: var(--color-fg-secondary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-.section-item:hover {
-  background: var(--color-surface-2);
-  color: var(--color-fg-primary);
-}
-
-.section-item.selected {
-  background: var(--color-surface-2);
-  color: var(--color-fg-accent);
-}
-
-.section-body {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-6);
-}
-
-.section-body--fixed {
-  overflow-y: hidden;
-}
-
-.section-title {
-  padding-right: var(--space-6);
-  color: var(--color-fg-primary);
-  font-family: var(--font-display);
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
-}
-
-.section-text {
-  color: var(--color-fg-secondary);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-}
-
-.account-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.account-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md, 8px);
-}
-
-.account-name {
-  color: var(--color-fg-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-}
-
-.account-dir {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-fg-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
-.primary-badge {
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-3);
-  color: var(--color-fg-secondary);
-  font-size: var(--text-xs);
-}
-
-.remove-button {
-  min-width: 84px;
-  padding: 2px var(--space-3);
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-pill);
-  color: var(--color-fg-secondary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.remove-button:hover {
-  background: var(--color-surface-3);
-  color: var(--color-fg-primary);
-}
-
-.remove-button.confirming,
-.remove-button.confirming:hover {
-  background: var(--color-error-muted);
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-
-.add-form {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.name-input {
-  flex: 1;
-  min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-0);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md, 8px);
-  color: var(--color-fg-primary);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-}
-
-.name-input:focus {
-  outline: none;
-  border-color: var(--color-amber);
-}
-
-.field-error {
-  margin: 0;
-  color: var(--color-error);
-  font-size: var(--text-xs);
-}
-</style>

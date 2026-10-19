@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'v
 import { vaultSession, describeError } from '../../vaultSession'
 import type { VaultChannel } from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
+import AppMultiPicker from '../AppMultiPicker.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -112,15 +113,9 @@ watch(newDbName, (dbName) => {
   loadTablesFor(dbName)
 })
 
-const tablesDropdownOpen = ref(false)
-const tableFilter = ref('')
-const tablesDropdownRef = ref<HTMLElement | null>(null)
-
-const filteredTables = computed(() => {
-  const query = tableFilter.value.trim().toLowerCase()
-  if (!query) return availableTables.value
-  return availableTables.value.filter((t) => t.toLowerCase().includes(query))
-})
+const tableGroups = computed(() => [
+  { items: availableTables.value.map((t) => ({ value: t, label: t })) }
+])
 
 const tablesSummaryLabel = computed(() => {
   if (tablesLoading.value) return 'Loading tables...'
@@ -129,23 +124,8 @@ const tablesSummaryLabel = computed(() => {
   return `${newTables.value.length} tables selected`
 })
 
-function toggleTablesDropdown(): void {
-  tablesDropdownOpen.value = !tablesDropdownOpen.value
-  if (tablesDropdownOpen.value) tableFilter.value = ''
-}
-
 function removeSelectedTable(table: string): void {
   newTables.value = newTables.value.filter((t) => t !== table)
-}
-
-// Closes the dropdown on any click outside it, without disturbing clicks on the trigger
-// itself (that's handled by its own @click toggle) or inside the popover (filtering,
-// checking a table shouldn't close it).
-function onDocumentClickOutsideTablesDropdown(event: MouseEvent): void {
-  if (!tablesDropdownOpen.value) return
-  if (tablesDropdownRef.value && !tablesDropdownRef.value.contains(event.target as Node)) {
-    tablesDropdownOpen.value = false
-  }
 }
 
 function openCreateForm(): void {
@@ -263,7 +243,6 @@ async function revoke(id: string): Promise<void> {
 onMounted(() => {
   refreshConnections()
   refresh()
-  document.addEventListener('click', onDocumentClickOutsideTablesDropdown, true)
 })
 
 watch(
@@ -277,7 +256,6 @@ watch(
 
 onUnmounted(() => {
   if (copiedTimer) clearTimeout(copiedTimer)
-  document.removeEventListener('click', onDocumentClickOutsideTablesDropdown, true)
 })
 </script>
 
@@ -341,16 +319,14 @@ onUnmounted(() => {
             <p v-else-if="!tablesLoading && availableTables.length === 0" class="hint">
               No tables found in this database.
             </p>
-            <div v-else ref="tablesDropdownRef" class="combobox">
-              <button
-                type="button"
-                class="combobox-trigger"
-                :disabled="tablesLoading"
-                @click="toggleTablesDropdown"
-              >
-                {{ tablesSummaryLabel }}
-              </button>
-
+            <AppMultiPicker
+              v-else
+              v-model="newTables"
+              :groups="tableGroups"
+              :summary="tablesSummaryLabel"
+              filter-placeholder="Filter tables..."
+              :disabled="tablesLoading"
+            >
               <div v-if="newTables.length > 0" class="chip-row">
                 <span v-for="table in newTables" :key="table" class="chip">
                   {{ table }}
@@ -364,24 +340,7 @@ onUnmounted(() => {
                   </button>
                 </span>
               </div>
-
-              <div v-if="tablesDropdownOpen" class="combobox-popover">
-                <input
-                  v-model="tableFilter"
-                  type="text"
-                  class="combobox-filter"
-                  placeholder="Filter tables..."
-                  autofocus
-                />
-                <div class="checkbox-grid combobox-list">
-                  <label v-for="table in filteredTables" :key="table" class="checkbox-option">
-                    <input v-model="newTables" type="checkbox" :value="table" />
-                    {{ table }}
-                  </label>
-                  <p v-if="filteredTables.length === 0" class="hint">No tables match.</p>
-                </div>
-              </div>
-            </div>
+            </AppMultiPicker>
           </div>
           <div class="field-block">
             <label class="field-label">Operations</label>

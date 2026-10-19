@@ -40,7 +40,7 @@ The Settings dialog adds Claude accounts, each with its own config folder beside
 
 ### Share books and tasks with someone else's agent
 
-The Node screen, under Vault in the sidebar, serves the books and scratchpad tasks you pick to other people's agents over MCP, read only. You issue each person a token with an expiry and open an ngrok tunnel for a set number of hours. They add the URL and token to Claude Code or any MCP client and do not need Lemongrass. The endpoint has a single `read` tool. A read with no path lists what was shared, and the agent reads on from those paths, so it does not spend tokens on a large tool surface. Anything not picked returns the same "not found" as a path that does not exist. Laws and handovers are never served. A revoke or expiry takes effect on the next request. The tunnel closes itself when its time is up.
+The Node screen, under Vault in the sidebar, serves the books, scratchpad tasks, laws and handovers you pick to other people's agents over MCP, read only. Each person gets one token with an expiry, and you open an ngrok tunnel for a set number of hours. They add the URL and token to Claude Code or any MCP client once and do not need Lemongrass. One token covers every project you share with them, and you add or remove what it can read at any time without a new token or a new setup. The endpoint has a single `read` tool. A read with no path lists what was shared, and the agent reads on from those paths, so it does not spend tokens on a large tool surface. Anything not picked returns the same "not found" as a path that does not exist. The laws summary and the handover whiteboard are never served, because they list every law and every task. A change to what a token reads, a disconnect or an expiry takes effect on the next request. The tunnel closes itself when its time is up.
 
 ### Real terminals, controlled by structured events
 
@@ -58,7 +58,7 @@ Built:
 
 In progress:
 
-- The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. Its transport has been checked over a live tunnel with curl. The app screen is temporary, and a real MCP client, live revoke and expiry have not been run yet. Search and an `lgrass node` client for Lemongrass users are planned.
+- The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. Its transport has been checked over a live tunnel with curl. The app screen has not been checked by hand yet, and a real MCP client, live revoke and expiry have not been run yet. Search and an `lgrass node` client for Lemongrass users are planned.
 - A wire-protocol proxy so a whole app can point its own database driver at a local port. Port allocation and the MySQL handshake listener are done. Query execution and the Postgres listener are not.
 - Codex as a workgroup member. Its tabs cannot write the lgrass database under Codex's default sandbox yet.
 

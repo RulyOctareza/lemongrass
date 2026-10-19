@@ -67,7 +67,7 @@ function cellClass(line: GitDiffLine | null): string {
       No textual changes. The file may have a mode change or be empty.
     </p>
     <p v-else-if="diff.status === 'error'" class="notice error">{{ diff.message }}</p>
-    <div v-else class="diff-scroll lg-scroll">
+    <div v-else class="diff-scroll">
       <template v-for="(hunk, hunkIndex) in diff.hunks" :key="hunkIndex">
         <div class="hunk-header">{{ hunk.header }}</div>
         <div v-for="(row, rowIndex) in hunk.rows" :key="rowIndex" class="diff-row">

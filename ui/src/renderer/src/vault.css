@@ -329,6 +329,7 @@
 }
 
 .vault-tab .inline-section {
+  --input-bg: var(--color-surface-1);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -390,53 +391,6 @@
   font-family: var(--font-body);
   font-size: var(--text-sm);
   cursor: pointer;
-}
-
-.vault-tab .combobox {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.vault-tab .combobox-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-.vault-tab .combobox-trigger:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.vault-tab .combobox-popover {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-}
-
-.vault-tab .combobox-filter {
-  width: 100%;
-}
-
-.vault-tab .combobox-list {
-  flex-wrap: nowrap;
-  flex-direction: column;
-  max-height: 200px;
 }
 
 .vault-tab .chip-row {

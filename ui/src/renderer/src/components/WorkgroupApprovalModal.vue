@@ -7,9 +7,16 @@ import { shellAccountOf } from '../workspace'
 import { renderSafeMarkdown } from '../safeMarkdown'
 import type { WorkgroupPending } from '../../../preload/types'
 import AppButton from './AppButton.vue'
+import AppSegmented from './AppSegmented.vue'
 
 const declineButton = ref<InstanceType<typeof AppButton> | null>(null)
 const reasonInput = ref<HTMLTextAreaElement | null>(null)
+
+// The primary account is the empty name.
+const accountOptions = computed(() => [
+  { value: '', label: 'primary' },
+  ...accountStore.items.map((account) => ({ value: account.name, label: account.name }))
+])
 
 const selected = computed((): WorkgroupPending | undefined =>
   approvals.pending.find((request) => request.requestId === approvals.selectedId)
@@ -74,7 +81,7 @@ watch(
         <div class="list-head">
           <h3 class="list-title">Waiting approval</h3>
         </div>
-        <ul class="request-items lg-scroll">
+        <ul class="request-items">
           <li v-for="request in approvals.pending" :key="request.requestId">
             <button
               class="request-row"
@@ -123,7 +130,7 @@ watch(
           </dl>
         </header>
 
-        <div class="reading-body lg-scroll">
+        <div class="reading-body">
           <details
             v-for="(member, index) in selected.members"
             :key="`${selected.requestId}-${member.label}`"
@@ -150,22 +157,11 @@ watch(
               <span :id="`account-${selected.requestId}-${index}`" class="account-label">
                 Account
               </span>
-              <div
-                class="segmented"
-                role="radiogroup"
+              <AppSegmented
+                v-model="approvals.accounts[selected.requestId][index]"
+                :options="accountOptions"
                 :aria-labelledby="`account-${selected.requestId}-${index}`"
-              >
-                <button
-                  v-for="name in ['', ...accountStore.items.map((account) => account.name)]"
-                  :key="name || 'primary'"
-                  type="button"
-                  role="radio"
-                  :aria-checked="approvals.accounts[selected.requestId][index] === name"
-                  @click="approvals.accounts[selected.requestId][index] = name"
-                >
-                  {{ name || 'primary' }}
-                </button>
-              </div>
+              />
             </div>
             <p class="assignment-label">Assignment</p>
             <!-- eslint-disable-next-line vue/no-v-html -->
@@ -417,46 +413,6 @@ watch(
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-3);
-}
-
-.segmented {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-3);
-}
-
-.segmented button {
-  padding: var(--space-1) var(--space-3);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-fg-secondary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-default),
-    color var(--duration-fast) var(--ease-default);
-}
-
-.segmented button:hover {
-  color: var(--color-fg-primary);
-}
-
-.segmented button[aria-checked='true'] {
-  background: var(--color-surface-1);
-  color: var(--color-fg-primary);
-  font-weight: var(--weight-semibold);
-  box-shadow: var(--shadow-sm);
-}
-
-.segmented button:focus-visible {
-  outline: 1px solid var(--color-amber);
-  outline-offset: 1px;
 }
 
 .skills-label,

@@ -374,7 +374,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
       <p v-else-if="loading && !catalog.length" class="empty">Loading the policy...</p>
     </div>
 
-    <div v-if="catalog.length" class="policy-scroll lg-scroll">
+    <div v-if="catalog.length" class="settings-scroll">
       <template v-if="!isGlobal">
         <p class="hint">
           Needs approval is refused for now. Approving a call with your passphrase is not built yet.
@@ -476,11 +476,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
       </div>
     </div>
 
-    <div v-if="catalog.length" class="save-bar">
-      <span v-if="saveError" class="error-text bar-status">{{ saveError }}</span>
-      <span v-else-if="dirty" class="bar-status">Unsaved changes</span>
-      <span v-else-if="savedNotice" class="saved-text bar-status">{{ savedNotice }}</span>
-      <span v-else class="bar-status muted">No changes</span>
+    <div v-if="catalog.length" class="settings-footer">
+      <span v-if="saveError" class="settings-footer-status error">{{ saveError }}</span>
+      <span v-else-if="dirty" class="settings-footer-status">Unsaved changes</span>
+      <span v-else-if="savedNotice" class="settings-footer-status saved">{{ savedNotice }}</span>
+      <span v-else class="settings-footer-status muted">No changes</span>
       <input
         v-if="!vaultUnlocked && dirty"
         v-model="passphraseInput"
@@ -513,18 +513,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
   gap: var(--space-3);
 }
 
-/* Only the rules scroll, so the picker and the save bar stay inside the modal's padding. */
-.policy-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-2) var(--space-3) 0;
-  border-top: 1px solid var(--color-border-default);
-}
-
 .hint {
   color: var(--color-fg-muted);
   font-size: var(--text-xs);
@@ -536,25 +524,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.save-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border-default);
-}
-
-.bar-status {
-  flex: 1;
-  min-width: 0;
-  color: var(--color-fg-primary);
-  font-size: var(--text-xs);
-}
-
-.bar-status.muted {
-  color: var(--color-fg-muted);
 }
 
 .scope-label {
@@ -572,7 +541,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
   min-width: 0;
 }
 
-.save-bar .passphrase-input {
+.settings-footer .passphrase-input {
   width: 12rem;
 }
 
@@ -754,11 +723,6 @@ select:focus {
 .empty {
   color: var(--color-fg-muted);
   font-size: var(--text-sm);
-}
-
-.saved-text {
-  color: var(--color-success);
-  font-size: var(--text-xs);
 }
 
 .error-text {

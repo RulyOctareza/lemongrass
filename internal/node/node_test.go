@@ -140,6 +140,70 @@ func TestOutsideTheGrantIsNotFound(t *testing.T) {
 	}
 }
 
+func TestLawsAndHandoversInsideTheGrant(t *testing.T) {
+	f := newFixture(t)
+	write(t, filepath.Join(f.root, "laws", "water_daily.md"), "water daily\n")
+	write(t, filepath.Join(f.root, "laws", "no_weeds.md"), "hidden")
+	write(t, filepath.Join(f.root, "handover", "irrigation.md"), "resume here\n")
+	write(t, filepath.Join(f.root, "handover", "whiteboard.md"), "hidden")
+	write(t, filepath.Join(f.root, "handover", "archive", "compost.md"), "closed\n")
+	f.grant.Shares = []Share{{
+		Alias:     "garden",
+		Laws:      []string{"water_daily", "summary"},
+		Handovers: []string{"irrigation", "compost", "whiteboard"},
+	}}
+
+	got, err := f.read(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "garden/laws/water_daily\ngarden/handovers/compost (archived)\ngarden/handovers/irrigation\n"
+	if got != want {
+		t.Errorf("contents = %q, want %q", got, want)
+	}
+
+	reads := map[string]string{
+		"garden/laws":                 "garden/laws/water_daily\n",
+		"garden/laws/water_daily":     "water daily\n",
+		"garden/laws/water_daily.md":  "water daily\n",
+		"garden/handovers/irrigation": "resume here\n",
+		"garden/handovers/compost.md": "closed\n",
+	}
+	for path, want := range reads {
+		if got, err := f.read(t, path); err != nil || got != want {
+			t.Errorf("read %q = %q, %v, want %q", path, got, err, want)
+		}
+	}
+
+	for _, path := range []string{
+		"garden/laws/summary",
+		"garden/laws/summary.md",
+		"garden/laws/no_weeds",
+		"garden/handovers/whiteboard",
+		"garden/handovers/archive",
+		"garden/handovers/archive/compost",
+		"garden/laws/../handover/irrigation",
+	} {
+		if got, err := f.read(t, path); !errors.Is(err, ErrNotFound) {
+			t.Errorf("read %q = %q, %v, want ErrNotFound", path, got, err)
+		}
+	}
+}
+
+func TestEmptyGrantSeesNothing(t *testing.T) {
+	f := newFixture(t)
+	f.grant.Shares = nil
+	got, err := f.read(t, "")
+	if err != nil || got != "Nothing is shared with this token.\n" {
+		t.Errorf("contents = %q, %v", got, err)
+	}
+	for _, path := range []string{"garden", "garden/books/" + testBook, "garden/tasks/irrigation"} {
+		if _, err := f.read(t, path); !errors.Is(err, ErrNotFound) {
+			t.Errorf("read %q: %v, want ErrNotFound", path, err)
+		}
+	}
+}
+
 func TestSymlinkedEntriesAreRefused(t *testing.T) {
 	f := newFixture(t)
 	outside := filepath.Join(t.TempDir(), "outside.md")

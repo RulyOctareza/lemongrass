@@ -14,6 +14,12 @@ import (
 // The knowledge folder every project keeps at its root, as internal/hook names it.
 const biblioDir = "biblio"
 
+// These index every law and every handover, so serving one would reveal what the grant leaves out.
+const (
+	lawsIndex     = "summary.md"
+	handoverIndex = "whiteboard.md"
+)
+
 // ReadCap is the most bytes of one file a single read returns.
 const ReadCap = 16 * 1024
 
@@ -31,7 +37,7 @@ func NewLibrary() *Library {
 	return &Library{Projects: project.List}
 }
 
-// Read answers the contents for an empty path, then alias, alias/books, alias/tasks, a book or task, and a file read from offset.
+// Read answers the contents for an empty path, then alias, alias/books, alias/tasks, alias/laws, alias/handovers, a book or task, and a file read from offset.
 func (l *Library) Read(cfg Config, g Grant, path string, offset int) (string, error) {
 	path = strings.Trim(path, "/")
 	if path == "" {
@@ -55,6 +61,10 @@ func (l *Library) Read(cfg Config, g Grant, path string, offset int) (string, er
 		return readBooks(root, alias, share, parts[2:], offset)
 	case "tasks":
 		return readTasks(root, alias, share, parts[2:], offset)
+	case "laws":
+		return readDocs(filepath.Join(root, "laws"), lawsIndex, alias+"/laws/", share.Laws, parts[2:], offset)
+	case "handovers":
+		return readDocs(filepath.Join(root, "handover"), handoverIndex, alias+"/handovers/", share.Handovers, parts[2:], offset)
 	}
 	return "", ErrNotFound
 }
@@ -81,6 +91,12 @@ func (l *Library) contents(cfg Config, g Grant, only string) (string, error) {
 				}
 				lines = append(lines, line)
 			}
+		}
+		for _, name := range grantedDocs(filepath.Join(root, "laws"), lawsIndex, share.Laws) {
+			lines = append(lines, share.Alias+"/laws/"+name)
+		}
+		for _, name := range grantedDocs(filepath.Join(root, "handover"), handoverIndex, share.Handovers) {
+			lines = append(lines, share.Alias+"/handovers/"+name)
 		}
 	}
 	if len(lines) == 0 {
@@ -119,9 +135,17 @@ func mergedShares(g Grant) []Share {
 		if i := slices.IndexFunc(out, func(o Share) bool { return o.Alias == s.Alias }); i >= 0 {
 			out[i].Books = append(out[i].Books, s.Books...)
 			out[i].Tasks = append(out[i].Tasks, s.Tasks...)
+			out[i].Laws = append(out[i].Laws, s.Laws...)
+			out[i].Handovers = append(out[i].Handovers, s.Handovers...)
 			continue
 		}
-		out = append(out, Share{Alias: s.Alias, Books: slices.Clone(s.Books), Tasks: slices.Clone(s.Tasks)})
+		out = append(out, Share{
+			Alias:     s.Alias,
+			Books:     slices.Clone(s.Books),
+			Tasks:     slices.Clone(s.Tasks),
+			Laws:      slices.Clone(s.Laws),
+			Handovers: slices.Clone(s.Handovers),
+		})
 	}
 	return out
 }
@@ -202,6 +226,57 @@ func readTasks(root, alias string, share Share, rest []string, offset int) (stri
 		return out, nil
 	}
 	return "", ErrNotFound
+}
+
+// readDocs serves single-file documents, laws or handovers, listing the granted ones or reading one.
+func readDocs(dir, index, prefix string, granted, rest []string, offset int) (string, error) {
+	if len(granted) == 0 {
+		return "", ErrNotFound
+	}
+	switch len(rest) {
+	case 0:
+		return listing(prefix, grantedDocs(dir, index, granted)), nil
+	case 1:
+		path, _, err := docFile(dir, index, granted, rest[0])
+		if err != nil {
+			return "", err
+		}
+		return readFile(filepath.Dir(path), filepath.Base(path), offset)
+	}
+	return "", ErrNotFound
+}
+
+// grantedDocs lists the granted documents that exist, with " (archived)" on those found in the archive.
+func grantedDocs(dir, index string, granted []string) []string {
+	var out []string
+	for _, name := range granted {
+		if _, archived, err := docFile(dir, index, granted, name); err == nil {
+			if archived {
+				name += " (archived)"
+			}
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// docFile finds a granted document in dir first and then in dir/archive, matching against listings only.
+func docFile(dir, index string, granted []string, requested string) (path string, archived bool, err error) {
+	name := strings.TrimSuffix(requested, ".md")
+	if name+".md" == index || !slices.Contains(granted, name) {
+		return "", false, ErrNotFound
+	}
+	for _, d := range []struct {
+		dir      string
+		archived bool
+	}{{dir, false}, {filepath.Join(dir, "archive"), true}} {
+		files, err := markdownFiles(d.dir)
+		if err == nil && slices.Contains(files, name+".md") {
+			return filepath.Join(d.dir, name+".md"), d.archived, nil
+		}
+	}
+	return "", false, ErrNotFound
 }
 
 func listing(prefix string, names []string) string {

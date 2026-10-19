@@ -17,6 +17,7 @@ import type {
   NodeIssued,
   NodeIssueRequest,
   NodeState,
+  NodeUpdateRequest,
   VaultScope,
   VaultChannel,
   VaultChannelWithShortId,
@@ -146,6 +147,7 @@ const node = {
   openTunnel: (hours: number): Promise<NodeState> => ipcRenderer.invoke('node:openTunnel', hours),
   closeTunnel: (): Promise<NodeState> => ipcRenderer.invoke('node:closeTunnel'),
   issue: (req: NodeIssueRequest): Promise<NodeIssued> => ipcRenderer.invoke('node:issue', req),
+  update: (req: NodeUpdateRequest): Promise<NodeState> => ipcRenderer.invoke('node:update', req),
   revoke: (id: string): Promise<NodeState> => ipcRenderer.invoke('node:revoke', id),
   remove: (id: string): Promise<NodeState> => ipcRenderer.invoke('node:remove', id)
 }

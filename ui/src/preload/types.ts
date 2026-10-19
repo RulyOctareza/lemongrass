@@ -350,6 +350,9 @@ export interface NodeShare {
   alias: string
   books: string[]
   tasks: string[]
+  // File names without .md.
+  laws: string[]
+  handovers: string[]
 }
 
 export interface NodeGrantView {
@@ -367,6 +370,12 @@ export interface NodeTask {
   archived: boolean
 }
 
+// A law or handover file, named without .md.
+export interface NodeDoc {
+  name: string
+  archived: boolean
+}
+
 export interface NodeProjectContent {
   projectId: string
   name: string
@@ -374,6 +383,8 @@ export interface NodeProjectContent {
   // Book identities, title and creation date, as grants store them.
   books: string[]
   tasks: NodeTask[]
+  laws: NodeDoc[]
+  handovers: NodeDoc[]
 }
 
 export interface NodeStatus {
@@ -400,11 +411,16 @@ export interface NodeState {
 
 export interface NodeIssueRequest {
   label: string
-  days: number
-  shares: { projectId: string; books: string[]; tasks: string[] }[]
 }
 
 export interface NodeIssued {
   id: string
   token: string
+}
+
+export interface NodeUpdateRequest {
+  id: string
+  label: string
+  expiresAt: string
+  shares: NodeShare[]
 }

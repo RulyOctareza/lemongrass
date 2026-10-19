@@ -35,7 +35,7 @@ function edit(value: string): void {
       />
     </div>
     <TocViewer v-else-if="tab.path === 'books/toc.md'" :project="project" />
-    <div v-else class="reader lg-scroll">
+    <div v-else class="reader">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="markdown-body" v-html="doc.html" />
     </div>

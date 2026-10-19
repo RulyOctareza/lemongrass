@@ -148,7 +148,7 @@ function openChapter(path: string): void {
 </script>
 
 <template>
-  <div ref="root" class="toc-viewer lg-scroll">
+  <div ref="root" class="toc-viewer">
     <p v-if="loading" class="empty">Loading...</p>
     <p v-else-if="entries.length === 0" class="empty">Nothing in books/ yet.</p>
     <template v-else>

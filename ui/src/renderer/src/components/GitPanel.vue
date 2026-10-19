@@ -178,7 +178,7 @@ watch(() => props.project.id, refresh)
       <p v-else-if="!status.isRepo" class="git-empty">Not a git repository.</p>
       <template v-else>
         <p v-if="files.length === 0" class="git-empty">No changes</p>
-        <ul v-else class="file-list lg-scroll">
+        <ul v-else class="file-list">
           <li v-for="file in files" :key="file.path" class="file-item">
             <input
               type="checkbox"
@@ -207,7 +207,7 @@ watch(() => props.project.id, refresh)
           placeholder="Commit message"
           :disabled="state.busy !== null"
         />
-        <p v-if="state.error" class="git-error lg-scroll">{{ state.error }}</p>
+        <p v-if="state.error" class="git-error">{{ state.error }}</p>
         <p v-if="hint" class="git-hint">{{ hint }}</p>
         <div class="git-actions">
           <AppButton

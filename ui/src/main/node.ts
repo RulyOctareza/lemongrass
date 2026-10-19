@@ -14,6 +14,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { nodeSocketPath } from './daemons'
 import type {
+  NodeDoc,
   NodeGrantView,
   NodeIssued,
   NodeIssueRequest,
@@ -21,7 +22,8 @@ import type {
   NodeShare,
   NodeState,
   NodeStatus,
-  NodeTask
+  NodeTask,
+  NodeUpdateRequest
 } from '../preload/types'
 
 // Mirrors internal/node/config.go; the Go daemon only reads this file.
@@ -54,6 +56,26 @@ interface RegistryProject {
 const STORE_DIR = join(homedir(), '.lemongrass')
 const CONFIG_FILE = join(STORE_DIR, 'node.json')
 const ZERO_TIME = '0001-01-01T00:00:00Z'
+const DEFAULT_DAYS = 30
+
+// Mirrors internal/node/content.go: these index every law and every handover, so they are never shared.
+const LAWS_INDEX = 'summary'
+const HANDOVER_INDEX = 'whiteboard'
+
+// The daemon omits empty laws and handovers, and grants written before they existed have none.
+function normalShare(s: Partial<NodeShare> & { alias: string }): NodeShare {
+  return {
+    alias: s.alias,
+    books: [...new Set(s.books ?? [])],
+    tasks: [...new Set(s.tasks ?? [])],
+    laws: [...new Set(s.laws ?? [])],
+    handovers: [...new Set(s.handovers ?? [])]
+  }
+}
+
+function shareSize(s: NodeShare): number {
+  return s.books.length + s.tasks.length + s.laws.length + s.handovers.length
+}
 
 function loadConfig(): NodeConfig {
   const empty: NodeConfig = {
@@ -65,7 +87,7 @@ function loadConfig(): NodeConfig {
   const raw = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as Partial<NodeConfig>
   return {
     projects: raw.projects ?? [],
-    grants: raw.grants ?? [],
+    grants: (raw.grants ?? []).map((g) => ({ ...g, shares: (g.shares ?? []).map(normalShare) })),
     tunnel: { ...empty.tunnel, ...raw.tunnel }
   }
 }
@@ -137,6 +159,30 @@ function realDirs(dir: string): string[] {
   }
 }
 
+// Regular .md files only, named without .md, the way the daemon matches them.
+function markdownNames(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.md'))
+      .map((e) => e.name.slice(0, -3))
+      .sort()
+  } catch {
+    return []
+  }
+}
+
+// Mirrors node.docFile: the folder first, then its archive.
+function docs(dir: string, index: string): NodeDoc[] {
+  const active = markdownNames(dir).filter((n) => n !== index)
+  const archived = markdownNames(join(dir, 'archive')).filter(
+    (n) => n !== index && !active.includes(n)
+  )
+  return [
+    ...active.map((name) => ({ name, archived: false })),
+    ...archived.map((name) => ({ name, archived: true }))
+  ]
+}
+
 // Mirrors node.BookIdentity: the title and creation date, unchanged by a tag edit.
 function bookIdentity(name: string): string | null {
   const m = /^([^[]+\[[^\]]*\])/.exec(name)
@@ -164,7 +210,15 @@ function projectContent(cfg: NodeConfig): NodeProjectContent[] {
         .map((slug) => ({ slug, archived: false })),
       ...realDirs(join(biblio, 'scratchpad', 'archive')).map((slug) => ({ slug, archived: true }))
     ]
-    return { projectId: p.id, name: p.name, alias: aliasFor(cfg, p), books, tasks }
+    return {
+      projectId: p.id,
+      name: p.name,
+      alias: aliasFor(cfg, p),
+      books,
+      tasks,
+      laws: docs(join(biblio, 'laws'), LAWS_INDEX),
+      handovers: docs(join(biblio, 'handover'), HANDOVER_INDEX)
+    }
   })
 }
 
@@ -198,34 +252,46 @@ async function state(op: 'reload' | 'status' = 'status'): Promise<NodeState> {
   }
 }
 
+// A new token reads nothing until resources are added to it, which never changes the token.
 function issue(req: NodeIssueRequest): NodeIssued {
   const cfg = loadConfig()
-  const registry = loadRegistry()
-  const shares: NodeShare[] = []
-  for (const s of req.shares) {
-    const project = registry.find((p) => p.id === s.projectId)
-    if (!project || (s.books.length === 0 && s.tasks.length === 0)) continue
-    const alias = aliasFor(cfg, project)
-    if (!cfg.projects.some((p) => p.projectId === project.id)) {
-      cfg.projects.push({ alias, projectId: project.id })
-    }
-    shares.push({ alias, books: s.books, tasks: s.tasks })
-  }
-  if (shares.length === 0) throw new Error('node: pick at least one book or task')
   const token = 'lgn_' + randomBytes(32).toString('base64url')
   const now = new Date()
   const id = randomUUID()
   cfg.grants.push({
     id,
     label: req.label.trim() || 'Unnamed',
-    shares,
-    expiresAt: new Date(now.getTime() + Math.max(1, req.days) * 86_400_000).toISOString(),
+    shares: [],
+    expiresAt: new Date(now.getTime() + DEFAULT_DAYS * 86_400_000).toISOString(),
     revoked: false,
     createdAt: now.toISOString(),
     tokenHash: createHash('sha256').update(token).digest('hex')
   })
   saveConfig(cfg)
   return { id, token }
+}
+
+// Edits one live grant in place, so its token and MCP setup stay the same.
+function updateGrant(req: NodeUpdateRequest): void {
+  const cfg = loadConfig()
+  const grant = cfg.grants.find((g) => g.id === req.id)
+  if (!grant) throw new Error('node: no such grant')
+  if (grant.revoked) throw new Error('node: a revoked grant cannot change')
+  const expiresAt = new Date(req.expiresAt)
+  if (Number.isNaN(expiresAt.getTime())) throw new Error('node: the expiry is not a date')
+  // An empty list is valid: the person stays connected and reads nothing.
+  const shares = req.shares.map(normalShare).filter((s) => shareSize(s) > 0)
+  const registry = loadRegistry()
+  for (const s of shares) {
+    if (cfg.projects.some((p) => p.alias === s.alias)) continue
+    const project = registry.find((p) => aliasFor(cfg, p) === s.alias)
+    if (!project) throw new Error(`node: no project is named ${s.alias}`)
+    cfg.projects.push({ alias: s.alias, projectId: project.id })
+  }
+  grant.label = req.label.trim() || 'Unnamed'
+  grant.expiresAt = expiresAt.toISOString()
+  grant.shares = shares
+  saveConfig(cfg)
 }
 
 export function registerNodeHandlers(): void {
@@ -268,6 +334,11 @@ export function registerNodeHandlers(): void {
     const issued = issue(req)
     await daemonStatus('reload')
     return issued
+  })
+
+  ipcMain.handle('node:update', async (_e, req: NodeUpdateRequest) => {
+    updateGrant(req)
+    return state('reload')
   })
 
   ipcMain.handle('node:revoke', (_e, id: string) => {

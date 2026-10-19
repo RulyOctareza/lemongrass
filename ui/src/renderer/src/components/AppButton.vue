@@ -55,6 +55,13 @@ defineExpose({ focus: () => el.value?.focus() })
   background: var(--color-amber-dim);
 }
 
+/* A faded amber reads as olive next to live amber, so a disabled primary is neutral instead. */
+.primary:disabled {
+  opacity: 1;
+  background: var(--color-surface-3);
+  color: var(--color-fg-muted);
+}
+
 .ghost {
   background: transparent;
   border: 1px solid var(--color-border-default);

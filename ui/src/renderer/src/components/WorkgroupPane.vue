@@ -225,7 +225,7 @@ onBeforeUnmount(() => clearInterval(timer))
 
       <div class="thread">
         <h3 class="thread-title">Thread</h3>
-        <div ref="scroller" class="thread-scroll lg-scroll">
+        <div ref="scroller" class="thread-scroll">
           <button v-if="more" class="older-button" :disabled="loadingOlder" @click="loadOlder">
             {{ loadingOlder ? 'Loading...' : 'Load earlier messages' }}
           </button>
