@@ -23,7 +23,16 @@ test('an unknown mention stays as written', () => {
   assert.deepEqual(parts[0], { text: '!>>deadbeef<<!', mention: false })
 })
 
-test('a mention missing its closing bang stays as written', () => {
-  const parts = bodyParts('!>>35546ed4<< checker here', members)
-  assert.deepEqual(parts[0], { text: '!>>35546ed4<< checker here', mention: false })
+test('a mention with a loose or missing closing shows the member label', () => {
+  for (const body of ['!>>35546ed4<< checker here', '!>>35546ed4<! checker here', '!>>35546ed4< checker here', '!>>35546ed4 checker here']) {
+    const parts = bodyParts(body, members)
+    assert.deepEqual(parts[0], { text: '@lead', mention: true }, body)
+    assert.equal(parts[1].text, ' checker here', body)
+  }
+})
+
+test('a mention followed by punctuation keeps the punctuation', () => {
+  const parts = bodyParts('thanks !>>35546ed4, done', members)
+  assert.deepEqual(parts[1], { text: '@lead', mention: true })
+  assert.equal(parts[2].text, ', done')
 })

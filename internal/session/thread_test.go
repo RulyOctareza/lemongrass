@@ -114,7 +114,7 @@ func TestListThreadsMostRecentlyActiveFirst(t *testing.T) {
 
 func TestParseMentions(t *testing.T) {
 	got := ParseMentions("ping !>>aaaaaaaa<<! and !>> bbbbbbbb <<! and again !>>aaaaaaaa<<! ok !>><<!")
-	want := []string{"aaaaaaaa", "bbbbbbbb", ""}
+	want := []string{"aaaaaaaa", ""}
 	if len(got) != len(want) {
 		t.Fatalf("ParseMentions = %q, want %q", got, want)
 	}
@@ -125,6 +125,32 @@ func TestParseMentions(t *testing.T) {
 	}
 	if got := ParseMentions("no markers here !> nope <!"); len(got) != 0 {
 		t.Errorf("ParseMentions on plain text = %q, want none", got)
+	}
+}
+
+func TestParseMentionsToleratesALooseClosing(t *testing.T) {
+	cases := map[string][]string{
+		"full":         {"!>>aaaaaaaa<<! hi", "aaaaaaaa"},
+		"no bang":      {"!>>aaaaaaaa<< hi", "aaaaaaaa"},
+		"single bang":  {"!>>aaaaaaaa<! hi", "aaaaaaaa"},
+		"single angle": {"!>>aaaaaaaa< hi", "aaaaaaaa"},
+		"no closing":   {"!>>aaaaaaaa hi", "aaaaaaaa"},
+		"at the end":   {"hi !>>aaaaaaaa", "aaaaaaaa"},
+		"punctuation":  {"thanks !>>aaaaaaaa, done", "aaaaaaaa"},
+		"full id":      {"!>>" + tabA + "<<", tabA},
+		"a name":       {"!>>core<<! hi", "core"},
+		"a bare name":  {"!>>core hi", "core"},
+		"bare marker":  {"!>> hi", ""},
+	}
+	for name, c := range cases {
+		got := ParseMentions(c[0])
+		if len(got) != 1 || got[0] != c[1] {
+			t.Errorf("%s: ParseMentions(%q) = %q, want [%q]", name, c[0], got, c[1])
+		}
+	}
+	got := ParseMentions("!>>aaaaaaaa<< then !>>bbbbbbbb<<! then !>>aaaaaaaa")
+	if len(got) != 2 || got[0] != "aaaaaaaa" || got[1] != "bbbbbbbb" {
+		t.Errorf("mixed forms = %q, want [aaaaaaaa bbbbbbbb]", got)
 	}
 }
 
@@ -147,6 +173,21 @@ func TestMentionsResolveByUniquePrefix(t *testing.T) {
 	}
 }
 
+func TestMentionWithALooseClosingResolves(t *testing.T) {
+	store := openTestStore(t)
+	store.RegisterTab(tabA, "claude")
+	store.RegisterTab(tabB, "codex")
+
+	id, err := store.CreateThread(tabA, "title", "hey !>>bbbbbbbb-2<< can you look")
+	if err != nil {
+		t.Fatalf("CreateThread: %v", err)
+	}
+	msgs, _, _ := store.ReadThread(id, 0, 10)
+	if len(msgs[0].Mentions) != 1 || msgs[0].Mentions[0] != tabB {
+		t.Errorf("mentions = %q, want [%s]", msgs[0].Mentions, tabB)
+	}
+}
+
 func TestMentionRejectsShortUnknownAmbiguousAndMalformed(t *testing.T) {
 	store := openTestStore(t)
 	store.RegisterTab(tabB, "codex")
@@ -159,6 +200,8 @@ func TestMentionRejectsShortUnknownAmbiguousAndMalformed(t *testing.T) {
 		"ambiguous": "!>>bbbbbbbb<<!",
 		"malformed": "!>>not-a-hex-id<<!",
 		"empty":     "!>><<!",
+		"a name":    "!>>core hi",
+		"spaced":    "!>> bbbbbbbb-2 <<!",
 	}
 	for name, body := range cases {
 		if _, err := store.PostMessage(tabB, id, body); err == nil {

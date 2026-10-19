@@ -17,17 +17,18 @@ func ShortID(id string) string {
 	return id
 }
 
+// Only the opening !>> marks a mention, because models often drop part of the closing <<!, so the closing may be <<!, <<, <!, < or absent.
 var (
-	mentionMarker = regexp.MustCompile(`!>>([^<]*)<<!`)
+	mentionMarker = regexp.MustCompile(`!>>([\w-]*)(?:<<?!?)?`)
 	tabIDPrefix   = regexp.MustCompile(`^[0-9a-fA-F-]+$`)
 )
 
-// Distinct marker contents in order of first appearance, trimmed.
+// Distinct tokens after each !>> in order of first appearance; a token that is not a tab id is kept so the post is rejected.
 func ParseMentions(body string) []string {
 	var out []string
 	seen := map[string]bool{}
 	for _, m := range mentionMarker.FindAllStringSubmatch(body, -1) {
-		token := strings.TrimSpace(m[1])
+		token := m[1]
 		if seen[token] {
 			continue
 		}

@@ -3,7 +3,8 @@ export interface BodyPart {
   mention: boolean
 }
 
-const MENTION = /!>>([0-9a-f-]{8,36})<<!/gi
+// The closing may be <<!, <<, <!, < or absent, matching what lgrass accepts as a mention.
+const MENTION = /!>>([0-9a-f-]{8,36})(?:<<?!?)?/gi
 
 // Mentions in a message body are tab ids or their first 8 characters, shown as the member's label.
 export function bodyParts(body: string, members: { tabId: string; label: string }[]): BodyPart[] {
