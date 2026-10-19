@@ -98,6 +98,10 @@ Some tools are deferred on purpose: their full definitions load through ToolSear
 
 Some gates ask you to sign a word before you continue, for example the memory gate before writing to Claude Code's memory. `lgrass sign <word>` prints the rule the word stands for and lifts that denial for a while. Read what it prints and follow it.
 
+## Gather context before you answer
+
+When the human brings an idea, starts a discussion, or asks about this project's code, design, or behavior, gather your context first: read the books that relate to it, starting from `biblio/books/toc.md`, then read the code that no book covers. Do this before you give an opinion, a proposal, or a recommendation. A plain question that needs no judgment can skip this.
+
 ## Procedures: skills and lgrass how
 
 Procedures live in skills and in `lgrass how`, not in this text.
