@@ -5,6 +5,7 @@ import ProjectSwitcher from './components/ProjectSwitcher.vue'
 import HeaderBar from './components/HeaderBar.vue'
 import WorkspaceView from './components/WorkspaceView.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import GuideModal from './components/GuideModal.vue'
 import WorkgroupApprovalModal from './components/WorkgroupApprovalModal.vue'
 import WorkgroupJoinModal from './components/WorkgroupJoinModal.vue'
 import ProjectTrustModal from './components/ProjectTrustModal.vue'
@@ -28,6 +29,7 @@ const loadedProjects = reactive<Record<string, boolean>>({})
 const sidebarCollapsed = ref(false)
 const closing = ref(false)
 const settingsOpen = ref(false)
+const guideOpen = ref(false)
 const trustPrompt = ref<Project | null>(null)
 const trustBusy = ref(false)
 
@@ -151,6 +153,7 @@ onBeforeUnmount(() => {
       :sidebar-collapsed="sidebarCollapsed"
       @toggle-sidebar="sidebarCollapsed = !sidebarCollapsed"
       @open-settings="settingsOpen = true"
+      @open-guide="guideOpen = true"
     >
       <template #title>
         <span class="brand-mark">
@@ -204,6 +207,7 @@ onBeforeUnmount(() => {
       :active-project-id="activeProjectId"
       @close="settingsOpen = false"
     />
+    <GuideModal v-if="guideOpen" @close="guideOpen = false" />
     <WorkgroupApprovalModal />
     <WorkgroupJoinModal />
     <ProjectTrustModal
