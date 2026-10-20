@@ -13,6 +13,16 @@ import type {
   GitStatus,
   GitDiff,
   GitActionResult,
+  GitBlame,
+  GitBranches,
+  GitCommitInfo,
+  GitLogResult,
+  GitLogSearchMode,
+  GitResetPreview,
+  GitIncomingCommit,
+  GitRevFiles,
+  GitRevision,
+  GitStash,
   NodeIssued,
   NodeIssueRequest,
   NodeState,
@@ -126,6 +136,48 @@ interface Api {
     diff: (projectPath: string, path: string, origPath?: string) => Promise<GitDiff>
     commit: (projectPath: string, message: string, paths?: string[]) => Promise<GitActionResult>
     push: (projectPath: string) => Promise<GitActionResult>
+    lastMessage: (projectPath: string) => Promise<string>
+    branches: (projectPath: string) => Promise<GitBranches>
+    switchBranch: (projectPath: string, name: string, remote: boolean) => Promise<GitActionResult>
+    revFiles: (projectPath: string, rev: GitRevision) => Promise<GitRevFiles>
+    revDiff: (
+      projectPath: string,
+      rev: GitRevision,
+      path: string,
+      origPath?: string
+    ) => Promise<GitDiff>
+    stashList: (projectPath: string) => Promise<GitStash[]>
+    stashPush: (
+      projectPath: string,
+      message: string,
+      includeUntracked: boolean
+    ) => Promise<GitActionResult>
+    stashAction: (
+      projectPath: string,
+      ref: string,
+      action: 'apply' | 'pop' | 'drop'
+    ) => Promise<GitActionResult>
+    fetch: (projectPath: string) => Promise<GitActionResult>
+    incoming: (projectPath: string, target: string) => Promise<GitIncomingCommit[]>
+    integrate: (
+      projectPath: string,
+      target: string,
+      mode: 'merge' | 'rebase'
+    ) => Promise<GitActionResult>
+    finish: (projectPath: string, action: 'continue' | 'abort') => Promise<GitActionResult>
+    log: (
+      projectPath: string,
+      mode: GitLogSearchMode,
+      text: string,
+      skip: number,
+      limit: number
+    ) => Promise<GitLogResult>
+    logToken: (projectPath: string) => Promise<string>
+    commitInfo: (projectPath: string, hash: string) => Promise<GitCommitInfo | null>
+    blame: (projectPath: string, hash: string, path: string) => Promise<GitBlame>
+    resetPreview: (projectPath: string, hash: string) => Promise<GitResetPreview>
+    resetSoft: (projectPath: string, hash: string) => Promise<GitActionResult>
+    amendMessage: (projectPath: string, message: string) => Promise<GitActionResult>
   }
   node: {
     state: () => Promise<NodeState>

@@ -207,10 +207,18 @@ export type GitFileKind =
   | 'untracked'
   | 'conflicted'
 
+// Where a file sits in the change list, which also decides its color. Staged new is an added file
+// in the index; unstaged new is an untracked one.
+export type GitFileGroup =
+  'conflicted' | 'changed' | 'renamed' | 'stagedNew' | 'unstagedNew' | 'deleted'
+
 export interface GitFile {
   path: string
   origPath?: string
   kind: GitFileKind
+  group: GitFileGroup
+  // The index differs from HEAD for this file, or it is in conflict.
+  staged: boolean
 }
 
 export interface GitStatus {
@@ -222,6 +230,8 @@ export interface GitStatus {
   behind: number
   hasCommits: boolean
   pushTarget: string | null
+  // A merge or rebase that stopped and waits to be continued or aborted.
+  operation: 'merge' | 'rebase' | null
   files: GitFile[]
 }
 
@@ -248,11 +258,92 @@ export type GitDiff =
   | { status: 'too-large' }
   | { status: 'error'; message: string }
 
+export interface GitBranches {
+  current: string | null
+  local: string[]
+  remote: string[]
+}
+
+export interface GitStash {
+  ref: string
+  message: string
+  time: number
+}
+
+// A commit or a stash, named so the main process can resolve the revision range itself.
+export type GitRevision = { kind: 'commit'; hash: string } | { kind: 'stash'; ref: string }
+
+export interface GitRevFile {
+  path: string
+  origPath?: string
+  kind: GitFileKind
+}
+
+export type GitRevFiles =
+  { status: 'ok'; files: GitRevFile[] } | { status: 'error'; message: string }
+
+export interface GitIncomingCommit {
+  hash: string
+  author: string
+  time: number
+  subject: string
+}
+
+export interface GitRef {
+  name: string
+  kind: 'head' | 'branch' | 'remote' | 'tag'
+}
+
+export interface GitCommit {
+  hash: string
+  parents: string[]
+  author: string
+  time: number
+  subject: string
+  refs: GitRef[]
+  // True when no remote branch contains the commit.
+  unpushed: boolean
+}
+
+export type GitLogSearchMode = 'message' | 'author' | 'hash' | 'file'
+
+export type GitLogResult =
+  | { status: 'ok'; commits: GitCommit[]; hasMore: boolean; head: string | null }
+  | { status: 'error'; message: string }
+
+export interface GitCommitInfo {
+  hash: string
+  parents: string[]
+  author: string
+  email: string
+  time: number
+  message: string
+}
+
+export interface GitBlameLine {
+  number: number
+  hash: string
+  author: string
+  time: number
+  text: string
+}
+
+export type GitBlame =
+  | { status: 'ok'; lines: GitBlameLine[] }
+  | { status: 'binary' }
+  | { status: 'too-large' }
+  | { status: 'error'; message: string }
+
+// What a soft reset would take off the branch: the commits, and how many of them a remote has.
+export type GitResetPreview =
+  { ok: true; count: number; pushed: number } | { ok: false; error: string }
+
 export type GitActionResult = { ok: true } | { ok: false; error: string }
 
 export type WorkspaceTab =
   | { id: string; kind: 'doc'; path: string }
   | { id: string; kind: 'diff'; path: string }
+  | { id: string; kind: 'history' }
   | { id: string; kind: 'connector' }
   | { id: string; kind: 'web'; shellTabId: string }
   | { id: string; kind: 'workgroup'; groupId: number }

@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
-import { commitChanges, gitStateOf, isChecked, refreshGit, setAllChecked, toggleFile } from '../git'
-import { activeDiffPath, openDiff, type ProjectRef } from '../workspace'
-import type { GitFile, GitFileKind } from '../../../preload/types'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  commitChanges,
+  gitStateOf,
+  isChecked,
+  refreshGit,
+  setAllChecked,
+  toggleFile,
+  toggleGroupFold
+} from '../git'
+import { activeDiffPath, openDiff, openHistory, type ProjectRef } from '../workspace'
+import type { GitFile, GitFileGroup, GitFileKind } from '../../../preload/types'
 import AppButton from './AppButton.vue'
+import GitBranchModal from './GitBranchModal.vue'
+import GitStashSection from './GitStashSection.vue'
+import GitSyncSection from './GitSyncSection.vue'
 
 const POLL_MS = 5000
 
@@ -15,6 +26,13 @@ const state = computed(() => gitStateOf(props.project.id))
 const status = computed(() => state.value.status)
 const files = computed(() => status.value?.files ?? [])
 const selectedPath = computed(() => activeDiffPath(props.project.id))
+const stagedCount = computed(() => files.value.filter((file) => file.staged).length)
+const switching = ref(false)
+const switchBlockedReason = computed((): string | null => {
+  if (state.value.busy) return 'An operation is running'
+  if (stagedCount.value > 0) return 'Commit or unstage the staged changes before switching branches'
+  return null
+})
 const hasConflicts = computed(() => files.value.some((file) => file.kind === 'conflicted'))
 const checkedCount = computed(
   () => files.value.filter((file) => isChecked(props.project.id, file.path)).length
@@ -24,16 +42,21 @@ const allChecked = computed(
 )
 const someChecked = computed(() => checkedCount.value > 0 && !allChecked.value)
 
-const KIND_LETTERS: Record<GitFileKind, string> = {
-  modified: 'M',
-  added: 'A',
-  deleted: 'D',
-  renamed: 'R',
-  copied: 'C',
-  typechange: 'T',
-  untracked: 'U',
-  conflicted: '!'
-}
+const GROUPS: { id: GitFileGroup; label: string }[] = [
+  { id: 'conflicted', label: 'Conflicts' },
+  { id: 'changed', label: 'Changed' },
+  { id: 'renamed', label: 'Renamed' },
+  { id: 'stagedNew', label: 'Staged new' },
+  { id: 'unstagedNew', label: 'Unstaged new' },
+  { id: 'deleted', label: 'Deleted' }
+]
+
+const groups = computed(() =>
+  GROUPS.map((group) => ({
+    ...group,
+    files: files.value.filter((file) => file.group === group.id)
+  })).filter((group) => group.files.length > 0)
+)
 
 const KIND_LABELS: Record<GitFileKind, string> = {
   modified: 'Modified',
@@ -64,6 +87,7 @@ const canCommit = computed(
   () =>
     !state.value.busy &&
     !hasConflicts.value &&
+    !status.value?.operation &&
     checkedCount.value > 0 &&
     state.value.message.trim().length > 0
 )
@@ -77,6 +101,7 @@ const pushBlockedReason = computed((): string | null => {
 const canPush = computed(() => canCommit.value && pushBlockedReason.value === null)
 
 const hint = computed((): string | null => {
+  if (status.value?.operation) return 'Continue or abort the merge or rebase in Sync first.'
   if (hasConflicts.value) return 'Resolve conflicts before committing.'
   if (state.value.busy === 'commit') return 'Committing...'
   if (state.value.busy === 'push') return 'Pushing...'
@@ -158,6 +183,23 @@ watch(() => props.project.id, refresh)
     </button>
 
     <div v-if="!state.folded" class="git-body">
+      <button
+        v-if="status?.isRepo"
+        class="branch-switch"
+        :disabled="switchBlockedReason !== null"
+        :title="switchBlockedReason ?? 'Switch branch'"
+        @click="switching = true"
+      >
+        <span class="branch-switch-label">Branch</span>
+        <span class="branch-switch-name">{{ status.branch ?? 'detached HEAD' }}</span>
+        <span class="branch-switch-action">Switch</span>
+      </button>
+      <button v-if="status?.isRepo" class="history-open" @click="openHistory(project)">
+        <span class="branch-switch-label">History</span>
+        <span class="branch-switch-action">Open</span>
+      </button>
+      <GitSyncSection v-if="status?.isRepo" :project="project" />
+
       <div class="changes-head">
         <input
           v-if="files.length > 0"
@@ -178,27 +220,54 @@ watch(() => props.project.id, refresh)
       <p v-else-if="!status.isRepo" class="git-empty">Not a git repository.</p>
       <template v-else>
         <p v-if="files.length === 0" class="git-empty">No changes</p>
-        <ul v-else class="file-list">
-          <li v-for="file in files" :key="file.path" class="file-item">
-            <input
-              type="checkbox"
-              class="file-check"
-              :aria-label="`Include ${file.path} in the commit`"
-              :checked="isChecked(project.id, file.path)"
-              @change="toggleFile(project.id, file.path)"
-            />
+        <div v-else class="file-list">
+          <section v-for="group in groups" :key="group.id" class="file-group">
             <button
-              class="file-row"
-              :class="{ active: file.path === selectedPath }"
-              :title="fileTitle(file)"
-              @click="openDiff(project, file.path)"
+              class="group-head"
+              :aria-expanded="!state.foldedGroups.includes(group.id)"
+              @click="toggleGroupFold(project.id, group.id)"
             >
-              <span class="file-kind" :class="file.kind">{{ KIND_LETTERS[file.kind] }}</span>
-              <span class="file-name">{{ fileName(file) }}</span>
-              <span class="file-dir">{{ fileDir(file) }}</span>
+              <svg
+                class="group-chevron"
+                :class="{ open: !state.foldedGroups.includes(group.id) }"
+                width="9"
+                height="9"
+                viewBox="0 0 10 10"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 2l3 3-3 3" />
+              </svg>
+              <span>{{ group.label }}</span>
+              <span class="group-count">{{ group.files.length }}</span>
             </button>
-          </li>
-        </ul>
+            <ul v-if="!state.foldedGroups.includes(group.id)" class="group-files">
+              <li v-for="file in group.files" :key="file.path" class="file-item">
+                <input
+                  type="checkbox"
+                  class="file-check"
+                  :aria-label="`Include ${file.path} in the commit`"
+                  :checked="isChecked(project.id, file.path)"
+                  @change="toggleFile(project.id, file.path)"
+                />
+                <button
+                  class="file-row"
+                  :class="[file.group, { active: file.path === selectedPath }]"
+                  :title="fileTitle(file)"
+                  @click="openDiff(project, file.path)"
+                >
+                  <span class="file-name">{{ fileName(file) }}</span>
+                  <span class="file-dir">{{ fileDir(file) }}</span>
+                </button>
+              </li>
+            </ul>
+          </section>
+        </div>
+
+        <GitStashSection :project="project" :has-changes="files.length > 0" />
 
         <textarea
           v-model="state.message"
@@ -229,6 +298,7 @@ watch(() => props.project.id, refresh)
         </div>
       </template>
     </div>
+    <GitBranchModal v-if="switching" :project="project" @close="switching = false" />
   </div>
 </template>
 
@@ -313,6 +383,74 @@ watch(() => props.project.id, refresh)
   padding: var(--space-2) var(--space-1) 0;
 }
 
+.branch-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-open {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.history-open .branch-switch-action {
+  margin-left: auto;
+}
+
+.history-open:hover {
+  background: var(--color-surface-2);
+}
+
+.branch-switch:hover:not(:disabled) {
+  background: var(--color-surface-2);
+}
+
+.branch-switch:disabled {
+  cursor: default;
+}
+
+.branch-switch-label {
+  flex-shrink: 0;
+  font-weight: var(--weight-semibold);
+}
+
+.branch-switch-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-fg-primary);
+}
+
+.branch-switch-action {
+  flex-shrink: 0;
+  color: var(--color-fg-accent);
+}
+
+.branch-switch:disabled .branch-switch-action {
+  color: var(--color-fg-muted);
+}
+
 .changes-head {
   display: flex;
   align-items: center;
@@ -358,6 +496,42 @@ watch(() => props.project.id, refresh)
   flex-shrink: 0;
   max-height: 180px;
   overflow-y: auto;
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px var(--space-2);
+  background: transparent;
+  border: none;
+  color: var(--color-fg-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.group-head:hover {
+  color: var(--color-fg-primary);
+}
+
+.group-chevron {
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.group-chevron.open {
+  transform: rotate(90deg);
+}
+
+.group-count {
+  color: var(--color-fg-muted);
+  font-weight: var(--weight-regular);
+}
+
+.group-files {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -390,32 +564,36 @@ watch(() => props.project.id, refresh)
   color: var(--color-fg-accent);
 }
 
-.file-kind {
-  flex-shrink: 0;
-  width: 12px;
-  font-family: var(--font-mono);
-  font-weight: var(--weight-bold);
-  text-align: center;
+/* Name and directory take the group color, so the group is readable without a letter. */
+.file-row.changed,
+.file-row.renamed {
+  color: var(--color-info);
 }
 
-.file-kind.modified,
-.file-kind.typechange {
-  color: var(--color-warning);
-}
-
-.file-kind.added,
-.file-kind.untracked {
+.file-row.stagedNew {
   color: var(--color-success);
 }
 
-.file-kind.deleted,
-.file-kind.conflicted {
+.file-row.unstagedNew {
   color: var(--color-error);
 }
 
-.file-kind.renamed,
-.file-kind.copied {
-  color: var(--color-info);
+.file-row.deleted {
+  color: var(--color-deleted);
+}
+
+.file-row.conflicted {
+  color: var(--color-warning);
+}
+
+.file-row.changed .file-dir,
+.file-row.renamed .file-dir,
+.file-row.stagedNew .file-dir,
+.file-row.unstagedNew .file-dir,
+.file-row.deleted .file-dir,
+.file-row.conflicted .file-dir {
+  color: inherit;
+  opacity: 0.6;
 }
 
 .file-name {

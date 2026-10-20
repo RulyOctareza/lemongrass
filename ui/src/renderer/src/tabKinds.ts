@@ -1,6 +1,7 @@
 import type { Component } from 'vue'
 import DiffViewer from './components/DiffViewer.vue'
 import DocView from './components/DocView.vue'
+import HistoryView from './components/HistoryView.vue'
 import ShellView from './components/ShellView.vue'
 import VaultPanel from './components/VaultPanel.vue'
 import WebPane from './components/WebPane.vue'
@@ -82,6 +83,17 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     body: DiffViewer,
     keepAlive: false,
     bodyProps: (tab, ctx) => ({ project: ctx.project, path: tab.path })
+  },
+  history: {
+    icon: [
+      { tag: 'circle', attrs: { cx: 7, cy: 7, r: 5.2 } },
+      { tag: 'path', attrs: { d: 'M7 4v3.2l2.2 1.3' } }
+    ],
+    label: () => ({ text: 'History' }),
+    title: () => 'Git history',
+    body: HistoryView,
+    keepAlive: true,
+    bodyProps: (_tab, ctx) => ({ project: ctx.project })
   },
   // The persisted kind stays 'connector' so saved layouts keep loading.
   connector: {

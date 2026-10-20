@@ -51,6 +51,7 @@ interface Workspace {
 
 type DocTab = Extract<WorkspaceTab, { kind: 'doc' }>
 type DiffTab = Extract<WorkspaceTab, { kind: 'diff' }>
+type HistoryTab = Extract<WorkspaceTab, { kind: 'history' }>
 type VaultTab = Extract<WorkspaceTab, { kind: 'connector' }>
 type ShellTab = Extract<WorkspaceTab, { kind: 'shell' }>
 type WorkgroupTab = Extract<WorkspaceTab, { kind: 'workgroup' }>
@@ -100,6 +101,10 @@ function newDocTab(path: string): DocTab {
 
 function newDiffTab(path: string): DiffTab {
   return { id: crypto.randomUUID(), kind: 'diff', path }
+}
+
+function newHistoryTab(): HistoryTab {
+  return { id: crypto.randomUUID(), kind: 'history' }
 }
 
 // The persisted tab kind stays 'connector' so saved layouts keep loading.
@@ -472,6 +477,26 @@ export function openDiff(project: ProjectRef, path: string): void {
   }
   const focused = leaves.find((leaf) => leaf.id === layout.focusedPaneId) ?? leaves[0]
   commit(project, tree.addTab(root, focused.id, newDiffTab(path)), focused.id)
+}
+
+// One history tab per project: opening it again focuses the existing tab wherever it lives.
+export function openHistory(project: ProjectRef): void {
+  const layout = workspaces[project.id].layout
+  const root = layout.root
+  if (!root) {
+    const leaf = tree.createLeaf<WorkspaceTab>([newHistoryTab()])
+    commit(project, leaf, leaf.id)
+    return
+  }
+  const leaves = tree.allLeaves(root)
+  for (const leaf of leaves) {
+    const existing = leaf.tabs.find((tab) => tab.kind === 'history')
+    if (!existing) continue
+    commit(project, tree.setActiveTab(root, leaf.id, existing.id), leaf.id)
+    return
+  }
+  const focused = leaves.find((leaf) => leaf.id === layout.focusedPaneId) ?? leaves[0]
+  commit(project, tree.addTab(root, focused.id, newHistoryTab()), focused.id)
 }
 
 // One vault tab per project: opening it again focuses the existing tab wherever it lives.

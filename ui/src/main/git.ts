@@ -1,88 +1,27 @@
 import { ipcMain } from 'electron'
-import { execFile, type ExecFileException } from 'child_process'
-import { resolve, sep } from 'path'
+import { registerGitBranchHandlers } from './gitBranch'
+import { registerGitHistoryHandlers } from './gitHistory'
+import { registerGitRevisionHandlers } from './gitRevision'
+import { registerGitSyncHandlers } from './gitSync'
+import { registerGitStashHandlers } from './gitStash'
 import { parseDiff, parseStatus } from './gitParse'
+import {
+  WRITE_TIMEOUT_MS,
+  errorText,
+  isInside,
+  pushEnv,
+  readEnv,
+  repoRoot,
+  run,
+  stoppedOperation,
+  topLevelCache,
+  type RunResult
+} from './gitRun'
 import type { GitActionResult, GitDiff, GitStatus } from '../preload/types'
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
-const READ_TIMEOUT_MS = 15_000
-const WRITE_TIMEOUT_MS = 120_000
 const PUSH_TIMEOUT_MS = 60_000
 const MAX_DIFF_BYTES = 4 * 1024 * 1024
-const MAX_OUTPUT_BYTES = 16 * 1024 * 1024
-
-interface RunResult {
-  code: number | null
-  stdout: string
-  stderr: string
-  overflow: boolean
-}
-
-interface RunOptions {
-  input?: string
-  timeout?: number
-  maxBuffer?: number
-  env?: Record<string, string>
-}
-
-function run(cwd: string, args: string[], options: RunOptions = {}): Promise<RunResult> {
-  return new Promise((resolvePromise) => {
-    const child = execFile(
-      'git',
-      args,
-      {
-        cwd,
-        encoding: 'utf8',
-        timeout: options.timeout ?? READ_TIMEOUT_MS,
-        maxBuffer: options.maxBuffer ?? MAX_OUTPUT_BYTES,
-        env: { ...process.env, ...options.env }
-      },
-      (failure: ExecFileException | null, stdout, stderr) => {
-        if (!failure) return resolvePromise({ code: 0, stdout, stderr, overflow: false })
-        if (failure.code === 'ENOENT') {
-          return resolvePromise({
-            code: null,
-            stdout: '',
-            stderr: 'git was not found on this machine.',
-            overflow: false
-          })
-        }
-        resolvePromise({
-          code: typeof failure.code === 'number' ? failure.code : null,
-          stdout,
-          stderr: stderr || failure.message,
-          overflow: failure.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
-        })
-      }
-    )
-    if (options.input !== undefined) child.stdin?.end(options.input)
-  })
-}
-
-const readEnv = { GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C', GIT_LITERAL_PATHSPECS: '1' }
-const pushEnv = { GIT_TERMINAL_PROMPT: '0' }
-
-const topLevels = new Map<string, string>()
-
-async function repoRoot(projectPath: string): Promise<string | null> {
-  const cached = topLevels.get(projectPath)
-  if (cached) return cached
-  const result = await run(projectPath, ['rev-parse', '--show-toplevel'], { env: readEnv })
-  const root = result.code === 0 ? result.stdout.trim() : ''
-  if (!root) return null
-  topLevels.set(projectPath, root)
-  return root
-}
-
-function isInside(root: string, relativePath: string): boolean {
-  if (!relativePath || relativePath.includes('\0')) return false
-  const target = resolve(root, relativePath)
-  return target.startsWith(root + sep)
-}
-
-function errorText(result: RunResult): string {
-  return result.stderr.trim() || result.stdout.trim() || 'git failed without a message.'
-}
 
 const notARepo: GitStatus = {
   isRepo: false,
@@ -93,6 +32,7 @@ const notARepo: GitStatus = {
   behind: 0,
   hasCommits: false,
   pushTarget: null,
+  operation: null,
   files: []
 }
 
@@ -112,7 +52,7 @@ async function status(projectPath: string): Promise<GitStatus> {
     { env: readEnv }
   )
   if (result.code !== 0) {
-    topLevels.delete(projectPath)
+    topLevelCache.delete(projectPath)
     return notARepo
   }
   const parsed = parseStatus(result.stdout)
@@ -121,7 +61,7 @@ async function status(projectPath: string): Promise<GitStatus> {
     const remote = await pushRemote(root)
     pushTarget = remote ? `${remote}/${parsed.branch}` : null
   }
-  return { isRepo: true, ...parsed, pushTarget }
+  return { isRepo: true, ...parsed, pushTarget, operation: await stoppedOperation(root) }
 }
 
 async function isUntracked(root: string, path: string): Promise<boolean> {
@@ -233,7 +173,19 @@ async function push(projectPath: string): Promise<GitActionResult> {
   return { ok: true }
 }
 
+async function lastMessage(projectPath: string): Promise<string> {
+  const root = await repoRoot(projectPath)
+  if (!root) return ''
+  const result = await run(root, ['log', '-1', '--format=%B'], { env: readEnv })
+  return result.code === 0 ? result.stdout.trim() : ''
+}
+
 export function registerGitHandlers(): void {
+  registerGitBranchHandlers()
+  registerGitRevisionHandlers()
+  registerGitStashHandlers()
+  registerGitSyncHandlers()
+  registerGitHistoryHandlers()
   ipcMain.handle('git:status', (_event, projectPath: string) => status(projectPath))
   ipcMain.handle('git:diff', (_event, projectPath: string, path: string, origPath?: string) =>
     diff(projectPath, path, origPath)
@@ -242,4 +194,5 @@ export function registerGitHandlers(): void {
     commit(projectPath, message, paths)
   )
   ipcMain.handle('git:push', (_event, projectPath: string) => push(projectPath))
+  ipcMain.handle('git:lastMessage', (_event, projectPath: string) => lastMessage(projectPath))
 }

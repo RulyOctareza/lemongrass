@@ -4,7 +4,12 @@ import type {
   GitDiffLine,
   GitDiffRow,
   GitFile,
-  GitFileKind
+  GitFileGroup,
+  GitFileKind,
+  GitBlameLine,
+  GitCommit,
+  GitRef,
+  GitRevFile
 } from '../preload/types'
 
 export interface ParsedStatus {
@@ -25,6 +30,19 @@ function kindOf(xy: string): GitFileKind {
   if (index === 'C' || worktree === 'C') return 'copied'
   if (index === 'T' || worktree === 'T') return 'typechange'
   return 'modified'
+}
+
+function isStaged(xy: string): boolean {
+  return xy[0] !== '.' && xy[0] !== '?'
+}
+
+export function groupOf(kind: GitFileKind, xy: string): GitFileGroup {
+  if (kind === 'conflicted') return 'conflicted'
+  if (kind === 'untracked') return 'unstagedNew'
+  if (kind === 'deleted') return 'deleted'
+  if (kind === 'renamed' || kind === 'copied') return 'renamed'
+  if (xy[0] === 'A') return 'stagedNew'
+  return 'changed'
 }
 
 export function parseStatus(raw: string): ParsedStatus {
@@ -60,25 +78,71 @@ export function parseStatus(raw: string): ParsedStatus {
     }
     const type = record[0]
     if (type === '?') {
-      result.files.push({ path: record.slice(2), kind: 'untracked' })
+      result.files.push({
+        path: record.slice(2),
+        kind: 'untracked',
+        group: 'unstagedNew',
+        staged: false
+      })
     } else if (type === '1') {
       const fields = record.split(' ')
-      result.files.push({ path: fields.slice(8).join(' '), kind: kindOf(fields[1]) })
+      const kind = kindOf(fields[1])
+      result.files.push({
+        path: fields.slice(8).join(' '),
+        kind,
+        group: groupOf(kind, fields[1]),
+        staged: isStaged(fields[1])
+      })
     } else if (type === '2') {
       const fields = record.split(' ')
       const origPath = records[++i]
+      const kind = kindOf(fields[1])
       result.files.push({
         path: fields.slice(9).join(' '),
         origPath,
-        kind: kindOf(fields[1])
+        kind,
+        group: groupOf(kind, fields[1]),
+        staged: isStaged(fields[1])
       })
     } else if (type === 'u') {
       const fields = record.split(' ')
-      result.files.push({ path: fields.slice(10).join(' '), kind: 'conflicted' })
+      result.files.push({
+        path: fields.slice(10).join(' '),
+        kind: 'conflicted',
+        group: 'conflicted',
+        staged: true
+      })
     }
   }
   result.files.sort((a, b) => a.path.localeCompare(b.path))
   return result
+}
+
+const NAME_STATUS_KINDS: Record<string, GitFileKind> = {
+  A: 'added',
+  M: 'modified',
+  D: 'deleted',
+  R: 'renamed',
+  C: 'copied',
+  T: 'typechange'
+}
+
+// Parses `git diff --name-status -z`: a status token, then one path, or two for a rename or copy.
+export function parseNameStatus(raw: string): GitRevFile[] {
+  const tokens = raw.split('\0')
+  const files: GitRevFile[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const status = tokens[i]
+    if (!status) continue
+    const kind = NAME_STATUS_KINDS[status[0]] ?? 'modified'
+    if (status[0] === 'R' || status[0] === 'C') {
+      files.push({ path: tokens[i + 2], origPath: tokens[i + 1], kind })
+      i += 2
+    } else {
+      files.push({ path: tokens[++i], kind })
+    }
+  }
+  return files.sort((a, b) => a.path.localeCompare(b.path))
 }
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/
@@ -147,4 +211,69 @@ export function parseDiff(raw: string): GitDiff {
 
   if (hunks.length === 0) return { status: 'empty' }
   return { status: 'ok', hunks, added, removed }
+}
+
+export interface RefNames {
+  local: Set<string>
+  remote: Set<string>
+}
+
+function parseRefs(decorations: string, names: RefNames): GitRef[] {
+  const refs: GitRef[] = []
+  for (const entry of decorations.split(', ').filter(Boolean)) {
+    if (entry.startsWith('tag: ')) refs.push({ name: entry.slice(5), kind: 'tag' })
+    else if (entry.startsWith('HEAD -> ')) {
+      refs.push({ name: 'HEAD', kind: 'head' }, { name: entry.slice(8), kind: 'branch' })
+    } else if (entry === 'HEAD') refs.push({ name: 'HEAD', kind: 'head' })
+    else if (names.local.has(entry)) refs.push({ name: entry, kind: 'branch' })
+    else if (names.remote.has(entry)) refs.push({ name: entry, kind: 'remote' })
+  }
+  return refs
+}
+
+// Parses the log format `%H %P %an %ct %D %s` with unit separators between fields and a record
+// separator after each commit.
+export function parseLog(raw: string, names: RefNames, unpushed: Set<string>): GitCommit[] {
+  const commits: GitCommit[] = []
+  for (const record of raw.split('\x1e')) {
+    const text = record.replace(/^\n/, '')
+    if (!text) continue
+    const [hash, parents, author, time, decorations, subject] = text.split('\x1f')
+    commits.push({
+      hash,
+      parents: parents ? parents.split(' ') : [],
+      author,
+      time: Number(time),
+      subject,
+      refs: parseRefs(decorations, names),
+      unpushed: unpushed.has(hash)
+    })
+  }
+  return commits
+}
+
+const BLAME_HEADER = /^([0-9a-f]{40,64}) \d+ (\d+)/
+
+// Parses `git blame --porcelain`. Details of a commit come only with its first line.
+export function parseBlame(raw: string): GitBlameLine[] {
+  const people = new Map<string, { author: string; time: number }>()
+  const lines: GitBlameLine[] = []
+  let hash = ''
+  let number = 0
+  for (const line of raw.split('\n')) {
+    const header = BLAME_HEADER.exec(line)
+    if (header) {
+      hash = header[1]
+      number = Number(header[2])
+      if (!people.has(hash)) people.set(hash, { author: '', time: 0 })
+    } else if (line.startsWith('author ')) {
+      people.get(hash)!.author = line.slice(7)
+    } else if (line.startsWith('author-time ')) {
+      people.get(hash)!.time = Number(line.slice(12))
+    } else if (line.startsWith('\t')) {
+      const person = people.get(hash)!
+      lines.push({ number, hash, author: person.author, time: person.time, text: line.slice(1) })
+    }
+  }
+  return lines
 }

@@ -1,14 +1,19 @@
 import { reactive } from 'vue'
-import type { GitFile, GitStatus } from '../../preload/types'
+import type { GitFile, GitFileGroup, GitStash, GitStatus } from '../../preload/types'
 import type { ProjectRef } from './workspace'
 
 export interface GitState {
   status: GitStatus | null
+  stashes: GitStash[]
   revision: number
   folded: boolean
   message: string
+  messageSeeded: boolean
   unchecked: string[]
-  busy: 'commit' | 'push' | null
+  foldedGroups: GitFileGroup[]
+  // The branch merge and rebase use; null means the current branch's upstream.
+  syncTarget: string | null
+  busy: 'commit' | 'push' | 'stash' | 'sync' | null
   error: string | null
 }
 
@@ -19,10 +24,14 @@ export function gitStateOf(projectId: string): GitState {
   if (!states[projectId]) {
     states[projectId] = {
       status: null,
+      stashes: [],
       revision: 0,
       folded: true,
       message: '',
+      messageSeeded: false,
       unchecked: [],
+      foldedGroups: [],
+      syncTarget: null,
       busy: null,
       error: null
     }
@@ -42,10 +51,23 @@ export async function refreshGit(project: ProjectRef): Promise<void> {
     if (state.unchecked.some((path) => !present.has(path))) {
       state.unchecked = state.unchecked.filter((path) => present.has(path))
     }
+    const stashes = await window.api.git.stashList(project.path)
+    if (JSON.stringify(state.stashes) !== JSON.stringify(stashes)) state.stashes = stashes
     state.revision += 1
+    await seedMessage(project, state)
   } finally {
     refreshing.delete(project.id)
   }
+}
+
+// Fills an empty draft with the last commit message once per project, so the next commit starts
+// from it. A draft the human cleared afterwards stays cleared.
+async function seedMessage(project: ProjectRef, state: GitState): Promise<void> {
+  if (state.messageSeeded || !state.status?.isRepo || !state.status.hasCommits) return
+  state.messageSeeded = true
+  if (state.message) return
+  const last = await window.api.git.lastMessage(project.path)
+  if (!state.message) state.message = last
 }
 
 export function isChecked(projectId: string, path: string): boolean {
@@ -57,6 +79,13 @@ export function toggleFile(projectId: string, path: string): void {
   state.unchecked = isChecked(projectId, path)
     ? [...state.unchecked, path]
     : state.unchecked.filter((entry) => entry !== path)
+}
+
+export function toggleGroupFold(projectId: string, group: GitFileGroup): void {
+  const state = gitStateOf(projectId)
+  state.foldedGroups = state.foldedGroups.includes(group)
+    ? state.foldedGroups.filter((entry) => entry !== group)
+    : [...state.foldedGroups, group]
 }
 
 export function setAllChecked(projectId: string, files: GitFile[], checked: boolean): void {
@@ -82,7 +111,6 @@ export async function commitChanges(project: ProjectRef, andPush: boolean): Prom
     await refreshGit(project)
     return
   }
-  state.message = ''
   if (andPush) {
     state.busy = 'push'
     const pushed = await window.api.git.push(project.path)
@@ -90,4 +118,70 @@ export async function commitChanges(project: ProjectRef, andPush: boolean): Prom
   }
   state.busy = null
   await refreshGit(project)
+}
+
+// Returns git's error text, or null once the branch is checked out.
+export async function switchBranch(
+  project: ProjectRef,
+  name: string,
+  remote: boolean
+): Promise<string | null> {
+  const switched = await window.api.git.switchBranch(project.path, name, remote)
+  await refreshGit(project)
+  return switched.ok ? null : switched.error
+}
+
+// Runs one stash action and refreshes. Returns git's error text, or null on success.
+export async function runStash(
+  project: ProjectRef,
+  action: 'apply' | 'pop' | 'drop' | { push: string; includeUntracked: boolean },
+  ref = ''
+): Promise<string | null> {
+  const state = gitStateOf(project.id)
+  if (state.busy) return 'Another git operation is running.'
+  state.busy = 'stash'
+  const done =
+    typeof action === 'string'
+      ? await window.api.git.stashAction(project.path, ref, action)
+      : await window.api.git.stashPush(project.path, action.push, action.includeUntracked)
+  state.busy = null
+  await refreshGit(project)
+  return done.ok ? null : done.error
+}
+
+export function syncTargetOf(projectId: string): string | null {
+  const state = gitStateOf(projectId)
+  return state.syncTarget ?? state.status?.upstream ?? null
+}
+
+// Runs one sync action and refreshes. Returns git's error text, or null on success.
+export async function runSync(
+  project: ProjectRef,
+  action: 'fetch' | 'merge' | 'rebase' | 'continue' | 'abort'
+): Promise<string | null> {
+  const state = gitStateOf(project.id)
+  if (state.busy) return 'Another git operation is running.'
+  const target = syncTargetOf(project.id)
+  state.busy = 'sync'
+  let done
+  if (action === 'fetch') done = await window.api.git.fetch(project.path)
+  else if (action === 'continue' || action === 'abort') {
+    done = await window.api.git.finish(project.path, action)
+  } else if (target) done = await window.api.git.integrate(project.path, target, action)
+  else done = { ok: false as const, error: 'There is no branch to bring in.' }
+  state.busy = null
+  await refreshGit(project)
+  return done.ok ? null : done.error
+}
+
+// Pushes the checked-out branch on its own, for commits made earlier. Returns git's error text, or
+// null on success.
+export async function pushBranch(project: ProjectRef): Promise<string | null> {
+  const state = gitStateOf(project.id)
+  if (state.busy) return 'Another git operation is running.'
+  state.busy = 'push'
+  const pushed = await window.api.git.push(project.path)
+  state.busy = null
+  await refreshGit(project)
+  return pushed.ok ? null : pushed.error
 }

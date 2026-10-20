@@ -14,6 +14,16 @@ import type {
   GitStatus,
   GitDiff,
   GitActionResult,
+  GitBlame,
+  GitBranches,
+  GitCommitInfo,
+  GitLogResult,
+  GitLogSearchMode,
+  GitResetPreview,
+  GitIncomingCommit,
+  GitRevFiles,
+  GitRevision,
+  GitStash,
   NodeIssued,
   NodeIssueRequest,
   NodeState,
@@ -137,7 +147,64 @@ const git = {
   commit: (projectPath: string, message: string, paths?: string[]): Promise<GitActionResult> =>
     ipcRenderer.invoke('git:commit', projectPath, message, paths),
   push: (projectPath: string): Promise<GitActionResult> =>
-    ipcRenderer.invoke('git:push', projectPath)
+    ipcRenderer.invoke('git:push', projectPath),
+  lastMessage: (projectPath: string): Promise<string> =>
+    ipcRenderer.invoke('git:lastMessage', projectPath),
+  branches: (projectPath: string): Promise<GitBranches> =>
+    ipcRenderer.invoke('git:branches', projectPath),
+  switchBranch: (projectPath: string, name: string, remote: boolean): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:switchBranch', projectPath, name, remote),
+  revFiles: (projectPath: string, rev: GitRevision): Promise<GitRevFiles> =>
+    ipcRenderer.invoke('git:revFiles', projectPath, rev),
+  revDiff: (
+    projectPath: string,
+    rev: GitRevision,
+    path: string,
+    origPath?: string
+  ): Promise<GitDiff> => ipcRenderer.invoke('git:revDiff', projectPath, rev, path, origPath),
+  stashList: (projectPath: string): Promise<GitStash[]> =>
+    ipcRenderer.invoke('git:stashList', projectPath),
+  stashPush: (
+    projectPath: string,
+    message: string,
+    includeUntracked: boolean
+  ): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:stashPush', projectPath, message, includeUntracked),
+  stashAction: (
+    projectPath: string,
+    ref: string,
+    action: 'apply' | 'pop' | 'drop'
+  ): Promise<GitActionResult> => ipcRenderer.invoke('git:stashAction', projectPath, ref, action),
+  fetch: (projectPath: string): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:fetch', projectPath),
+  incoming: (projectPath: string, target: string): Promise<GitIncomingCommit[]> =>
+    ipcRenderer.invoke('git:incoming', projectPath, target),
+  integrate: (
+    projectPath: string,
+    target: string,
+    mode: 'merge' | 'rebase'
+  ): Promise<GitActionResult> => ipcRenderer.invoke('git:integrate', projectPath, target, mode),
+  finish: (projectPath: string, action: 'continue' | 'abort'): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:finish', projectPath, action),
+  log: (
+    projectPath: string,
+    mode: GitLogSearchMode,
+    text: string,
+    skip: number,
+    limit: number
+  ): Promise<GitLogResult> => ipcRenderer.invoke('git:log', projectPath, mode, text, skip, limit),
+  logToken: (projectPath: string): Promise<string> =>
+    ipcRenderer.invoke('git:logToken', projectPath),
+  commitInfo: (projectPath: string, hash: string): Promise<GitCommitInfo | null> =>
+    ipcRenderer.invoke('git:commitInfo', projectPath, hash),
+  blame: (projectPath: string, hash: string, path: string): Promise<GitBlame> =>
+    ipcRenderer.invoke('git:blame', projectPath, hash, path),
+  resetPreview: (projectPath: string, hash: string): Promise<GitResetPreview> =>
+    ipcRenderer.invoke('git:resetPreview', projectPath, hash),
+  resetSoft: (projectPath: string, hash: string): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:resetSoft', projectPath, hash),
+  amendMessage: (projectPath: string, message: string): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:amendMessage', projectPath, message)
 }
 
 const node = {
