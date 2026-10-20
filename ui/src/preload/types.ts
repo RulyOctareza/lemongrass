@@ -340,6 +340,42 @@ export type GitResetPreview =
 
 export type GitActionResult = { ok: true } | { ok: false; error: string }
 
+export interface DeviceInfo {
+  serial: string
+  // adb's own state: 'device' when usable, otherwise e.g. 'unauthorized' or 'offline'.
+  state: string
+  model: string
+}
+
+export type DeviceListResult = { ok: true; devices: DeviceInfo[] } | { ok: false; error: string }
+
+// The renderer picks the session id so it can listen for packets before the stream starts.
+export interface DeviceStartRequest {
+  id: string
+  serial: string
+}
+
+export type DeviceStartResult =
+  | { ok: true; name: string; codec: string; width: number; height: number }
+  | { ok: false; error: string }
+
+// One H.264 unit from scrcpy, Annex B. A config packet holds SPS and PPS and must be
+// decoded together with the frame that follows it.
+export interface DevicePacket {
+  id: string
+  config: boolean
+  key: boolean
+  pts: number
+  data: Uint8Array
+}
+
+export interface DeviceEnd {
+  id: string
+  error?: string
+  // Another Device tab started mirroring the same phone, so this one must not reconnect.
+  replaced?: boolean
+}
+
 export type WorkspaceTab =
   | { id: string; kind: 'doc'; path: string }
   | { id: string; kind: 'diff'; path: string }
@@ -347,6 +383,7 @@ export type WorkspaceTab =
   | { id: string; kind: 'connector' }
   | { id: string; kind: 'web'; shellTabId: string }
   | { id: string; kind: 'workgroup'; groupId: number }
+  | { id: string; kind: 'device' }
   | {
       id: string
       kind: 'shell'

@@ -9,6 +9,7 @@ import {
   registerPtyHandlers,
   stopCodexShells
 } from './pty'
+import { loadLoginPath } from './loginPath'
 import { registerTabSessionHandlers } from './tabSessions'
 import { registerAccountHandlers } from './accounts'
 import { registerProjectHandlers } from './projects'
@@ -16,6 +17,7 @@ import { setTrustBinary } from './projectTrust'
 import { registerWorkspaceLayoutHandlers } from './workspaceLayouts'
 import { registerBiblioHandlers, registerBiblioImageScheme, closeBiblioWatchers } from './biblio'
 import { registerGitHandlers } from './git'
+import { registerDeviceHandlers, stopAllDevices } from './device'
 import { registerVaultHandlers } from './vault'
 import { registerNodeHandlers } from './node'
 import { registerWindowControlHandlers, wireMaximizeEvents } from './windowControls'
@@ -87,6 +89,9 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window, { zoom: true })
   })
 
+  // Before anything spawns a child, so PTYs and tools see the login shell's PATH.
+  loadLoginPath()
+
   const lgrassPath = installLgrass()
   const lgrassdPath = installLgrassd()
   installLgrassconf()
@@ -102,6 +107,7 @@ app.whenReady().then(() => {
   registerTabSessionHandlers(lgrassdPath)
   registerBiblioHandlers(() => mainWindow?.webContents)
   registerGitHandlers()
+  registerDeviceHandlers(() => mainWindow?.webContents)
   registerVaultHandlers()
   registerNodeHandlers()
   registerWindowControlHandlers(() => mainWindow)
@@ -122,6 +128,7 @@ app.on('before-quit', () => stopWorkgroupBridge())
 // macOS apps conventionally stay alive with no windows open until Cmd+Q.
 app.on('window-all-closed', () => {
   killAllShells()
+  stopAllDevices()
   killDaemons()
   closeBiblioWatchers()
   if (process.platform !== 'darwin') {

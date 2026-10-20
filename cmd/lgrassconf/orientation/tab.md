@@ -88,6 +88,15 @@ A channel granted the performance views lets you SELECT from them by name in the
 
 A web channel is a browser you drive to test a web app as a named user. Run `lgrass rester <short-id> info` first: its `type` says `web` or `api`, and each type refuses the other's commands. Only a Claude or Codex tab can drive it. `open <path> --user <name>` logs that user in from the rester's saved steps, and no password reaches you. `snapshot` lists the page with refs such as `e12`, and `click <ref>`, `type <ref> <text>`, `press`, `wait`, `network`, `console` and `screenshot --out <file>` act on it. Every result starts with `as <user>`, and after a failed login no user is active until a switch succeeds. Secrets are always stripped from what you read. Refs change after every action, so use the newest. Run `lgrass rester --help` for every flag.
 
+## Android phones and Flutter apps
+
+When a task needs an Android phone or a Flutter app, use `lgrass device` and `lgrass flutter` rather than raw `adb` or `flutter`. The human may be watching the same phone live in the Device pane, so everything you do on it shows there.
+
+- `lgrass device` drives a phone connected over USB: `screenshot`, `tree` for the elements on screen with their labels, `tap --text` or `tap --id` to tap one by its label or Flutter Semantics identifier, `swipe`, `type`, `key` and `logs`. Find what to tap with `tree` and tap it by text, not by guessed coordinates.
+- `lgrass flutter`, run inside a Flutter project, keeps the app running in the background (`run` with `--flavor`, `status`, `reload`, `restart`, `stop`), runs tests and prints JSON results (`test`, `report`), recording one clip per test for files under `integration_test/`, and lists the HTTP calls the running app made, with auth headers and cookies redacted (`http`).
+
+Run either with no arguments for its full usage. An integration test run reinstalls the app and removes it from the phone when it ends, taking its data with it, so tell the human before you start one.
+
 ## Code comments and books
 
 Knowledge has three tiers. The code is the first and its comments are the second. Both are committed and owned by the team. The books in `biblio` are the third. They hold anything worth keeping, decisions and knowledge that spans many places in the code included, belong to one person, are not committed, and reach others only when shared. Comments are the filtered tier: concise and ready for a cold reader. A teammate's model never sees your books, so whatever someone needs to change the code safely also goes into a comment, even when a book holds it in full.

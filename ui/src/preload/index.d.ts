@@ -3,6 +3,11 @@ import type {
   AccountAddResult,
   AccountInfo,
   AccountRemoveResult,
+  DeviceEnd,
+  DeviceListResult,
+  DevicePacket,
+  DeviceStartRequest,
+  DeviceStartResult,
   PtySpawnOptions,
   PtyDataPayload,
   PtyExitPayload,
@@ -178,6 +183,14 @@ interface Api {
     resetPreview: (projectPath: string, hash: string) => Promise<GitResetPreview>
     resetSoft: (projectPath: string, hash: string) => Promise<GitActionResult>
     amendMessage: (projectPath: string, message: string) => Promise<GitActionResult>
+  }
+  device: {
+    list: () => Promise<DeviceListResult>
+    start: (request: DeviceStartRequest) => Promise<DeviceStartResult>
+    stop: (id: string) => void
+    control: (id: string, message: Uint8Array) => void
+    onPacket: (callback: (packet: DevicePacket) => void) => () => void
+    onEnd: (callback: (end: DeviceEnd) => void) => () => void
   }
   node: {
     state: () => Promise<NodeState>
