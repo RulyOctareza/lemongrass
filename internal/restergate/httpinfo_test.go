@@ -14,7 +14,7 @@ func TestHTTPChannelInfoActive(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	users := []vault.DomainUser{
+	users := []vault.ResterUser{
 		{Name: "alice", Fields: map[string]string{"password": "s3cret-pw"}},
 		{Name: "bob", Token: "s3cret-token"},
 	}
@@ -24,8 +24,8 @@ func TestHTTPChannelInfoActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HTTPChannelInfo: %v", err)
 	}
-	if info.Status != HTTPStatusActive || info.Name != "test-channel" || info.Domain != "test-domain" {
-		t.Errorf("info = %+v, want an active test-channel on test-domain", info)
+	if info.Status != HTTPStatusActive || info.Name != "test-channel" || info.Rester != "test-rester" {
+		t.Errorf("info = %+v, want an active test-channel on test-rester", info)
 	}
 	if info.BaseURL != srv.URL {
 		t.Errorf("BaseURL = %q, want %q", info.BaseURL, srv.URL)
@@ -49,7 +49,7 @@ func TestHTTPChannelInfoInactive(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 	svc.forgetKey(id)
 
 	info, err := svc.HTTPChannelInfo(id)
@@ -59,7 +59,7 @@ func TestHTTPChannelInfoInactive(t *testing.T) {
 	if info.Status != HTTPStatusInactive || info.BaseURL != "" || len(info.Users) != 0 {
 		t.Errorf("info = %+v, want inactive with no base URL or users", info)
 	}
-	if info.Domain != "test-domain" || len(info.Methods) != 1 {
+	if info.Rester != "test-rester" || len(info.Methods) != 1 {
 		t.Errorf("info = %+v, want the metadata that needs no key", info)
 	}
 }
@@ -68,7 +68,7 @@ func TestHTTPChannelInfoExpired(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 	if _, err := svc.ActivateHTTP("root-secret", id, -time.Minute); err != nil {
 		t.Fatal(err)
 	}

@@ -11,11 +11,11 @@ import (
 const maxRedirects = 10
 
 // followRedirects returns a redirect policy for a proxied call: a redirect to another host is
-// followed, but with the token stripped from wherever the domain's placement put it, the domain's
+// followed, but with the token stripped from wherever the rester's placement put it, the rester's
 // own headers, cookies and the referrer (which carries a query-placed token) dropped, so a
-// presigned download URL still works and nothing the domain holds reaches a second host.
-func followRedirects(domain vault.Domain) func(req *http.Request, via []*http.Request) error {
-	placement := domain.TokenPlacement
+// presigned download URL still works and nothing the rester holds reaches a second host.
+func followRedirects(rester vault.ResolvedRester) func(req *http.Request, via []*http.Request) error {
+	placement := rester.TokenPlacement
 	return func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return errors.New("stopped after 10 redirects")
@@ -26,7 +26,7 @@ func followRedirects(domain vault.Domain) func(req *http.Request, via []*http.Re
 		req.Header.Del("Authorization")
 		req.Header.Del("Cookie")
 		req.Header.Del("Referer")
-		for _, h := range domain.Headers {
+		for _, h := range rester.Headers {
 			req.Header.Del(h.Name)
 		}
 		switch placement.Kind {

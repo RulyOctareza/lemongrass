@@ -21,9 +21,14 @@ import type {
   VaultScope,
   VaultChannel,
   VaultChannelWithShortId,
-  VaultDomain,
-  VaultDomainUser,
-  VaultDomainLoginTest,
+  WebBounds,
+  WebState,
+  VaultRester,
+  VaultResterUser,
+  VaultResterLoginTest,
+  VaultEnvironment,
+  VaultResterAPI,
+  VaultWebScope,
   VaultHTTPScope,
   VaultHTTPChannel,
   VaultHTTPChannelWithShortId,
@@ -190,25 +195,42 @@ const vault = {
   verifyPassphrase: (passphrase: string): Promise<void> =>
     ipcRenderer.invoke('vault:verifyPassphrase', passphrase),
   resetVault: (): Promise<void> => ipcRenderer.invoke('vault:resetVault'),
-  listDomains: (): Promise<string[]> => ipcRenderer.invoke('vault:listDomains'),
-  putDomain: (passphrase: string, name: string, domain: VaultDomain): Promise<void> =>
-    ipcRenderer.invoke('vault:putDomain', passphrase, name, domain),
-  getDomain: (passphrase: string, name: string): Promise<VaultDomain> =>
-    ipcRenderer.invoke('vault:getDomain', passphrase, name),
-  updateDomain: (passphrase: string, name: string, domain: VaultDomain): Promise<void> =>
-    ipcRenderer.invoke('vault:updateDomain', passphrase, name, domain),
-  deleteDomain: (name: string): Promise<void> => ipcRenderer.invoke('vault:deleteDomain', name),
-  testDomainLogin: (domain: VaultDomain, user: VaultDomainUser): Promise<VaultDomainLoginTest> =>
-    ipcRenderer.invoke('vault:testDomainLogin', domain, user),
+  listResters: (): Promise<string[]> => ipcRenderer.invoke('vault:listResters'),
+  putRester: (passphrase: string, name: string, rester: VaultRester): Promise<void> =>
+    ipcRenderer.invoke('vault:putRester', passphrase, name, rester),
+  getRester: (passphrase: string, name: string): Promise<VaultRester> =>
+    ipcRenderer.invoke('vault:getRester', passphrase, name),
+  updateRester: (passphrase: string, name: string, rester: VaultRester): Promise<void> =>
+    ipcRenderer.invoke('vault:updateRester', passphrase, name, rester),
+  deleteRester: (name: string): Promise<void> => ipcRenderer.invoke('vault:deleteRester', name),
+  testResterLogin: (
+    api: VaultResterAPI,
+    environment: VaultEnvironment,
+    user: VaultResterUser
+  ): Promise<VaultResterLoginTest> =>
+    ipcRenderer.invoke('vault:testResterLogin', api, environment, user),
   listHTTPChannels: (): Promise<VaultHTTPChannel[]> => ipcRenderer.invoke('vault:listHTTPChannels'),
   createHTTPChannel: (
     passphrase: string,
     name: string,
-    domainName: string,
+    rester: string,
+    environment: string,
+    type: 'api' | 'web',
     scope: VaultHTTPScope,
+    webScope: VaultWebScope | null,
     ttlSeconds: number
   ): Promise<VaultHTTPChannelWithShortId> =>
-    ipcRenderer.invoke('vault:createHTTPChannel', passphrase, name, domainName, scope, ttlSeconds),
+    ipcRenderer.invoke(
+      'vault:createHTTPChannel',
+      passphrase,
+      name,
+      rester,
+      environment,
+      type,
+      scope,
+      webScope,
+      ttlSeconds
+    ),
   activateHTTPChannel: (
     passphrase: string,
     id: string,
@@ -293,6 +315,20 @@ const accounts = {
     ipcRenderer.invoke('accounts:remove', name)
 }
 
+const web = {
+  attach: (tabId: string, bounds: WebBounds): Promise<void> =>
+    ipcRenderer.invoke('web:attach', tabId, bounds),
+  setBounds: (tabId: string, bounds: WebBounds): Promise<void> =>
+    ipcRenderer.invoke('web:set-bounds', tabId, bounds),
+  detach: (tabId: string): Promise<void> => ipcRenderer.invoke('web:detach', tabId),
+  getState: (tabId: string): Promise<WebState> => ipcRenderer.invoke('web:get-state', tabId),
+  onState: (callback: (state: WebState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: WebState): void => callback(state)
+    ipcRenderer.on('web:state', listener)
+    return () => ipcRenderer.removeListener('web:state', listener)
+  }
+}
+
 const api = {
   pty,
   accounts,
@@ -303,6 +339,7 @@ const api = {
   git,
   node,
   vault,
+  web,
   windowControls,
   workgroup
 }

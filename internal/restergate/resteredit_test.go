@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 func TestHTTPChannelUsersListsNamesAndTagsOnly(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	users := []vault.DomainUser{
+	users := []vault.ResterUser{
 		{Name: "employee", Fields: map[string]string{"password": "s3cret-pw"}, Tags: []string{"tenant x", "low level"}},
 		{Name: "admin", Token: "s3cret-token"},
 	}
@@ -44,7 +45,7 @@ func TestUserErrorsIncludeTags(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	users := []vault.DomainUser{
+	users := []vault.ResterUser{
 		{Name: "employee", Fields: map[string]string{"u": "e"}, Tags: []string{"tenant x", "low level"}},
 		{Name: "admin", Fields: map[string]string{"u": "a"}},
 	}
@@ -56,8 +57,8 @@ func TestUserErrorsIncludeTags(t *testing.T) {
 	}
 }
 
-func newEditableDomain(baseURL string, users []vault.DomainUser) vault.Domain {
-	return vault.Domain{
+func newEditableDomain(baseURL string, users []vault.ResterUser) vaulttest.Domain {
+	return vaulttest.Domain{
 		BaseURL:         baseURL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
@@ -67,14 +68,14 @@ func newEditableDomain(baseURL string, users []vault.DomainUser) vault.Domain {
 	}
 }
 
-func TestUpdateDomainPropagatesToActiveAndInactiveChannels(t *testing.T) {
+func TestUpdateResterPropagatesToActiveAndInactiveChannels(t *testing.T) {
 	var oldHits, newHits []string
 	oldSrv := httptest.NewServer(newLoginMux(&oldHits))
 	defer oldSrv.Close()
 	newSrv := httptest.NewServer(newLoginMux(&newHits))
 	defer newSrv.Close()
 
-	svc, activeID := setUpHTTPChannel(t, oldSrv, []vault.DomainUser{
+	svc, activeID := setUpHTTPChannel(t, oldSrv, []vault.ResterUser{
 		{Name: "alice", Fields: map[string]string{"u": "alice"}},
 		{Name: "bob", Fields: map[string]string{"u": "bob"}},
 	}, []string{"GET"})
@@ -83,7 +84,7 @@ func TestUpdateDomainPropagatesToActiveAndInactiveChannels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inactive, err := other.CreateHTTPChannel("root-secret", "second", "test-domain", vault.HTTPScope{Methods: []string{"GET"}}, 3600e9)
+	inactive, err := other.CreateHTTPChannel("root-secret", "second", "test-rester", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET"}}, nil, 3600e9)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,11 +96,11 @@ func TestUpdateDomainPropagatesToActiveAndInactiveChannels(t *testing.T) {
 		t.Fatalf("oldHits = %v, want one baseline hit", oldHits)
 	}
 
-	edited := newEditableDomain(newSrv.URL, []vault.DomainUser{
+	edited := newEditableDomain(newSrv.URL, []vault.ResterUser{
 		{Name: "alice", Fields: map[string]string{"u": "alice2"}, Tags: []string{"renamed"}},
 	})
-	if err := svc.UpdateDomain("root-secret", "test-domain", edited); err != nil {
-		t.Fatalf("UpdateDomain: %v", err)
+	if err := svc.UpdateRester("root-secret", "test-rester", edited.Rester()); err != nil {
+		t.Fatalf("UpdateRester: %v", err)
 	}
 
 	if _, err := svc.RequestHTTP(activeID, "alice", "GET", "/api/x", nil, "", nil); err != nil {
@@ -126,19 +127,19 @@ func TestUpdateDomainPropagatesToActiveAndInactiveChannels(t *testing.T) {
 	}
 }
 
-func TestUpdateDomainWrongPassphraseChangesNothing(t *testing.T) {
+func TestUpdateResterWrongPassphraseChangesNothing(t *testing.T) {
 	srv := httptest.NewServer(http.NewServeMux())
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
-	edited := newEditableDomain("http://elsewhere.invalid", []vault.DomainUser{{Name: "mallory"}})
-	if err := svc.UpdateDomain("wrong-secret", "test-domain", edited); err == nil {
+	edited := newEditableDomain("http://elsewhere.invalid", []vault.ResterUser{{Name: "mallory"}})
+	if err := svc.UpdateRester("wrong-secret", "test-rester", edited.Rester()); err == nil {
 		t.Fatal("expected an error for a wrong passphrase")
 	}
 
-	d, err := svc.GetDomain("root-secret", "test-domain")
-	if err != nil || d.BaseURL != srv.URL {
-		t.Errorf("stored domain = %+v, err = %v, want it unchanged", d, err)
+	d, err := svc.GetRester("root-secret", "test-rester")
+	if err != nil || d.Environments[0].BaseURL != srv.URL {
+		t.Errorf("stored rester = %+v, err = %v, want it unchanged", d, err)
 	}
 	info, err := svc.HTTPChannelInfo(id)
 	if err != nil || info.BaseURL != srv.URL {
@@ -146,33 +147,33 @@ func TestUpdateDomainWrongPassphraseChangesNothing(t *testing.T) {
 	}
 }
 
-func TestUpdateDomainUnknownName(t *testing.T) {
+func TestUpdateResterUnknownName(t *testing.T) {
 	svc := newTestService(t)
 	if err := svc.SetPassphrase("root-secret"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.UpdateDomain("root-secret", "missing", vault.Domain{BaseURL: "http://x"}); err == nil {
-		t.Error("expected an error updating a domain that was never stored")
+	if err := svc.UpdateRester("root-secret", "missing", vaulttest.Domain{BaseURL: "http://x"}.Rester()); err == nil {
+		t.Error("expected an error updating a rester that was never stored")
 	}
-	if names, _ := svc.ListDomains(); len(names) != 0 {
-		t.Errorf("domains = %v, want none created by a failed update", names)
+	if names, _ := svc.ListResters(); len(names) != 0 {
+		t.Errorf("resters = %v, want none created by a failed update", names)
 	}
 }
 
-func TestUpdateDomainLeavesOtherDomainsChannelsAlone(t *testing.T) {
+func TestUpdateResterLeavesOtherRestersChannelsAlone(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
-	if err := svc.PutDomain("root-secret", "other", newEditableDomain("http://other.invalid", []vault.DomainUser{{Name: "z"}})); err != nil {
+	if err := svc.PutRester("root-secret", "other", newEditableDomain("http://other.invalid", []vault.ResterUser{{Name: "z"}}).Rester()); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.UpdateDomain("root-secret", "other", newEditableDomain("http://changed.invalid", []vault.DomainUser{{Name: "z"}})); err != nil {
+	if err := svc.UpdateRester("root-secret", "other", newEditableDomain("http://changed.invalid", []vault.ResterUser{{Name: "z"}}).Rester()); err != nil {
 		t.Fatal(err)
 	}
 	info, err := svc.HTTPChannelInfo(id)
 	if err != nil || info.BaseURL != srv.URL {
-		t.Errorf("channel on another domain: info = %+v, err = %v, want it untouched", info, err)
+		t.Errorf("channel on another rester: info = %+v, err = %v, want it untouched", info, err)
 	}
 }

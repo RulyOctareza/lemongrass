@@ -15,8 +15,8 @@ import (
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
-func aliceOnly() []vault.DomainUser {
-	return []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}
+func aliceOnly() []vault.ResterUser {
+	return []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}
 }
 
 func newDownloadServer(t *testing.T, file http.HandlerFunc) *httptest.Server {

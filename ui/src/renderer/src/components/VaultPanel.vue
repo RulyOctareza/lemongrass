@@ -11,7 +11,7 @@ import {
 } from '../vaultSession'
 import ConnectionsSection from './connector/ConnectionsSection.vue'
 import DbChannelsSection from './connector/DbChannelsSection.vue'
-import DomainsSection from './connector/DomainsSection.vue'
+import ResterList from './connector/rester/ResterList.vue'
 import HttpChannelsSection from './connector/HttpChannelsSection.vue'
 import AppButton from './AppButton.vue'
 
@@ -21,7 +21,7 @@ const props = defineProps<{
 
 const activeKind = ref<'database' | 'http'>('database')
 const activeDbTab = ref<'connections' | 'channels'>('connections')
-const activeHttpTab = ref<'domains' | 'httpChannels'>('domains')
+const activeHttpTab = ref<'resters' | 'httpChannels'>('resters')
 
 const vaultUnlocked = toRef(vaultSession, 'unlocked')
 const unlockInput = ref('')
@@ -208,7 +208,7 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
                 d="M7 1.5c1.7 1.6 2.5 3.4 2.5 5.5S8.7 10.9 7 12.5C5.3 10.9 4.5 9.1 4.5 7S5.3 3.1 7 1.5z"
               />
             </svg>
-            HTTP
+            Rester
           </button>
           <div class="nav-lock">
             <span class="unlock-status">Vault unlocked</span>
@@ -249,22 +249,22 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
               <div class="tab-row">
                 <button
                   class="tab"
-                  :class="{ active: activeHttpTab === 'domains' }"
-                  @click="activeHttpTab = 'domains'"
+                  :class="{ active: activeHttpTab === 'resters' }"
+                  @click="activeHttpTab = 'resters'"
                 >
-                  Domains
+                  Resters
                 </button>
                 <button
                   class="tab"
                   :class="{ active: activeHttpTab === 'httpChannels' }"
                   @click="activeHttpTab = 'httpChannels'"
                 >
-                  HTTP Channels
+                  Channels
                 </button>
               </div>
-              <DomainsSection
-                v-show="activeHttpTab === 'domains'"
-                :visible="shown('http', 'domains')"
+              <ResterList
+                v-show="activeHttpTab === 'resters'"
+                :visible="shown('http', 'resters')"
               />
               <HttpChannelsSection
                 v-show="activeHttpTab === 'httpChannels'"

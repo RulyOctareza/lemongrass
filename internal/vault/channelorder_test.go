@@ -38,14 +38,14 @@ func TestListChannelsNewestFirst(t *testing.T) {
 
 func TestListHTTPChannelsNewestFirst(t *testing.T) {
 	svc := openTestService(t)
-	d := Domain{BaseURL: "https://api.example.test", LoginEndpoint: "/login", TokenPath: "access_token"}
-	if err := svc.PutDomain(testRootSecret, "staging", d); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	d := NewAPIRester("https://api.example.test", ResterAPI{LoginEndpoint: "/login", TokenPath: "access_token"}, []ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}})
+	if err := svc.PutRester(testRootSecret, "staging", d); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
 
 	var created []ChannelID
 	for i := 0; i < 12; i++ {
-		c, err := svc.CreateHTTPChannel(testRootSecret, "ch", "staging", HTTPScope{Methods: []string{"GET"}}, 5*time.Minute)
+		c, err := svc.CreateHTTPChannel(testRootSecret, "ch", "staging", DefaultEnvironment, TypeAPI, HTTPScope{Methods: []string{"GET"}}, nil, 5*time.Minute)
 		if err != nil {
 			t.Fatalf("CreateHTTPChannel %d: %v", i, err)
 		}

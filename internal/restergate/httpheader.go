@@ -17,18 +17,18 @@ func setHeaders(req *http.Request, headers []vault.Header) {
 	}
 }
 
-// checkCallHeaders refuses a caller's header that is malformed, repeated, carries a credential, or is set by the proxy or the domain.
-func checkCallHeaders(domain vault.Domain, headers []vault.Header) error {
+// checkCallHeaders refuses a caller's header that is malformed, repeated, carries a credential, or is set by the proxy or the rester.
+func checkCallHeaders(rester vault.ResolvedRester, headers []vault.Header) error {
 	seen := make(map[string]bool, len(headers))
 	for _, h := range headers {
 		if err := vault.CheckHeader(h); err != nil {
 			return fmt.Errorf("restergate: %w", err)
 		}
-		if domain.ReservesHeader(h.Name) || isCredentialHeader(h.Name) {
+		if rester.ReservesHeader(h.Name) || isCredentialHeader(h.Name) {
 			return fmt.Errorf("restergate: header %q is set by the proxy and cannot be set on a call", h.Name)
 		}
-		if domain.SetsHeader(h.Name) {
-			return fmt.Errorf("restergate: header %q is set by the domain and cannot be set on a call", h.Name)
+		if rester.SetsHeader(h.Name) {
+			return fmt.Errorf("restergate: header %q is set by the rester and cannot be set on a call", h.Name)
 		}
 		key := http.CanonicalHeaderKey(h.Name)
 		if seen[key] {

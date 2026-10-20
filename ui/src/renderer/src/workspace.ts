@@ -54,6 +54,7 @@ type DiffTab = Extract<WorkspaceTab, { kind: 'diff' }>
 type VaultTab = Extract<WorkspaceTab, { kind: 'connector' }>
 type ShellTab = Extract<WorkspaceTab, { kind: 'shell' }>
 type WorkgroupTab = Extract<WorkspaceTab, { kind: 'workgroup' }>
+type WebTab = Extract<WorkspaceTab, { kind: 'web' }>
 
 const AUTOSAVE_MS = 600
 const LAYOUT_SAVE_MS = 400
@@ -108,6 +109,10 @@ function newVaultTab(): VaultTab {
 
 function newWorkgroupTab(groupId: number): WorkgroupTab {
   return { id: crypto.randomUUID(), kind: 'workgroup', groupId }
+}
+
+function newWebTab(shellTabId: string): WebTab {
+  return { id: crypto.randomUUID(), kind: 'web', shellTabId }
 }
 
 function tabsOf(projectId: string): WorkspaceTab[] {
@@ -507,6 +512,24 @@ export function openWorkgroup(project: ProjectRef, groupId: number): void {
   }
   const focused = leaves.find((leaf) => leaf.id === layout.focusedPaneId) ?? leaves[0]
   commit(project, tree.addTab(root, focused.id, newWorkgroupTab(groupId)), focused.id)
+}
+
+// One web tab per shell tab: opening it again focuses the existing tab wherever it lives,
+// otherwise it opens in a new pane to the right of the shell.
+export function openWeb(project: ProjectRef, paneId: string, shellTabId: string): void {
+  const root = workspaces[project.id].layout.root
+  if (!root) return
+  const existing = tree
+    .allLeaves(root)
+    .find((leaf) => leaf.tabs.some((tab) => tab.kind === 'web' && tab.shellTabId === shellTabId))
+  if (existing) {
+    const tab = existing.tabs.find((t) => t.kind === 'web' && t.shellTabId === shellTabId)!
+    commit(project, tree.setActiveTab(root, existing.id, tab.id), existing.id)
+    return
+  }
+  const tab = newWebTab(shellTabId)
+  const next = tree.splitWithTab(root, paneId, 'right', tab)
+  commit(project, next, tree.findLeafByTab(next, tab.id)?.id)
 }
 
 export function addShell(project: ProjectRef, paneId?: string): void {

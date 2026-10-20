@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 type seenRequest struct {
@@ -48,18 +49,18 @@ func newRedirectFixture(t *testing.T, placement vault.TokenPlacement, redirectTo
 	if err := svc.SetPassphrase("root-secret"); err != nil {
 		t.Fatal(err)
 	}
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         base.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  placement,
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 	}
-	if err := svc.PutDomain("root-secret", "d", domain); err != nil {
+	if err := svc.PutRester("root-secret", "d", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := svc.CreateHTTPChannel("root-secret", "ch", "d", vault.HTTPScope{Methods: []string{"GET"}}, time.Hour)
+	c, err := svc.CreateHTTPChannel("root-secret", "ch", "d", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET"}}, nil, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,8 +131,8 @@ func TestLoginRedirectToAnotherHostIsRefused(t *testing.T) {
 	}))
 	defer base.Close()
 
-	domain := vault.Domain{BaseURL: base.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 60}
-	user := vault.DomainUser{Name: "alice", Fields: map[string]string{"password": "s3cret-pw"}}
+	domain := vault.ResolvedRester{BaseURL: base.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 60}
+	user := vault.ResterUser{Name: "alice", Fields: map[string]string{"password": "s3cret-pw"}}
 	if _, _, err := loginHTTP(domain, user); err == nil {
 		t.Fatal("a login redirected to another host was followed")
 	}

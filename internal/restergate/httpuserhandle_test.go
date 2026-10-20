@@ -8,8 +8,8 @@ import (
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
-func spacedUsers() []vault.DomainUser {
-	return []vault.DomainUser{
+func spacedUsers() []vault.ResterUser {
+	return []vault.ResterUser{
 		{Name: "John Doe", Fields: map[string]string{"u": "john"}, Tags: []string{"tenant x"}},
 		{Name: "Bob", Fields: map[string]string{"u": "bob"}},
 	}

@@ -55,8 +55,8 @@ func TestJWTExpiry(t *testing.T) {
 }
 
 func TestByotExpiryFixedTTL(t *testing.T) {
-	domain := vault.Domain{FixedTTLSeconds: 60}
-	user := vault.DomainUser{Token: "pasted-token"}
+	domain := vault.ResolvedRester{FixedTTLSeconds: 60}
+	user := vault.ResterUser{Token: "pasted-token"}
 
 	got, err := byotExpiry(domain, user)
 	if err != nil {
@@ -68,8 +68,8 @@ func TestByotExpiryFixedTTL(t *testing.T) {
 }
 
 func TestByotExpiryJSONPathOriginRejected(t *testing.T) {
-	domain := vault.Domain{TTLOrigin: "expires_in"}
-	user := vault.DomainUser{Token: "pasted-token"}
+	domain := vault.ResolvedRester{TTLOrigin: "expires_in"}
+	user := vault.ResterUser{Token: "pasted-token"}
 
 	if _, err := byotExpiry(domain, user); err == nil {
 		t.Error("byotExpiry with a JSON-path TTLOrigin for a BYOT user = nil error, want an error (no login response to read)")
@@ -92,8 +92,8 @@ func TestLoginHTTPExtractsTokenAndFixedTTL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	domain := vault.Domain{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 30}
-	user := vault.DomainUser{Fields: map[string]string{"username": "alice"}}
+	domain := vault.ResolvedRester{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 30}
+	user := vault.ResterUser{Fields: map[string]string{"username": "alice"}}
 
 	token, expiresAt, err := loginHTTP(domain, user)
 	if err != nil {
@@ -113,8 +113,8 @@ func TestLoginHTTPBadCredentialsErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	domain := vault.Domain{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token"}
-	if _, _, err := loginHTTP(domain, vault.DomainUser{}); err == nil {
+	domain := vault.ResolvedRester{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token"}
+	if _, _, err := loginHTTP(domain, vault.ResterUser{}); err == nil {
 		t.Error("loginHTTP with a 401 response = nil error, want an error")
 	}
 }
@@ -127,8 +127,8 @@ func TestLoginHTTPSendsTypedFields(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	domain := vault.Domain{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 30}
-	user := vault.DomainUser{
+	domain := vault.ResolvedRester{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 30}
+	user := vault.ResterUser{
 		Fields:     map[string]string{"username": "alice", "site_id": "3", "remember": "false"},
 		FieldTypes: map[string]string{"site_id": vault.FieldNumber, "remember": vault.FieldBoolean},
 	}
@@ -147,8 +147,8 @@ func TestLoginHTTPStatusErrorCarriesBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	domain := vault.Domain{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token"}
-	_, _, err := loginHTTP(domain, vault.DomainUser{})
+	domain := vault.ResolvedRester{BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token"}
+	_, _, err := loginHTTP(domain, vault.ResterUser{})
 
 	var statusErr *LoginStatusError
 	if !errors.As(err, &statusErr) {
@@ -165,16 +165,33 @@ func TestLoginHTTPStatusErrorCarriesBody(t *testing.T) {
 	}
 }
 
-func TestTestDomainLoginBYOT(t *testing.T) {
-	g := &Gate{}
-	domain := vault.Domain{TTLOrigin: "jwt-exp"}
-	user := vault.DomainUser{Token: makeJWT(t, time.Now().Add(time.Hour).Unix())}
-
-	if err := g.TestDomainLogin(domain, user); err != nil {
-		t.Errorf("TestDomainLogin(BYOT, valid jwt) = %v, want nil", err)
+func TestTestResterLoginBYOT(t *testing.T) {
+	g := New(newTestService(t).Service)
+	api := vault.ResterAPI{TTLOrigin: "jwt-exp"}
+	env := vault.Environment{Name: "local", BaseURL: "http://localhost"}
+	user := vault.ResterUser{Token: makeJWT(t, time.Now().Add(time.Hour).Unix())}
+	if err := g.TestResterLogin(api, env, user); err != nil {
+		t.Errorf("TestResterLogin(BYOT, valid jwt) = %v, want nil", err)
 	}
+	if err := g.TestResterLogin(api, env, vault.ResterUser{Token: "not-a-jwt"}); err == nil {
+		t.Error("TestResterLogin(BYOT, invalid token) = nil, want an error")
+	}
+}
 
-	if err := g.TestDomainLogin(domain, vault.DomainUser{Token: "not-a-jwt"}); err == nil {
-		t.Error("TestDomainLogin(BYOT, invalid token) = nil, want an error")
+func TestTestResterLoginUsesTheEnvironmentsAddressAndHeaders(t *testing.T) {
+	var gotHeader, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeader, gotPath = r.Header.Get("X-Tenant"), r.URL.Path
+		json.NewEncoder(w).Encode(map[string]string{"access_token": "tok"})
+	}))
+	defer srv.Close()
+	api := vault.ResterAPI{LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 30, Headers: []vault.Header{{Name: "X-Tenant", Value: "shared"}}}
+	env := vault.Environment{Name: "staging", BaseURL: srv.URL, Headers: []vault.Header{{Name: "x-tenant", Value: "staging"}}}
+	g := New(newTestService(t).Service)
+	if err := g.TestResterLogin(api, env, vault.ResterUser{Fields: map[string]string{"u": "alice"}}); err != nil {
+		t.Fatalf("TestResterLogin: %v", err)
+	}
+	if gotPath != "/login" || gotHeader != "staging" {
+		t.Errorf("login hit %q with X-Tenant %q, want /login with the environment's header", gotPath, gotHeader)
 	}
 }

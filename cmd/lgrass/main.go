@@ -107,12 +107,12 @@ COMMANDS
                                      (INSERT/UPDATE/DELETE) requires exactly one of --dry-run
                                      (rolled back, reports the row count) or --commit (persists)
 
-  rester <short-id> info            Model-facing: prints a channel's base URL, expiry, allowed
-                                     methods and users
+  rester <short-id> info            Model-facing: prints a channel's rester, environment, type, base URL,
+                                     expiry, allowed methods and users
   rester <short-id> users           Model-facing: prints a channel's users with their tags
   rester <short-id> <get|post|put|patch|delete|head|options> <path> [--user <name>] [--body '<json>']
                                      Model-facing: proxies one HTTP call through the channel's
-                                     domain as user, through the running agent and vault daemons
+                                     rester as user, through the running agent and vault daemons
 
   version                           Print version
 `)

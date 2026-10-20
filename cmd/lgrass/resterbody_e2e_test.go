@@ -14,6 +14,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/agent"
 	"github.com/faizalv/lemongrass/internal/gatekeeper"
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 func startStack(t *testing.T) (*gatekeeper.Client, *agent.Client) {
@@ -72,18 +73,18 @@ func TestSpreadsheetUploadReachesTheAPIThroughTheWholeChain(t *testing.T) {
 
 	vaultClient, agentClient := startStack(t)
 	const passphrase = "correct horse"
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 	}
-	if err := vaultClient.PutDomain(passphrase, "staging", domain); err != nil {
+	if err := vaultClient.PutRester(passphrase, "staging", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := vaultClient.CreateHTTPChannel(passphrase, "ch", "staging", vault.HTTPScope{Methods: []string{"POST"}}, time.Hour)
+	c, err := vaultClient.CreateHTTPChannel(passphrase, "ch", "staging", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"POST"}}, nil, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

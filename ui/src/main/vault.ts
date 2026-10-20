@@ -75,7 +75,9 @@ async function call<T>(
   }
 }
 
-function vaultCall<T>(op: string, payload?: unknown): Promise<T> {
+// Exported because the web engine reads a channel's login fields through web_login_fields; the
+// reply must never be forwarded to a model.
+export function vaultCall<T>(op: string, payload?: unknown): Promise<T> {
   return call<T>(vaultSocketPath(), op, payload)
 }
 
@@ -108,32 +110,64 @@ export interface TokenPlacement {
   Prefix: string
 }
 
-export interface DomainUser {
-  Name: string
-  Fields: Record<string, string>
-  FieldTypes: Record<string, string> | null
-  Token: string
-  Tags: string[]
-}
-
 export interface Header {
   Name: string
   Value: string
 }
 
-export interface Domain {
+export interface LoginStep {
+  Action: 'goto' | 'fill' | 'click' | 'wait'
+  URL: string
+  Selector: string
+  Field: string
+  TimeoutSeconds: number
+}
+
+export interface Environment {
+  Name: string
   BaseURL: string
+  Origin: string
+  Headers: Header[] | null
+}
+
+export interface UserOverride {
+  Fields: Record<string, string> | null
+  FieldTypes: Record<string, string> | null
+  Token: string
+}
+
+export interface ResterUser {
+  Name: string
+  Fields: Record<string, string> | null
+  FieldTypes: Record<string, string> | null
+  Token: string
+  Tags: string[] | null
+  Environments: string[] | null
+  Overrides: Record<string, UserOverride> | null
+}
+
+export interface ResterAPI {
   LoginEndpoint: string
   TokenPath: string
   TTLOrigin: string
   FixedTTLSeconds: number
   TokenPlacement: TokenPlacement
-  Users: DomainUser[]
   Headers: Header[] | null
 }
 
+export interface ResterWeb {
+  Login: LoginStep[] | null
+}
+
+export interface Rester {
+  API: ResterAPI | null
+  Web: ResterWeb | null
+  Environments: Environment[]
+  Users: ResterUser[]
+}
+
 // error is empty when the login passed; status and body are the login endpoint's non-2xx answer.
-export interface DomainLoginTest {
+export interface ResterLoginTest {
   error: string
   status: number
   body: string
@@ -149,11 +183,19 @@ export interface HTTPScope {
   Exclusions: MethodPath[]
 }
 
+export interface WebScope {
+  Origins: string[] | null
+  Exclusions: MethodPath[] | null
+}
+
 export interface HTTPChannel {
   ID: string
   Name: string
-  Domain: string
+  Rester: string
+  Environment: string
+  Type: 'api' | 'web'
   Scope: HTTPScope
+  WebScope: WebScope | null
   CreatedAt: string
   ExpiresAt: string
 }
@@ -307,38 +349,43 @@ async function resetVault(): Promise<void> {
   await vaultCall<void>('reset_vault')
 }
 
-async function listDomains(): Promise<string[]> {
-  const { names } = await vaultCall<{ names: string[] }>('list_domains')
+async function listResters(): Promise<string[]> {
+  const { names } = await vaultCall<{ names: string[] }>('list_resters')
   return names ?? []
 }
 
-async function putDomain(passphrase: string, name: string, domain: Domain): Promise<void> {
-  await vaultCall<void>('put_domain', { root_secret: passphrase, name, domain })
+async function putRester(passphrase: string, name: string, rester: Rester): Promise<void> {
+  await vaultCall<void>('put_rester', { root_secret: passphrase, name, rester })
 }
 
-// Reads a stored domain back in full, passwords and tokens included, for the edit form.
-async function getDomain(passphrase: string, name: string): Promise<Domain> {
-  const { domain } = await vaultCall<{ domain: Domain }>('get_domain', {
+// Reads a stored rester back in full, passwords and tokens included, for the edit form.
+async function getRester(passphrase: string, name: string): Promise<Rester> {
+  const { rester } = await vaultCall<{ rester: Rester }>('get_rester', {
     root_secret: passphrase,
     name
   })
-  return domain
+  return rester
 }
 
-// Replaces a stored domain and re-wraps it for every HTTP channel already minted from it.
-async function updateDomain(passphrase: string, name: string, domain: Domain): Promise<void> {
-  await vaultCall<void>('update_domain', { root_secret: passphrase, name, domain })
+// Replaces a stored rester and re-wraps it for every HTTP channel already minted from it.
+async function updateRester(passphrase: string, name: string, rester: Rester): Promise<void> {
+  await vaultCall<void>('update_rester', { root_secret: passphrase, name, rester })
 }
 
-async function deleteDomain(name: string): Promise<void> {
-  await vaultCall<void>('delete_domain', { name })
+async function deleteRester(name: string): Promise<void> {
+  await vaultCall<void>('delete_rester', { name })
 }
 
-// Tests a domain user's login (or, for a bring-your-own-token user, validates the pasted
-// token) with values straight out of the in-progress form -- no root secret, nothing stored.
-async function testDomainLogin(domain: Domain, user: DomainUser): Promise<DomainLoginTest> {
-  const result = await vaultCall<Partial<DomainLoginTest> | undefined>('test_domain_login', {
-    domain,
+// Tests a rester user's login (or, for a bring-your-own-token user, validates the pasted
+// token) with values straight out of the in-progress form, with no root secret and nothing stored.
+async function testResterLogin(
+  api: ResterAPI,
+  environment: Environment,
+  user: ResterUser
+): Promise<ResterLoginTest> {
+  const result = await vaultCall<Partial<ResterLoginTest> | undefined>('test_rester_login', {
+    api,
+    environment,
     user
   })
   return { error: result?.error ?? '', status: result?.status ?? 0, body: result?.body ?? '' }
@@ -352,15 +399,21 @@ async function listHTTPChannels(): Promise<HTTPChannel[]> {
 async function createHTTPChannel(
   passphrase: string,
   name: string,
-  domainName: string,
+  rester: string,
+  environment: string,
+  type: 'api' | 'web',
   scope: HTTPScope,
+  webScope: WebScope | null,
   ttlSeconds: number
 ): Promise<HTTPChannelWithShortId> {
   const { channel } = await vaultCall<{ channel: HTTPChannel }>('create_http_channel', {
     root_secret: passphrase,
     name,
-    domain_name: domainName,
+    rester,
+    environment,
+    type,
     scope,
+    web_scope: webScope,
     ttl_seconds: ttlSeconds
   })
   const { short_id: shortId } = await agentCall<{ short_id: string }>('register_channel', {
@@ -497,19 +550,21 @@ export function registerVaultHandlers(): void {
   )
   ipcMain.handle('vault:resetVault', () => resetVault())
 
-  ipcMain.handle('vault:listDomains', () => listDomains())
-  ipcMain.handle('vault:putDomain', (_event, passphrase: string, name: string, domain: Domain) =>
-    putDomain(passphrase, name, domain)
+  ipcMain.handle('vault:listResters', () => listResters())
+  ipcMain.handle('vault:putRester', (_event, passphrase: string, name: string, rester: Rester) =>
+    putRester(passphrase, name, rester)
   )
-  ipcMain.handle('vault:getDomain', (_event, passphrase: string, name: string) =>
-    getDomain(passphrase, name)
+  ipcMain.handle('vault:getRester', (_event, passphrase: string, name: string) =>
+    getRester(passphrase, name)
   )
-  ipcMain.handle('vault:updateDomain', (_event, passphrase: string, name: string, domain: Domain) =>
-    updateDomain(passphrase, name, domain)
+  ipcMain.handle('vault:updateRester', (_event, passphrase: string, name: string, rester: Rester) =>
+    updateRester(passphrase, name, rester)
   )
-  ipcMain.handle('vault:deleteDomain', (_event, name: string) => deleteDomain(name))
-  ipcMain.handle('vault:testDomainLogin', (_event, domain: Domain, user: DomainUser) =>
-    testDomainLogin(domain, user)
+  ipcMain.handle('vault:deleteRester', (_event, name: string) => deleteRester(name))
+  ipcMain.handle(
+    'vault:testResterLogin',
+    (_event, api: ResterAPI, environment: Environment, user: ResterUser) =>
+      testResterLogin(api, environment, user)
   )
   ipcMain.handle('vault:listHTTPChannels', () => listHTTPChannels())
   ipcMain.handle(
@@ -518,10 +573,13 @@ export function registerVaultHandlers(): void {
       _event,
       passphrase: string,
       name: string,
-      domainName: string,
+      rester: string,
+      environment: string,
+      type: 'api' | 'web',
       scope: HTTPScope,
+      webScope: WebScope | null,
       ttlSeconds: number
-    ) => createHTTPChannel(passphrase, name, domainName, scope, ttlSeconds)
+    ) => createHTTPChannel(passphrase, name, rester, environment, type, scope, webScope, ttlSeconds)
   )
   ipcMain.handle(
     'vault:activateHTTPChannel',

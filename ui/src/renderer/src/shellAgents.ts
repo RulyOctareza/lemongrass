@@ -30,7 +30,7 @@ export const SHELL_AGENTS: readonly ShellAgent[] = [
     id: 'shell',
     command: 'zsh',
     label: 'Shell',
-    hint: 'zsh'
+    hint: 'shell'
   }
 ]
 

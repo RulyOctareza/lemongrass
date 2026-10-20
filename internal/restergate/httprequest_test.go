@@ -10,18 +10,19 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 // setUpHTTPChannel creates a domain and an active HTTP channel against it, returning the
 // service, the channel id, and the server for the caller to add handlers to before use.
-func setUpHTTPChannel(t *testing.T, srv *httptest.Server, users []vault.DomainUser, methods []string) (*testSvc, vault.ChannelID) {
+func setUpHTTPChannel(t *testing.T, srv *httptest.Server, users []vault.ResterUser, methods []string) (*testSvc, vault.ChannelID) {
 	t.Helper()
 	svc := newTestService(t)
 	const rootSecret = "root-secret"
 	if err := svc.SetPassphrase(rootSecret); err != nil {
 		t.Fatalf("SetPassphrase: %v", err)
 	}
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
@@ -29,10 +30,10 @@ func setUpHTTPChannel(t *testing.T, srv *httptest.Server, users []vault.DomainUs
 		FixedTTLSeconds: 3600,
 		Users:           users,
 	}
-	if err := svc.PutDomain(rootSecret, "test-domain", domain); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	if err := svc.PutRester(rootSecret, "test-rester", domain.Rester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	c, err := svc.CreateHTTPChannel(rootSecret, "test-channel", "test-domain", vault.HTTPScope{Methods: methods}, time.Hour)
+	c, err := svc.CreateHTTPChannel(rootSecret, "test-channel", "test-rester", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: methods}, nil, time.Hour)
 	if err != nil {
 		t.Fatalf("CreateHTTPChannel: %v", err)
 	}
@@ -55,7 +56,7 @@ func TestRequestHTTPSuccessfulCall(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
 	result, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "", nil)
 	if err != nil {
@@ -81,7 +82,7 @@ func TestRequestHTTPScopeDenied(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
 	if _, err := svc.RequestHTTP(id, "alice", "DELETE", "/api/orders/1", nil, "", nil); err == nil {
 		t.Error("RequestHTTP with an ungranted method = nil error, want an error")
@@ -96,7 +97,7 @@ func TestRequestHTTPExpiredChannelDenied(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
 	if _, err := svc.ActivateHTTP("root-secret", id, -time.Minute); err != nil {
 		t.Fatalf("ActivateHTTP: %v", err)
@@ -129,7 +130,7 @@ func TestRequestHTTPReactiveRetryOnStaleToken(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
 	if _, err := svc.RequestHTTP(id, "alice", "GET", "/api/orders", nil, "", nil); err != nil {
 		t.Fatalf("first RequestHTTP: %v", err)
@@ -166,7 +167,7 @@ func TestRequestHTTPBYOTStaleTokenIsNotRetried(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "bot", Token: "pasted-token"}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "bot", Token: "pasted-token"}}, []string{"GET"})
 
 	if _, err := svc.RequestHTTP(id, "bot", "GET", "/api/orders", nil, "", nil); err != nil {
 		t.Fatalf("first RequestHTTP: %v", err)
@@ -184,7 +185,7 @@ func TestRequestHTTPSoleUserDefault(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
 	if _, err := svc.RequestHTTP(id, "", "GET", "/api/orders", nil, "", nil); err != nil {
 		t.Fatalf("RequestHTTP with no user on a one-user domain: %v", err)
@@ -195,7 +196,7 @@ func TestRequestHTTPUserErrorsListUsers(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	users := []vault.DomainUser{
+	users := []vault.ResterUser{
 		{Name: "alice", Fields: map[string]string{"u": "alice"}},
 		{Name: "bob", Fields: map[string]string{"u": "bob"}},
 	}

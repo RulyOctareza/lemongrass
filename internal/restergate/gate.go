@@ -1,4 +1,4 @@
-// Package restergate makes HTTP calls through a channel: it checks scope, logs users in, caches their tokens and sends the request. The domain config comes from the vault and only tokens are cached here.
+// Package restergate makes HTTP calls through a channel: it checks scope, logs users in, caches their tokens and sends the request. The rester config comes from the vault and only tokens are cached here.
 package restergate
 
 import (
@@ -23,7 +23,7 @@ type Gate struct {
 	tokens map[tokenCacheKey]cachedToken
 }
 
-// New returns a Gate reading domain config from svc and dropping a channel's cached tokens whenever the vault invalidates that channel.
+// New returns a Gate reading rester config from svc and dropping a channel's cached tokens whenever the vault invalidates that channel.
 func New(svc *vault.Service) *Gate {
 	g := &Gate{vault: svc, tokens: make(map[tokenCacheKey]cachedToken)}
 	svc.OnInvalidate(g.forgetTokens)

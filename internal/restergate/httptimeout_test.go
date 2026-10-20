@@ -34,7 +34,7 @@ func setTimeouts(t *testing.T, login, request time.Duration) {
 func TestRequestHTTPUpstreamIsNotBoundByTheLoginTimeout(t *testing.T) {
 	srv := newSlowServer(400 * time.Millisecond)
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 	setTimeouts(t, 100*time.Millisecond, 5*time.Second)
 
 	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), "text/csv", nil)
@@ -46,7 +46,7 @@ func TestRequestHTTPUpstreamIsNotBoundByTheLoginTimeout(t *testing.T) {
 func TestRequestHTTPGivesUpAfterRequestTimeout(t *testing.T) {
 	srv := newSlowServer(time.Second)
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 	setTimeouts(t, 5*time.Second, 200*time.Millisecond)
 
 	_, err := svc.RequestHTTP(id, "alice", "POST", "/import", []byte("x"), "text/csv", nil)

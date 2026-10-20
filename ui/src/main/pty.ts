@@ -10,6 +10,8 @@ import { writeTrust } from './projectTrust'
 import { orientationLaunch, type OrientationRole } from './orientation'
 import { startupTrimArgs, startupTrimEnv } from './startupTrim'
 import { classifyInput } from './humanInput'
+import { destroyInstance } from './web'
+import { resolveShellBinary } from './shellBinary'
 
 // Every shell spawns an agent binary directly, never a login shell. Codex
 // receives repeated Ctrl+C during a graceful tab or app shutdown, so it can
@@ -90,7 +92,7 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
     if (opts.tabId && opts.cwd) await registerTab(opts.cwd, opts.tabId, opts.command)
     const target = trustTarget(opts)
     if (target && opts.cwd && isTrustedProject(opts.cwd)) await writeTrust(opts.cwd, target)
-    const proc = pty.spawn(opts.command, args, {
+    const proc = pty.spawn(resolveShellBinary(opts.command), args, {
       name: 'xterm-256color',
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,
@@ -111,6 +113,8 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
     proc.onExit(({ exitCode, signal }) => {
       if (!shuttingDown) send(getSender(), 'pty:exit', { id, exitCode, signal })
       shells.delete(id)
+      // The tab's browser lives only as long as its shell, which is the tab id the web commands arrive with.
+      if (opts.tabId) destroyInstance(opts.tabId)
     })
 
     shells.set(id, {

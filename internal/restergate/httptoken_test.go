@@ -47,9 +47,9 @@ func TestObtainTokenCachesUntilNearExpiry(t *testing.T) {
 	defer srv.Close()
 
 	svc := newTestService(t)
-	domain := vault.Domain{
+	domain := vault.ResolvedRester{
 		BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 3600,
-		Users: []vault.DomainUser{{Name: "alice", Fields: map[string]string{"username": "alice"}}},
+		Users: []vault.ResterUser{{Name: "alice", Fields: map[string]string{"username": "alice"}}},
 	}
 	id, _ := vault.NewChannelID()
 
@@ -78,9 +78,9 @@ func TestObtainTokenRefreshesNearExpiry(t *testing.T) {
 	defer srv.Close()
 
 	svc := newTestService(t)
-	domain := vault.Domain{
+	domain := vault.ResolvedRester{
 		BaseURL: srv.URL, LoginEndpoint: "/login", TokenPath: "access_token", FixedTTLSeconds: 3600,
-		Users: []vault.DomainUser{{Name: "alice", Fields: map[string]string{"username": "alice"}}},
+		Users: []vault.ResterUser{{Name: "alice", Fields: map[string]string{"username": "alice"}}},
 	}
 	id, _ := vault.NewChannelID()
 
@@ -108,11 +108,11 @@ func TestObtainTokenBYOTNeverCallsLogin(t *testing.T) {
 	defer srv.Close()
 
 	svc := newTestService(t)
-	domain := vault.Domain{
+	domain := vault.ResolvedRester{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "bot", Token: "pasted"}},
+		Users:           []vault.ResterUser{{Name: "bot", Token: "pasted"}},
 	}
 	id, _ := vault.NewChannelID()
 

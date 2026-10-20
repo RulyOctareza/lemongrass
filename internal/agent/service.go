@@ -109,7 +109,7 @@ func (s *Service) HTTPChannelInfo(shortID string) (restergate.HTTPChannelInfo, e
 	return info, redactID(err, realID, shortID)
 }
 
-// HTTPUsers resolves shortID to its real vault channel and lists its domain's users with their
+// HTTPUsers resolves shortID to its real vault channel and lists its rester's users with their
 // tags, returning the same error for an unregistered, forgotten, or mistyped id.
 func (s *Service) HTTPUsers(shortID string) ([]restergate.HTTPUserInfo, error) {
 	realID, ok := s.lookup(shortID)

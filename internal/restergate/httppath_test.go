@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 func TestResolveRequestTarget(t *testing.T) {
@@ -27,9 +28,9 @@ func TestResolveRequestTarget(t *testing.T) {
 		{name: "trailing slash kept", base: "https://api.example.com", input: "/orders/", wantScope: "/orders/", wantURL: "https://api.example.com/orders/"},
 		{name: "full url under base", base: "https://api.example.com", input: "https://api.example.com/orders/42?x=1", wantScope: "/orders/42", wantURL: "https://api.example.com/orders/42?x=1"},
 		{name: "full url host case", base: "https://api.example.com", input: "https://API.example.com/orders", wantScope: "/orders", wantURL: "https://api.example.com/orders"},
-		{name: "full url on another host", base: "https://api.example.com", input: "https://evil.example/orders", wantErr: "not under this domain's base URL"},
-		{name: "full url wrong scheme", base: "https://api.example.com", input: "http://api.example.com/orders", wantErr: "not under this domain's base URL"},
-		{name: "full url with userinfo", base: "https://api.example.com", input: "https://api.example.com@evil.example/orders", wantErr: "not under this domain's base URL"},
+		{name: "full url on another host", base: "https://api.example.com", input: "https://evil.example/orders", wantErr: "not under this rester's base URL"},
+		{name: "full url wrong scheme", base: "https://api.example.com", input: "http://api.example.com/orders", wantErr: "not under this rester's base URL"},
+		{name: "full url with userinfo", base: "https://api.example.com", input: "https://api.example.com@evil.example/orders", wantErr: "not under this rester's base URL"},
 		{name: "userinfo shaped path stays a path", base: "https://api.example.com", input: "@evil.example/x", wantScope: "/@evil.example/x", wantURL: "https://api.example.com/@evil.example/x"},
 		{name: "scheme relative", base: "https://api.example.com", input: "//evil.example/x", wantErr: "scheme-relative"},
 		{name: "host and port shaped", base: "https://api.example.com", input: "localhost:8080/x", wantScope: "/localhost:8080/x", wantURL: "https://api.example.com/localhost:8080/x"},
@@ -46,10 +47,10 @@ func TestResolveRequestTarget(t *testing.T) {
 		{name: "base path only", base: "https://api.example.com/api/v1/", input: "/api/v1", wantScope: "/", wantURL: "https://api.example.com/api/v1/"},
 		{name: "similar prefix not stripped", base: "https://api.example.com/api", input: "/apiary/x", wantScope: "/apiary/x", wantURL: "https://api.example.com/api/apiary/x"},
 		{name: "full url with base path", base: "https://api.example.com/api/v1", input: "https://api.example.com/api/v1/orders", wantScope: "/orders", wantURL: "https://api.example.com/api/v1/orders"},
-		{name: "full url outside base path", base: "https://api.example.com/api/v1", input: "https://api.example.com/orders", wantErr: "outside this domain's base path"},
+		{name: "full url outside base path", base: "https://api.example.com/api/v1", input: "https://api.example.com/orders", wantErr: "outside this rester's base path"},
 		{name: "trailing slash on base", base: "https://api.example.com/", input: "/orders", wantScope: "/orders", wantURL: "https://api.example.com/orders"},
 		{name: "base with port", base: "http://127.0.0.1:8080", input: "http://127.0.0.1:8080/orders", wantScope: "/orders", wantURL: "http://127.0.0.1:8080/orders"},
-		{name: "base with other port", base: "http://127.0.0.1:8080", input: "http://127.0.0.1:9090/orders", wantErr: "not under this domain's base URL"},
+		{name: "base with other port", base: "http://127.0.0.1:8080", input: "http://127.0.0.1:9090/orders", wantErr: "not under this rester's base URL"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -96,7 +97,7 @@ func TestRequestHTTPFullURLUnderBaseAndReportedURL(t *testing.T) {
 	var hits []string
 	srv := httptest.NewServer(newLoginMux(&hits))
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
 	result, err := svc.RequestHTTP(id, "alice", "GET", srv.URL+"/api/orders?limit=2", nil, "", nil)
 	if err != nil {
@@ -119,7 +120,7 @@ func TestRequestHTTPNeverReachesAnotherHost(t *testing.T) {
 	defer srv.Close()
 	other := httptest.NewServer(newLoginMux(&otherHits))
 	defer other.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET"})
 
 	otherHost := strings.TrimPrefix(other.URL, "http://")
 	for _, p := range []string{
@@ -147,22 +148,22 @@ func TestRequestHTTPExclusionHoldsAgainstBypassShapes(t *testing.T) {
 	if err := svc.SetPassphrase(rootSecret); err != nil {
 		t.Fatal(err)
 	}
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 	}
-	if err := svc.PutDomain(rootSecret, "d", domain); err != nil {
+	if err := svc.PutRester(rootSecret, "d", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
 	scope := vault.HTTPScope{
 		Methods:    []string{"PUT"},
 		Exclusions: []vault.MethodPath{{Method: "PUT", PathPattern: "/users/*/change-password"}},
 	}
-	c, err := svc.CreateHTTPChannel(rootSecret, "ch", "d", scope, time.Hour)
+	c, err := svc.CreateHTTPChannel(rootSecret, "ch", "d", vault.DefaultEnvironment, vault.TypeAPI, scope, nil, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

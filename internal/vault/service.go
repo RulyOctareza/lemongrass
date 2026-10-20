@@ -23,6 +23,9 @@ type Service struct {
 	httpMetaDir string
 	rootSalt    []byte
 
+	// resterMu makes PutRester's name check and write one step.
+	resterMu sync.Mutex
+
 	mu         sync.Mutex
 	activeKeys map[ChannelID][]byte
 	onInvalid  []func(ChannelID)
@@ -104,7 +107,7 @@ func (s *Service) PutCredential(rootSecret, dbName string, value []byte) error {
 }
 
 // ListConnections lists stored credential names only, never a decrypted value, without needing
-// a root secret. Excludes domain entries, which share this same Store under their own key prefix.
+// a root secret. Excludes rester entries, which share this same Store under their own key prefix.
 func (s *Service) ListConnections() ([]string, error) {
 	names, err := s.creds.List()
 	if err != nil {
@@ -112,7 +115,7 @@ func (s *Service) ListConnections() ([]string, error) {
 	}
 	out := make([]string, 0, len(names))
 	for _, n := range names {
-		if strings.HasPrefix(n, domainKeyPrefix) {
+		if strings.HasPrefix(n, resterKeyPrefix) {
 			continue
 		}
 		out = append(out, n)
@@ -164,7 +167,7 @@ func (s *Service) VerifyPassphrase(rootSecret string) error {
 	return nil
 }
 
-// ResetVault permanently discards the canary and every stored credential, domain, and channel
+// ResetVault permanently discards the canary and every stored credential, rester, and channel
 // of both kinds. The only way back from a forgotten passphrase, since nothing encrypted under
 // it is recoverable without it. The policy file is kept: it is not sealed under the passphrase,
 // and a reset, which needs no passphrase, must not drop the user's own denials.

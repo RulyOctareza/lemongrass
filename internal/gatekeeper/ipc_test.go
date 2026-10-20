@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 const testRootSecret = "correct horse battery staple"
@@ -217,33 +218,33 @@ func TestIPCQueryIsNotAdminGated(t *testing.T) {
 	}
 }
 
-func TestIPCGetAndUpdateDomainRoundTrip(t *testing.T) {
+func TestIPCGetAndUpdateResterRoundTrip(t *testing.T) {
 	client := startTestServer(t)
 
-	d := vault.Domain{BaseURL: "http://a.invalid", Users: []vault.DomainUser{{Name: "alice", Fields: map[string]string{"password": "pw"}, Tags: []string{"tenant x"}}}}
-	if err := client.PutDomain(testRootSecret, "staging", d); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	d := vaulttest.Domain{BaseURL: "http://a.invalid", Users: []vault.ResterUser{{Name: "alice", Fields: map[string]string{"password": "pw"}, Tags: []string{"tenant x"}}}}
+	if err := client.PutRester(testRootSecret, "staging", d.Rester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
 
-	got, err := client.GetDomain(testRootSecret, "staging")
+	got, err := client.GetRester(testRootSecret, "staging")
 	if err != nil {
-		t.Fatalf("GetDomain: %v", err)
+		t.Fatalf("GetRester: %v", err)
 	}
-	if got.BaseURL != "http://a.invalid" || got.Users[0].Fields["password"] != "pw" || got.Users[0].Tags[0] != "tenant x" {
-		t.Errorf("GetDomain = %+v, want the full stored config", got)
-	}
-
-	got.BaseURL = "http://b.invalid"
-	if err := client.UpdateDomain(testRootSecret, "staging", got); err != nil {
-		t.Fatalf("UpdateDomain: %v", err)
-	}
-	again, err := client.GetDomain(testRootSecret, "staging")
-	if err != nil || again.BaseURL != "http://b.invalid" {
-		t.Errorf("after UpdateDomain: %+v, err = %v, want base URL http://b.invalid", again, err)
+	if got.Environments[0].BaseURL != "http://a.invalid" || got.Users[0].Fields["password"] != "pw" || got.Users[0].Tags[0] != "tenant x" {
+		t.Errorf("GetRester = %+v, want the full stored config", got)
 	}
 
-	if _, err := client.GetDomain("wrong-secret", "staging"); err == nil {
-		t.Error("GetDomain accepted a wrong passphrase")
+	got.Environments[0].BaseURL = "http://b.invalid"
+	if err := client.UpdateRester(testRootSecret, "staging", got); err != nil {
+		t.Fatalf("UpdateRester: %v", err)
+	}
+	again, err := client.GetRester(testRootSecret, "staging")
+	if err != nil || again.Environments[0].BaseURL != "http://b.invalid" {
+		t.Errorf("after UpdateRester: %+v, err = %v, want base URL http://b.invalid", again, err)
+	}
+
+	if _, err := client.GetRester("wrong-secret", "staging"); err == nil {
+		t.Error("GetRester accepted a wrong passphrase")
 	}
 }
 

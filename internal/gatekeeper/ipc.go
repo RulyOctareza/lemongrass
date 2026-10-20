@@ -34,10 +34,10 @@ const (
 	opGetConnection       = "get_connection"
 	opUpdateConnection    = "update_connection"
 
-	opPutDomain           = "put_domain"
-	opListDomains         = "list_domains"
-	opDeleteDomain        = "delete_domain"
-	opTestDomainLogin     = "test_domain_login"
+	opPutRester           = "put_rester"
+	opListResters         = "list_resters"
+	opDeleteRester        = "delete_rester"
+	opTestResterLogin     = "test_rester_login"
 	opCreateHTTPChannel   = "create_http_channel"
 	opActivateHTTP        = "activate_http"
 	opRequestHTTP         = "request_http"
@@ -48,8 +48,9 @@ const (
 	opHTTPChannelInfo     = "http_channel_info"
 	opHTTPChannelUsers    = "http_channel_users"
 	opFlushHTTPTokens     = "flush_http_tokens"
-	opGetDomain           = "get_domain"
-	opUpdateDomain        = "update_domain"
+	opGetRester           = "get_rester"
+	opUpdateRester        = "update_rester"
+	opWebLoginFields      = "web_login_fields"
 )
 
 var connDeadline = 10 * time.Second
@@ -157,38 +158,39 @@ type hasPassphrasePayload struct {
 	HasPassphrase bool `json:"has_passphrase"`
 }
 
-type putDomainPayload struct {
+type putResterPayload struct {
 	RootSecret string       `json:"root_secret"`
 	Name       string       `json:"name"`
-	Domain     vault.Domain `json:"domain"`
+	Rester     vault.Rester `json:"rester"`
 }
 
-type domainNamePayload struct {
+type resterNamePayload struct {
 	Name string `json:"name"`
 }
 
-type domainListPayload struct {
+type resterListPayload struct {
 	Names []string `json:"names"`
 }
 
-type testDomainLoginPayload struct {
-	Domain vault.Domain     `json:"domain"`
-	User   vault.DomainUser `json:"user"`
+type testResterLoginPayload struct {
+	API         vault.ResterAPI   `json:"api"`
+	Environment vault.Environment `json:"environment"`
+	User        vault.ResterUser  `json:"user"`
 }
 
-// testDomainLoginResultPayload is a finished login test. An empty Error means the login passed;
+// testResterLoginResultPayload is a finished login test. An empty Error means the login passed;
 // Status and Body are set only when the login endpoint answered with a non-2xx status.
-type testDomainLoginResultPayload struct {
+type testResterLoginResultPayload struct {
 	Error  string `json:"error,omitempty"`
 	Status int    `json:"status,omitempty"`
 	Body   string `json:"body,omitempty"`
 }
 
-func testDomainLoginResult(err error) testDomainLoginResultPayload {
+func testResterLoginResult(err error) testResterLoginResultPayload {
 	if err == nil {
-		return testDomainLoginResultPayload{}
+		return testResterLoginResultPayload{}
 	}
-	result := testDomainLoginResultPayload{Error: err.Error()}
+	result := testResterLoginResultPayload{Error: err.Error()}
 	var statusErr *restergate.LoginStatusError
 	if errors.As(err, &statusErr) {
 		result.Status = statusErr.Status
@@ -198,11 +200,14 @@ func testDomainLoginResult(err error) testDomainLoginResultPayload {
 }
 
 type createHTTPChannelPayload struct {
-	RootSecret string          `json:"root_secret"`
-	Name       string          `json:"name"`
-	DomainName string          `json:"domain_name"`
-	Scope      vault.HTTPScope `json:"scope"`
-	TTLSeconds int             `json:"ttl_seconds"`
+	RootSecret  string          `json:"root_secret"`
+	Name        string          `json:"name"`
+	Rester      string          `json:"rester"`
+	Environment string          `json:"environment"`
+	Type        string          `json:"type"`
+	Scope       vault.HTTPScope `json:"scope"`
+	WebScope    *vault.WebScope `json:"web_scope"`
+	TTLSeconds  int             `json:"ttl_seconds"`
 }
 
 type activateHTTPPayload struct {
@@ -246,17 +251,22 @@ type flushHTTPTokensPayload struct {
 	User string          `json:"user"`
 }
 
+type webLoginFieldsPayload struct {
+	ChannelID vault.ChannelID `json:"channel_id"`
+	User      string          `json:"user"`
+}
+
 type flushedPayload struct {
 	Flushed int `json:"flushed"`
 }
 
-type getDomainPayload struct {
+type getResterPayload struct {
 	RootSecret string `json:"root_secret"`
 	Name       string `json:"name"`
 }
 
-type domainPayload struct {
-	Domain vault.Domain `json:"domain"`
+type resterPayload struct {
+	Rester vault.Rester `json:"rester"`
 }
 
 type httpChannelListPayload struct {
@@ -493,38 +503,38 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 		}
 		return response{OK: true}
 
-	case opPutDomain:
-		var p putDomainPayload
+	case opPutRester:
+		var p putResterPayload
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			return response{OK: true}, svc.PutDomain(p.RootSecret, p.Name, p.Domain)
+			return response{OK: true}, svc.PutRester(p.RootSecret, p.Name, p.Rester)
 		})
 
-	case opListDomains:
-		names, err := svc.ListDomains()
+	case opListResters:
+		names, err := svc.ListResters()
 		if err != nil {
 			return errResponse(err)
 		}
-		return payloadResponse(domainListPayload{Names: names})
+		return payloadResponse(resterListPayload{Names: names})
 
-	case opDeleteDomain:
-		var p domainNamePayload
+	case opDeleteRester:
+		var p resterNamePayload
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
-		if err := svc.DeleteDomain(p.Name); err != nil {
+		if err := svc.DeleteRester(p.Name); err != nil {
 			return errResponse(err)
 		}
 		return response{OK: true}
 
-	case opTestDomainLogin:
-		var p testDomainLoginPayload
+	case opTestResterLogin:
+		var p testResterLoginPayload
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
-		return payloadResponse(testDomainLoginResult(svc.HTTP.TestDomainLogin(p.Domain, p.User)))
+		return payloadResponse(testResterLoginResult(svc.HTTP.TestResterLogin(p.API, p.Environment, p.User)))
 
 	case opCreateHTTPChannel:
 		var p createHTTPChannelPayload
@@ -532,7 +542,7 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			c, err := svc.CreateHTTPChannel(p.RootSecret, p.Name, p.DomainName, p.Scope, time.Duration(p.TTLSeconds)*time.Second)
+			c, err := svc.CreateHTTPChannel(p.RootSecret, p.Name, p.Rester, p.Environment, p.Type, p.Scope, p.WebScope, time.Duration(p.TTLSeconds)*time.Second)
 			return payloadResponse(httpChannelPayload{Channel: c}), err
 		})
 
@@ -600,6 +610,17 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 		}
 		return payloadResponse(httpChannelUsersPayload{Users: users})
 
+	case opWebLoginFields:
+		var p webLoginFieldsPayload
+		if err := json.Unmarshal(req.Payload, &p); err != nil {
+			return errResponse(err)
+		}
+		fields, err := svc.HTTP.WebLoginFields(p.ChannelID, p.User)
+		if err != nil {
+			return errResponse(err)
+		}
+		return payloadResponse(fields)
+
 	case opFlushHTTPTokens:
 		var p flushHTTPTokensPayload
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
@@ -611,23 +632,23 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 		}
 		return payloadResponse(flushedPayload{Flushed: flushed})
 
-	case opGetDomain:
-		var p getDomainPayload
+	case opGetRester:
+		var p getResterPayload
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			d, err := svc.GetDomain(p.RootSecret, p.Name)
-			return payloadResponse(domainPayload{Domain: d}), err
+			d, err := svc.GetRester(p.RootSecret, p.Name)
+			return payloadResponse(resterPayload{Rester: d}), err
 		})
 
-	case opUpdateDomain:
-		var p putDomainPayload
+	case opUpdateRester:
+		var p putResterPayload
 		if err := json.Unmarshal(req.Payload, &p); err != nil {
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			return response{OK: true}, svc.UpdateDomain(p.RootSecret, p.Name, p.Domain)
+			return response{OK: true}, svc.UpdateRester(p.RootSecret, p.Name, p.Rester)
 		})
 
 	case opListHTTPChannels:
@@ -858,23 +879,23 @@ func (c *Client) ResetVault() error {
 	return c.call(opResetVault, nil, nil)
 }
 
-func (c *Client) PutDomain(rootSecret, name string, d vault.Domain) error {
-	return c.call(opPutDomain, putDomainPayload{RootSecret: rootSecret, Name: name, Domain: d}, nil)
+func (c *Client) PutRester(rootSecret, name string, r vault.Rester) error {
+	return c.call(opPutRester, putResterPayload{RootSecret: rootSecret, Name: name, Rester: r}, nil)
 }
 
-func (c *Client) ListDomains() ([]string, error) {
-	var out domainListPayload
-	err := c.call(opListDomains, nil, &out)
+func (c *Client) ListResters() ([]string, error) {
+	var out resterListPayload
+	err := c.call(opListResters, nil, &out)
 	return out.Names, err
 }
 
-func (c *Client) DeleteDomain(name string) error {
-	return c.call(opDeleteDomain, domainNamePayload{Name: name}, nil)
+func (c *Client) DeleteRester(name string) error {
+	return c.call(opDeleteRester, resterNamePayload{Name: name}, nil)
 }
 
-func (c *Client) TestDomainLogin(d vault.Domain, u vault.DomainUser) error {
-	var out testDomainLoginResultPayload
-	if err := c.call(opTestDomainLogin, testDomainLoginPayload{Domain: d, User: u}, &out); err != nil {
+func (c *Client) TestResterLogin(api vault.ResterAPI, env vault.Environment, u vault.ResterUser) error {
+	var out testResterLoginResultPayload
+	if err := c.call(opTestResterLogin, testResterLoginPayload{API: api, Environment: env, User: u}, &out); err != nil {
 		return err
 	}
 	if out.Error != "" {
@@ -883,9 +904,9 @@ func (c *Client) TestDomainLogin(d vault.Domain, u vault.DomainUser) error {
 	return nil
 }
 
-func (c *Client) CreateHTTPChannel(rootSecret, name, domainName string, scope vault.HTTPScope, ttl time.Duration) (vault.HTTPChannel, error) {
+func (c *Client) CreateHTTPChannel(rootSecret, name, rester, environment, typ string, scope vault.HTTPScope, webScope *vault.WebScope, ttl time.Duration) (vault.HTTPChannel, error) {
 	var out httpChannelPayload
-	err := c.call(opCreateHTTPChannel, createHTTPChannelPayload{RootSecret: rootSecret, Name: name, DomainName: domainName, Scope: scope, TTLSeconds: int(ttl.Seconds())}, &out)
+	err := c.call(opCreateHTTPChannel, createHTTPChannelPayload{RootSecret: rootSecret, Name: name, Rester: rester, Environment: environment, Type: typ, Scope: scope, WebScope: webScope, TTLSeconds: int(ttl.Seconds())}, &out)
 	return out.Channel, err
 }
 
@@ -923,20 +944,27 @@ func (c *Client) HTTPChannelUsers(id vault.ChannelID) ([]restergate.HTTPUserInfo
 	return out.Users, err
 }
 
+// WebLoginFields asks for the login material of one user on a web channel. Only the app calls it; its reply never travels to a model.
+func (c *Client) WebLoginFields(id vault.ChannelID, user string) (restergate.WebLoginFields, error) {
+	var out restergate.WebLoginFields
+	err := c.call(opWebLoginFields, webLoginFieldsPayload{ChannelID: id, User: user}, &out)
+	return out, err
+}
+
 func (c *Client) FlushHTTPTokens(id vault.ChannelID, user string) (int, error) {
 	var out flushedPayload
 	err := c.call(opFlushHTTPTokens, flushHTTPTokensPayload{ID: id, User: user}, &out)
 	return out.Flushed, err
 }
 
-func (c *Client) GetDomain(rootSecret, name string) (vault.Domain, error) {
-	var out domainPayload
-	err := c.call(opGetDomain, getDomainPayload{RootSecret: rootSecret, Name: name}, &out)
-	return out.Domain, err
+func (c *Client) GetRester(rootSecret, name string) (vault.Rester, error) {
+	var out resterPayload
+	err := c.call(opGetRester, getResterPayload{RootSecret: rootSecret, Name: name}, &out)
+	return out.Rester, err
 }
 
-func (c *Client) UpdateDomain(rootSecret, name string, d vault.Domain) error {
-	return c.call(opUpdateDomain, putDomainPayload{RootSecret: rootSecret, Name: name, Domain: d}, nil)
+func (c *Client) UpdateRester(rootSecret, name string, r vault.Rester) error {
+	return c.call(opUpdateRester, putResterPayload{RootSecret: rootSecret, Name: name, Rester: r}, nil)
 }
 
 func (c *Client) ListHTTPChannels() ([]vault.HTTPChannel, error) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/faizalv/lemongrass/internal/restergate"
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 func fullHTTPScope() vault.HTTPScope {
@@ -33,18 +34,18 @@ func TestServiceRegisterThenRequestHTTP(t *testing.T) {
 	defer srv.Close()
 
 	vaultClient := startTestVault(t)
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 	}
-	if err := vaultClient.PutDomain(testRootSecret, "staging", domain); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	if err := vaultClient.PutRester(testRootSecret, "staging", domain.Rester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", fullHTTPScope(), 5*time.Minute)
+	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", vault.DefaultEnvironment, vault.TypeAPI, fullHTTPScope(), nil, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("CreateHTTPChannel: %v", err)
 	}
@@ -79,18 +80,18 @@ func TestServiceHTTPChannelInfo(t *testing.T) {
 	defer srv.Close()
 
 	vaultClient := startTestVault(t)
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 	}
-	if err := vaultClient.PutDomain(testRootSecret, "staging", domain); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	if err := vaultClient.PutRester(testRootSecret, "staging", domain.Rester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", fullHTTPScope(), 5*time.Minute)
+	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", vault.DefaultEnvironment, vault.TypeAPI, fullHTTPScope(), nil, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("CreateHTTPChannel: %v", err)
 	}
@@ -127,18 +128,18 @@ func TestServiceRequestHTTPFullURLAndDefaultUser(t *testing.T) {
 	defer srv.Close()
 
 	vaultClient := startTestVault(t)
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 	}
-	if err := vaultClient.PutDomain(testRootSecret, "staging", domain); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	if err := vaultClient.PutRester(testRootSecret, "staging", domain.Rester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", fullHTTPScope(), 5*time.Minute)
+	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", vault.DefaultEnvironment, vault.TypeAPI, fullHTTPScope(), nil, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("CreateHTTPChannel: %v", err)
 	}
@@ -163,18 +164,18 @@ func TestServiceRequestHTTPFullURLAndDefaultUser(t *testing.T) {
 
 func TestServiceHTTPUsers(t *testing.T) {
 	vaultClient := startTestVault(t)
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         "http://127.0.0.1:1",
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "employee", Fields: map[string]string{"password": "pw"}, Tags: []string{"tenant x"}}},
+		Users:           []vault.ResterUser{{Name: "employee", Fields: map[string]string{"password": "pw"}, Tags: []string{"tenant x"}}},
 	}
-	if err := vaultClient.PutDomain(testRootSecret, "staging", domain); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	if err := vaultClient.PutRester(testRootSecret, "staging", domain.Rester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", fullHTTPScope(), 5*time.Minute)
+	c, err := vaultClient.CreateHTTPChannel(testRootSecret, "test-channel", "staging", vault.DefaultEnvironment, vault.TypeAPI, fullHTTPScope(), nil, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("CreateHTTPChannel: %v", err)
 	}

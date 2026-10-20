@@ -12,28 +12,33 @@ const (
 	HTTPStatusExpired  = "expired"
 )
 
-// HTTPUserInfo is what a model may learn about a domain user: a name and its tags, never a
+// HTTPUserInfo is what a model may learn about a rester user: a name and its tags, never a
 // login field or a token.
 type HTTPUserInfo struct {
 	Name string   `json:"name"`
 	Tags []string `json:"tags"`
 }
 
-// HTTPChannelInfo is a channel's model-facing summary. BaseURL and Users need the channel's
-// decrypted domain copy, so they are only present while the channel is active.
+// HTTPChannelInfo is a channel's model-facing summary. BaseURL, Origin and Users need the channel's
+// decrypted rester copy, so they are only present while the channel is active.
 type HTTPChannelInfo struct {
 	Name             string             `json:"name"`
-	Domain           string             `json:"domain"`
+	Rester           string             `json:"rester"`
+	Environment      string             `json:"environment"`
+	Type             string             `json:"type"`
 	Status           string             `json:"status"`
 	ExpiresAt        time.Time          `json:"expires_at"`
 	RemainingSeconds int64              `json:"remaining_seconds"`
 	Methods          []string           `json:"methods"`
 	Exclusions       []vault.MethodPath `json:"exclusions"`
 	BaseURL          string             `json:"base_url,omitempty"`
+	Origin           string             `json:"origin,omitempty"`
+	WebOrigins       []string           `json:"web_origins,omitempty"`
+	WebExclusions    []vault.MethodPath `json:"web_exclusions,omitempty"`
 	Users            []HTTPUserInfo     `json:"users,omitempty"`
 }
 
-// HTTPChannelInfo reports channel id's name, domain, expiry, scope and, while the channel is
+// HTTPChannelInfo reports channel id's name, rester, expiry, scope and, while the channel is
 // active, its base URL and users.
 func (g *Gate) HTTPChannelInfo(id vault.ChannelID) (HTTPChannelInfo, error) {
 	c, err := g.vault.HTTPChannelScope(id)
@@ -43,11 +48,17 @@ func (g *Gate) HTTPChannelInfo(id vault.ChannelID) (HTTPChannelInfo, error) {
 
 	now := time.Now()
 	info := HTTPChannelInfo{
-		Name:       c.Name,
-		Domain:     c.Domain,
-		ExpiresAt:  c.ExpiresAt,
-		Methods:    c.Scope.Methods,
-		Exclusions: c.Scope.Exclusions,
+		Name:        c.Name,
+		Rester:      c.Rester,
+		Environment: c.Environment,
+		Type:        c.Type,
+		ExpiresAt:   c.ExpiresAt,
+		Methods:     c.Scope.Methods,
+		Exclusions:  c.Scope.Exclusions,
+	}
+	if c.WebScope != nil {
+		info.WebOrigins = c.WebScope.Origins
+		info.WebExclusions = c.WebScope.Exclusions
 	}
 	if info.Methods == nil {
 		info.Methods = []string{}
@@ -62,20 +73,24 @@ func (g *Gate) HTTPChannelInfo(id vault.ChannelID) (HTTPChannelInfo, error) {
 	}
 	info.RemainingSeconds = int64(c.ExpiresAt.Sub(now).Seconds())
 
-	domain, err := g.vault.ChannelDomain(id)
+	rester, err := g.vault.ChannelResolved(id)
 	if err != nil {
 		info.Status = HTTPStatusInactive
 		return info, nil
 	}
 	info.Status = HTTPStatusActive
-	info.BaseURL = domain.BaseURL
-	info.Users = userInfos(domain)
+	if c.Type == vault.TypeWeb {
+		info.Origin = rester.Origin
+	} else {
+		info.BaseURL = rester.BaseURL
+	}
+	info.Users = userInfos(rester)
 	return info, nil
 }
 
-func userInfos(domain vault.Domain) []HTTPUserInfo {
-	out := make([]HTTPUserInfo, len(domain.Users))
-	for i, u := range domain.Users {
+func userInfos(rester vault.ResolvedRester) []HTTPUserInfo {
+	out := make([]HTTPUserInfo, len(rester.Users))
+	for i, u := range rester.Users {
 		tags := u.Tags
 		if tags == nil {
 			tags = []string{}
@@ -85,12 +100,12 @@ func userInfos(domain vault.Domain) []HTTPUserInfo {
 	return out
 }
 
-// HTTPChannelUsers lists the users of channel id's domain with their tags, under the same
+// HTTPChannelUsers lists the users of channel id's rester with their tags, under the same
 // expiry and active checks as RequestHTTP.
 func (g *Gate) HTTPChannelUsers(id vault.ChannelID) ([]HTTPUserInfo, error) {
-	_, domain, err := g.vault.OpenHTTPChannel(id)
+	_, rester, err := g.vault.OpenHTTPChannel(id)
 	if err != nil {
 		return nil, err
 	}
-	return userInfos(domain), nil
+	return userInfos(rester), nil
 }

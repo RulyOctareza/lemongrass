@@ -15,6 +15,7 @@ import {
   docTabCount,
   focusPane,
   openInNewShell,
+  openWeb,
   placeTab,
   projectRelativePath,
   tabBand,
@@ -283,6 +284,12 @@ async function copyPath(tabId: string): Promise<void> {
 function menuCopyPath(): void {
   if (!menu.value) return
   void copyPath(menu.value.tabId)
+  menu.value = null
+}
+
+function menuWatchBrowser(): void {
+  if (!menu.value) return
+  openWeb(props.project, props.leaf.id, menu.value.tabId)
   menu.value = null
 }
 
@@ -624,6 +631,25 @@ onBeforeUnmount(() => {
           />
         </svg>
         Copy tab id
+      </button>
+      <button v-if="menuTab.kind === 'shell'" class="menu-item" @click="menuWatchBrowser">
+        <svg
+          class="menu-icon"
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="7" cy="7" r="5.2" />
+          <path
+            d="M1.8 7h10.4M7 1.8c-1.6 1.6-2.4 3.3-2.4 5.2s.8 3.6 2.4 5.2c1.6-1.6 2.4-3.3 2.4-5.2S8.6 3.4 7 1.8Z"
+          />
+        </svg>
+        Watch browser
       </button>
       <template v-if="menuJoinGroups">
         <div class="menu-divider" />

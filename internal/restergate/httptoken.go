@@ -9,7 +9,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
-// tokenCacheKey identifies one cached token: a channel plus which of the channel's domain
+// tokenCacheKey identifies one cached token: a channel plus which of the channel's rester
 // users it belongs to.
 type tokenCacheKey struct {
 	channel vault.ChannelID
@@ -91,58 +91,58 @@ func (g *Gate) forgetTokens(id vault.ChannelID) {
 }
 
 // resolveUser returns the stored name of the user a call runs as: the one whose handle matches
-// name, or the domain's only user when name is empty. Otherwise the error lists the handles a
+// name, or the rester's only user when name is empty. Otherwise the error lists the handles a
 // caller can choose from.
-func resolveUser(domain vault.Domain, name string) (string, error) {
-	if name == "" && len(domain.Users) == 1 {
-		return domain.Users[0].Name, nil
+func resolveUser(rester vault.ResolvedRester, name string) (string, error) {
+	if name == "" && len(rester.Users) == 1 {
+		return rester.Users[0].Name, nil
 	}
 	handle := vault.UserHandle(name)
-	for _, u := range domain.Users {
+	for _, u := range rester.Users {
 		if vault.UserHandle(u.Name) == handle {
 			return u.Name, nil
 		}
 	}
-	if len(domain.Users) == 0 {
-		return "", errors.New("restergate: this domain has no users")
+	if len(rester.Users) == 0 {
+		return "", errors.New("restergate: this rester has no users")
 	}
-	names := make([]string, len(domain.Users))
-	for i, u := range domain.Users {
+	names := make([]string, len(rester.Users))
+	for i, u := range rester.Users {
 		names[i] = vault.UserHandle(u.Name)
 		if len(u.Tags) > 0 {
 			names[i] += " (" + strings.Join(u.Tags, ", ") + ")"
 		}
 	}
 	if name == "" {
-		return "", fmt.Errorf("restergate: this domain has several users, pass --user with one of: %s", strings.Join(names, ", "))
+		return "", fmt.Errorf("restergate: this rester has several users, pass --user with one of: %s", strings.Join(names, ", "))
 	}
-	return "", fmt.Errorf("restergate: domain has no user %q, available users: %s", name, strings.Join(names, ", "))
+	return "", fmt.Errorf("restergate: rester has no user %q, available users: %s", name, strings.Join(names, ", "))
 }
 
-func findDomainUser(domain vault.Domain, userName string) (vault.DomainUser, error) {
-	for _, u := range domain.Users {
+func findResterUser(rester vault.ResolvedRester, userName string) (vault.ResterUser, error) {
+	for _, u := range rester.Users {
 		if u.Name == userName {
 			return u, nil
 		}
 	}
-	return vault.DomainUser{}, fmt.Errorf("restergate: domain has no user %q", userName)
+	return vault.ResterUser{}, fmt.Errorf("restergate: rester has no user %q", userName)
 }
 
 // obtainToken returns user's current token: a cached one if it isn't within
 // tokenRefreshMargin of its computed expiry, otherwise a fresh one -- a login user re-logs in
-// via domain.LoginEndpoint, a bring-your-own-token user's stored token is reused directly
+// via rester.LoginEndpoint, a bring-your-own-token user's stored token is reused directly
 // since there's no login call to refresh from.
-func (g *Gate) obtainToken(id vault.ChannelID, domain vault.Domain, userName string) (string, bool, error) {
+func (g *Gate) obtainToken(id vault.ChannelID, rester vault.ResolvedRester, userName string) (string, bool, error) {
 	if cached, ok := g.cachedTokenFor(id, userName); ok && time.Until(cached.expiresAt) > tokenRefreshMargin {
 		return string(cached.locked), cached.everUsed, nil
 	}
-	return g.refreshToken(id, domain, userName)
+	return g.refreshToken(id, rester, userName)
 }
 
 // refreshToken always obtains a fresh token, bypassing any cached one -- used both by
 // obtainToken on a cache miss/near-expiry and by the reactive re-login-and-retry path.
-func (g *Gate) refreshToken(id vault.ChannelID, domain vault.Domain, userName string) (string, bool, error) {
-	user, err := findDomainUser(domain, userName)
+func (g *Gate) refreshToken(id vault.ChannelID, rester vault.ResolvedRester, userName string) (string, bool, error) {
+	user, err := findResterUser(rester, userName)
 	if err != nil {
 		return "", false, err
 	}
@@ -150,13 +150,13 @@ func (g *Gate) refreshToken(id vault.ChannelID, domain vault.Domain, userName st
 	var token string
 	var expiresAt time.Time
 	if user.IsBYOT() {
-		expiresAt, err = byotExpiry(domain, user)
+		expiresAt, err = byotExpiry(rester, user)
 		if err != nil {
 			return "", false, err
 		}
 		token = user.Token
 	} else {
-		token, expiresAt, err = loginHTTP(domain, user)
+		token, expiresAt, err = loginHTTP(rester, user)
 		if err != nil {
 			return "", false, err
 		}

@@ -36,13 +36,13 @@ func startDownloadStack(t *testing.T, handler http.HandlerFunc, methods ...strin
 		t.Fatal(err)
 	}
 	domain := newEditableDomain(srv.URL, twoLoginUsers()[:1])
-	if err := backend.PutDomain(rootSecret, "d", domain); err != nil {
+	if err := backend.PutRester(rootSecret, "d", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
 	if len(methods) == 0 {
 		methods = []string{"GET"}
 	}
-	c, err := backend.CreateHTTPChannel(rootSecret, "ch", "d", vault.HTTPScope{Methods: methods}, time.Hour)
+	c, err := backend.CreateHTTPChannel(rootSecret, "ch", "d", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: methods}, nil, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

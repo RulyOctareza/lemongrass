@@ -80,31 +80,63 @@ export interface VaultTokenPlacement {
 
 export type VaultLoginFieldType = 'number' | 'boolean'
 
-export interface VaultDomainUser {
-  Name: string
-  Fields: Record<string, string>
-  FieldTypes: Record<string, VaultLoginFieldType> | null
-  Token: string
-  Tags: string[]
-}
-
 export interface VaultHeader {
   Name: string
   Value: string
 }
 
-export interface VaultDomain {
+export interface VaultLoginStep {
+  Action: 'goto' | 'fill' | 'click' | 'wait'
+  URL: string
+  Selector: string
+  Field: string
+  TimeoutSeconds: number
+}
+
+export interface VaultEnvironment {
+  Name: string
   BaseURL: string
+  Origin: string
+  Headers: VaultHeader[] | null
+}
+
+export interface VaultUserOverride {
+  Fields: Record<string, string> | null
+  FieldTypes: Record<string, string> | null
+  Token: string
+}
+
+export interface VaultResterUser {
+  Name: string
+  Fields: Record<string, string> | null
+  FieldTypes: Record<string, string> | null
+  Token: string
+  Tags: string[] | null
+  Environments: string[] | null
+  Overrides: Record<string, VaultUserOverride> | null
+}
+
+export interface VaultResterAPI {
   LoginEndpoint: string
   TokenPath: string
   TTLOrigin: string
   FixedTTLSeconds: number
   TokenPlacement: VaultTokenPlacement
-  Users: VaultDomainUser[]
   Headers: VaultHeader[] | null
 }
 
-export interface VaultDomainLoginTest {
+export interface VaultResterWeb {
+  Login: VaultLoginStep[] | null
+}
+
+export interface VaultRester {
+  API: VaultResterAPI | null
+  Web: VaultResterWeb | null
+  Environments: VaultEnvironment[]
+  Users: VaultResterUser[]
+}
+
+export interface VaultResterLoginTest {
   error: string
   status: number
   body: string
@@ -120,11 +152,19 @@ export interface VaultHTTPScope {
   Exclusions: VaultMethodPath[]
 }
 
+export interface VaultWebScope {
+  Origins: string[] | null
+  Exclusions: VaultMethodPath[] | null
+}
+
 export interface VaultHTTPChannel {
   ID: string
   Name: string
-  Domain: string
+  Rester: string
+  Environment: string
+  Type: 'api' | 'web'
   Scope: VaultHTTPScope
+  WebScope: VaultWebScope | null
   CreatedAt: string
   ExpiresAt: string
 }
@@ -214,6 +254,7 @@ export type WorkspaceTab =
   | { id: string; kind: 'doc'; path: string }
   | { id: string; kind: 'diff'; path: string }
   | { id: string; kind: 'connector' }
+  | { id: string; kind: 'web'; shellTabId: string }
   | { id: string; kind: 'workgroup'; groupId: number }
   | {
       id: string
@@ -425,4 +466,20 @@ export interface NodeUpdateRequest {
   label: string
   expiresAt: string
   shares: NodeShare[]
+}
+
+// A rectangle in DIPs, as getBoundingClientRect reports it in the content area.
+export interface WebBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface WebState {
+  tabId: string
+  url: string
+  title: string
+  user: string
+  open: boolean
 }

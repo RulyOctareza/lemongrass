@@ -11,21 +11,50 @@ import (
 	"time"
 )
 
-// CreateHTTPChannel decrypts domainName's root-encrypted config once and stores a
-// separately-encrypted copy under a new channel id, wrapped with that channel's own derived
-// key -- the same pattern CreateChannel uses for a db credential.
-func (s *Service) CreateHTTPChannel(rootSecret, name, domainName string, scope HTTPScope, ttl time.Duration) (HTTPChannel, error) {
+// CreateHTTPChannel decrypts resterName's root-encrypted config once, resolves it for one
+// environment and type, and stores that flat copy under a new channel id, wrapped with that
+// channel's own derived key -- the same pattern CreateChannel uses for a db credential. The scope
+// that does not match typ is dropped. It refuses an environment or side that does not exist, an
+// environment with no address for typ, and a channel no user could use.
+func (s *Service) CreateHTTPChannel(rootSecret, name, resterName, environment, typ string, scope HTTPScope, webScope *WebScope, ttl time.Duration) (HTTPChannel, error) {
 	if name == "" {
 		return HTTPChannel{}, ErrEmptyChannelName
 	}
+	if environment == "" {
+		return HTTPChannel{}, errors.New("vault: a channel needs an environment")
+	}
+	switch typ {
+	case TypeAPI:
+		webScope = nil
+	case TypeWeb:
+		scope = HTTPScope{}
+		if webScope == nil {
+			webScope = &WebScope{}
+		}
+		if err := webScope.Validate(); err != nil {
+			return HTTPChannel{}, err
+		}
+	default:
+		return HTTPChannel{}, fmt.Errorf("vault: unknown channel type %q, want %q or %q", typ, TypeAPI, TypeWeb)
+	}
 
-	domain, err := s.getDomain(rootSecret, domainName)
+	// Held until the metadata is saved so UpdateRester, which checks a rester's channels under the same lock, sees this one.
+	s.resterMu.Lock()
+	defer s.resterMu.Unlock()
+	rester, err := s.GetRester(rootSecret, resterName)
 	if err != nil {
 		return HTTPChannel{}, err
 	}
-	plain, err := json.Marshal(domain)
+	resolved, err := rester.resolve(environment, typ)
 	if err != nil {
-		return HTTPChannel{}, fmt.Errorf("vault: encoding domain %s: %w", domainName, err)
+		return HTTPChannel{}, err
+	}
+	if len(resolved.Users) == 0 {
+		return HTTPChannel{}, fmt.Errorf("vault: no user of rester %s can use a %s channel in environment %q", resterName, typ, environment)
+	}
+	plain, err := json.Marshal(resolved)
+	if err != nil {
+		return HTTPChannel{}, fmt.Errorf("vault: encoding rester %s: %w", resterName, err)
 	}
 	defer Zero(plain)
 
@@ -49,18 +78,21 @@ func (s *Service) CreateHTTPChannel(rootSecret, name, domainName string, scope H
 
 	if err := s.channels.Put(string(id), locked, plain); err != nil {
 		LockedFree(locked)
-		return HTTPChannel{}, fmt.Errorf("vault: wrapping domain for channel %s: %w", id, err)
+		return HTTPChannel{}, fmt.Errorf("vault: wrapping rester for channel %s: %w", id, err)
 	}
 
 	now := time.Now()
 	c := HTTPChannel{
-		ID:        id,
-		Name:      name,
-		Domain:    domainName,
-		Scope:     scope,
-		Salt:      salt,
-		CreatedAt: now,
-		ExpiresAt: now.Add(ttl),
+		ID:          id,
+		Name:        name,
+		Rester:      resterName,
+		Environment: environment,
+		Type:        typ,
+		Scope:       scope,
+		WebScope:    webScope,
+		Salt:        salt,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(ttl),
 	}
 	if err := s.saveHTTPMeta(c); err != nil {
 		LockedFree(locked)
@@ -75,7 +107,7 @@ func (s *Service) CreateHTTPChannel(rootSecret, name, domainName string, scope H
 }
 
 // ActivateHTTP re-derives an existing HTTP channel's key and refreshes its TTL, without
-// decrypting the root-encrypted domain config again.
+// decrypting the root-encrypted rester again.
 func (s *Service) ActivateHTTP(rootSecret string, id ChannelID, ttl time.Duration) (HTTPChannel, error) {
 	c, err := s.loadHTTPMeta(id)
 	if err != nil {
@@ -106,7 +138,7 @@ func (s *Service) ActivateHTTP(rootSecret string, id ChannelID, ttl time.Duratio
 	return c, nil
 }
 
-// RevokeHTTP removes an HTTP channel's metadata, wrapped domain config, and cached key,
+// RevokeHTTP removes an HTTP channel's metadata, wrapped rester copy, and cached key,
 // succeeding even if the channel was never active.
 func (s *Service) RevokeHTTP(id ChannelID) error {
 	s.forgetKey(id)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 type headerFixture struct {
@@ -60,19 +61,19 @@ func newHeaderFixture(t *testing.T) *headerFixture {
 	if err := f.svc.SetPassphrase("root-secret"); err != nil {
 		t.Fatal(err)
 	}
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "X-Api-Key"},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 		Headers:         []vault.Header{{Name: "anthropic-version", Value: "2023-06-01"}},
 	}
-	if err := f.svc.PutDomain("root-secret", "d", domain); err != nil {
+	if err := f.svc.PutRester("root-secret", "d", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := f.svc.CreateHTTPChannel("root-secret", "ch", "d", vault.HTTPScope{Methods: []string{"GET"}}, time.Hour)
+	c, err := f.svc.CreateHTTPChannel("root-secret", "ch", "d", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET"}}, nil, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +148,7 @@ func TestRefusedCallHeaders(t *testing.T) {
 		{"authorization", []vault.Header{{Name: "Authorization", Value: "Bearer mine"}}, `header "Authorization" is set by the proxy`},
 		{"cookie", []vault.Header{{Name: "cookie", Value: "a=b"}}, `header "cookie" is set by the proxy`},
 		{"content type", []vault.Header{{Name: "Content-Type", Value: "text/plain"}}, `header "Content-Type" is set by the proxy`},
-		{"domain header", []vault.Header{{Name: "ANTHROPIC-VERSION", Value: "2099-01-01"}}, `header "ANTHROPIC-VERSION" is set by the domain`},
+		{"domain header", []vault.Header{{Name: "ANTHROPIC-VERSION", Value: "2099-01-01"}}, `header "ANTHROPIC-VERSION" is set by the rester`},
 		{"repeated", []vault.Header{{Name: "X-A", Value: "1"}, {Name: "x-a", Value: "2"}}, `header "x-a" is given more than once`},
 		{"newline", []vault.Header{{Name: "X-A", Value: "1\r\nX-B: 2"}}, `header "X-A" has a value that is not a single line`},
 	}

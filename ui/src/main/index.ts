@@ -23,6 +23,7 @@ import { installLgrass, installLgrassd, installLgrassconf } from './lgrassInstal
 import { ensureDaemonsRunning, killDaemons } from './daemons'
 import { startWorkgroupBridge, stopWorkgroupBridge } from './workgroupBridge'
 import { registerWorkgroupHandlers } from './workgroups'
+import { destroyAllInstances } from './web'
 
 let mainWindow: BrowserWindow | undefined
 
@@ -61,6 +62,7 @@ function createWindow(): void {
   // destroyed" for any handler still holding this getter.
   win.on('closed', () => {
     mainWindow = undefined
+    destroyAllInstances()
   })
 
   win.webContents.setWindowOpenHandler((details) => {

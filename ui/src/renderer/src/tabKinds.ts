@@ -3,6 +3,7 @@ import DiffViewer from './components/DiffViewer.vue'
 import DocView from './components/DocView.vue'
 import ShellView from './components/ShellView.vue'
 import VaultPanel from './components/VaultPanel.vue'
+import WebPane from './components/WebPane.vue'
 import WorkgroupPane from './components/WorkgroupPane.vue'
 import { shellTitles } from './shellRegistry'
 import { workgroupStateOf } from './workgroups'
@@ -107,6 +108,23 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     body: WorkgroupPane,
     keepAlive: true,
     bodyProps: (tab, ctx) => ({ project: ctx.project, groupId: tab.groupId, active: ctx.active })
+  },
+  web: {
+    icon: [
+      { tag: 'circle', attrs: { cx: 7, cy: 7, r: 5.2 } },
+      {
+        tag: 'path',
+        attrs: {
+          d: 'M1.8 7h10.4M7 1.8c-1.6 1.6-2.4 3.3-2.4 5.2s.8 3.6 2.4 5.2c1.6-1.6 2.4-3.3 2.4-5.2S8.6 3.4 7 1.8Z'
+        }
+      }
+    ],
+    label: (tab) => ({ prefix: 'web', text: shellTitles[tab.shellTabId] ?? 'browser' }),
+    title: (tab) => `Browser of ${shellTitles[tab.shellTabId] ?? 'a shell tab'}`,
+    body: WebPane,
+    // The native view is attached only while the tab is active, so the body can unmount.
+    keepAlive: false,
+    bodyProps: (tab) => ({ shellTabId: tab.shellTabId })
   }
 }
 

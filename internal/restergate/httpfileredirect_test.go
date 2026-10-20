@@ -52,11 +52,11 @@ func newFileRedirectFixture(t *testing.T) *fileRedirectFixture {
 	if err := svc.SetPassphrase("root-secret"); err != nil {
 		t.Fatal(err)
 	}
-	domain := newEditableDomain(base.URL, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}})
-	if err := svc.PutDomain("root-secret", "d", domain); err != nil {
+	domain := newEditableDomain(base.URL, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}})
+	if err := svc.PutRester("root-secret", "d", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := svc.CreateHTTPChannel("root-secret", "ch", "d", vault.HTTPScope{Methods: []string{"POST"}}, time.Hour)
+	c, err := svc.CreateHTTPChannel("root-secret", "ch", "d", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"POST"}}, nil, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

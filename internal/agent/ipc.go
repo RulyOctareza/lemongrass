@@ -11,6 +11,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/gatekeeper"
 	"github.com/faizalv/lemongrass/internal/restergate"
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/web"
 )
 
 const (
@@ -126,6 +127,9 @@ func handleConn(svc *Service, queryLimiter *vault.FailureLimiter, conn net.Conn)
 	if req.Op == opRequestHTTP || req.Op == opRequestHTTPDownload {
 		conn.SetDeadline(time.Now().Add(restergate.RequestTimeout))
 	}
+	if req.Op == opWebCommand {
+		conn.SetDeadline(time.Now().Add(web.Timeout))
+	}
 	if req.Op == opRequestHTTPDownload {
 		serveDownload(svc, conn, req)
 		return
@@ -205,6 +209,9 @@ func dispatch(svc *Service, queryLimiter *vault.FailureLimiter, req request) res
 			flushed, err := svc.FlushHTTPTokens(p.ShortID, p.User)
 			return payloadResponse(httpFlushedPayload{Flushed: flushed}), err
 		})
+
+	case opWebCommand:
+		return webCommandOp(svc, queryLimiter, req.Payload)
 
 	case opForget:
 		var p shortIDPayload

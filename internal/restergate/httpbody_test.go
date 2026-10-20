@@ -65,7 +65,7 @@ func TestRequestHTTPSendsBinaryBodyByteForByteWithContentType(t *testing.T) {
 	rec := &bodyRecorder{}
 	srv := newBodyServer(rec)
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 
 	want := spreadsheetShapedBytes()
 	result, err := svc.RequestHTTP(id, "alice", "POST", "/import", want, xlsxType, nil)
@@ -82,7 +82,7 @@ func TestRequestHTTPDefaultsToJSONWithoutContentType(t *testing.T) {
 	rec := &bodyRecorder{}
 	srv := newBodyServer(rec)
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 
 	if _, err := svc.RequestHTTP(id, "alice", "POST", "/orders", []byte(`{"a":1}`), "", nil); err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestRequestHTTPRejectsOversizeBodyAndBadContentType(t *testing.T) {
 	rec := &bodyRecorder{}
 	srv := newBodyServer(rec)
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"POST"})
 
 	_, err := svc.RequestHTTP(id, "alice", "POST", "/import", make([]byte, MaxRequestBodyBytes+1), xlsxType, nil)
 	if err == nil || !strings.Contains(err.Error(), "25 MiB") {
@@ -141,7 +141,7 @@ func TestRequestHTTPRetryResendsSameBodyAndContentType(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET", "POST"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}, []string{"GET", "POST"})
 
 	if _, err := svc.RequestHTTP(id, "alice", "GET", "/ok", nil, "", nil); err != nil {
 		t.Fatal(err)

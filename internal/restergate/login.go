@@ -15,15 +15,26 @@ import (
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
-// TestDomainLogin attempts a real login for user against domain's LoginEndpoint, or validates
-// a bring-your-own-token user's pasted token, with no root secret and no stored state involved
-// -- the same fresh-value check TestConnection does for a db connection string.
-func (g *Gate) TestDomainLogin(domain vault.Domain, user vault.DomainUser) error {
+// TestResterLogin attempts a real login for user against the api side's LoginEndpoint at the
+// environment's base URL, or validates a bring-your-own-token user's pasted token, with no root
+// secret and no stored state involved -- the same fresh-value check TestConnection does for a db
+// connection string. user is the effective user the form holds.
+func (g *Gate) TestResterLogin(api vault.ResterAPI, env vault.Environment, user vault.ResterUser) error {
+	rester := vault.ResolvedRester{
+		Environment:     env.Name,
+		BaseURL:         env.BaseURL,
+		LoginEndpoint:   api.LoginEndpoint,
+		TokenPath:       api.TokenPath,
+		TTLOrigin:       api.TTLOrigin,
+		FixedTTLSeconds: api.FixedTTLSeconds,
+		TokenPlacement:  api.TokenPlacement,
+		Headers:         vault.MergeHeaders(api.Headers, env.Headers),
+	}
 	if user.IsBYOT() {
-		_, err := byotExpiry(domain, user)
+		_, err := byotExpiry(rester, user)
 		return err
 	}
-	_, _, err := loginHTTP(domain, user)
+	_, _, err := loginHTTP(rester, user)
 	return err
 }
 
@@ -40,21 +51,21 @@ func (e *LoginStatusError) Error() string {
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-// loginHTTP POSTs user.LoginBody() to domain.LoginEndpoint and extracts the token and
+// loginHTTP POSTs user.LoginBody() to rester.LoginEndpoint and extracts the token and
 // its computed expiry from the response.
-func loginHTTP(domain vault.Domain, user vault.DomainUser) (token string, expiresAt time.Time, err error) {
-	if domain.LoginEndpoint == "" {
-		return "", time.Time{}, errors.New("restergate: domain has no login endpoint, only bring-your-own-token users are supported")
+func loginHTTP(rester vault.ResolvedRester, user vault.ResterUser) (token string, expiresAt time.Time, err error) {
+	if rester.LoginEndpoint == "" {
+		return "", time.Time{}, errors.New("restergate: rester has no login endpoint, only bring-your-own-token users are supported")
 	}
 	body, err := user.LoginBody()
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	req, err := http.NewRequest(http.MethodPost, domain.BaseURL+domain.LoginEndpoint, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, rester.BaseURL+rester.LoginEndpoint, bytes.NewReader(body))
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("restergate: building login request: %w", err)
 	}
-	setHeaders(req, domain.Headers)
+	setHeaders(req, rester.Headers)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := *httpClient
@@ -73,12 +84,12 @@ func loginHTTP(domain vault.Domain, user vault.DomainUser) (token string, expire
 		return "", time.Time{}, &LoginStatusError{Status: resp.StatusCode, Body: respBody}
 	}
 
-	token, err = jsonPathString(respBody, domain.TokenPath)
+	token, err = jsonPathString(respBody, rester.TokenPath)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("restergate: extracting token: %w", err)
 	}
 
-	expiresAt, err = ttlFromLoginResponse(domain, respBody, token)
+	expiresAt, err = ttlFromLoginResponse(rester, respBody, token)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -88,43 +99,43 @@ func loginHTTP(domain vault.Domain, user vault.DomainUser) (token string, expire
 // byotExpiry computes a bring-your-own-token user's expiry: from the token itself when
 // TTLOrigin is "jwt-exp", otherwise from FixedTTLSeconds, since there's no login response to
 // pull a JSON-path TTL from.
-func byotExpiry(domain vault.Domain, user vault.DomainUser) (time.Time, error) {
+func byotExpiry(rester vault.ResolvedRester, user vault.ResterUser) (time.Time, error) {
 	if user.Token == "" {
 		return time.Time{}, errors.New("restergate: bring-your-own-token user has no token")
 	}
-	switch domain.TTLOrigin {
+	switch rester.TTLOrigin {
 	case "jwt-exp":
 		return jwtExpiry(user.Token)
 	case "":
-		return time.Now().Add(time.Duration(domain.FixedTTLSeconds) * time.Second), nil
+		return time.Now().Add(time.Duration(rester.FixedTTLSeconds) * time.Second), nil
 	default:
-		return time.Time{}, fmt.Errorf("restergate: TTLOrigin %q needs a login response, which a bring-your-own-token user never has -- use \"jwt-exp\" or a fixed TTL", domain.TTLOrigin)
+		return time.Time{}, fmt.Errorf("restergate: TTLOrigin %q needs a login response, which a bring-your-own-token user never has -- use \"jwt-exp\" or a fixed TTL", rester.TTLOrigin)
 	}
 }
 
 // ttlFromLoginResponse computes a login user's expiry from TTLOrigin: a JSON path into
 // respBody, the literal "jwt-exp" to decode token itself, or FixedTTLSeconds when TTLOrigin is empty.
-func ttlFromLoginResponse(domain vault.Domain, respBody []byte, token string) (time.Time, error) {
-	switch domain.TTLOrigin {
+func ttlFromLoginResponse(rester vault.ResolvedRester, respBody []byte, token string) (time.Time, error) {
+	switch rester.TTLOrigin {
 	case "":
-		return time.Now().Add(time.Duration(domain.FixedTTLSeconds) * time.Second), nil
+		return time.Now().Add(time.Duration(rester.FixedTTLSeconds) * time.Second), nil
 	case "jwt-exp":
 		return jwtExpiry(token)
 	default:
-		raw, err := jsonPathString(respBody, domain.TTLOrigin)
+		raw, err := jsonPathString(respBody, rester.TTLOrigin)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("restergate: extracting TTL: %w", err)
 		}
 		seconds, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("restergate: TTLOrigin %q did not yield a number: %w", domain.TTLOrigin, err)
+			return time.Time{}, fmt.Errorf("restergate: TTLOrigin %q did not yield a number: %w", rester.TTLOrigin, err)
 		}
 		return time.Now().Add(time.Duration(seconds * float64(time.Second))), nil
 	}
 }
 
 // jwtExpiry decodes a JWT's payload segment (no signature verification -- the vault trusts the
-// issuing domain it just logged into, not the token as an untrusted credential) and reads its
+// issuing rester it just logged into, not the token as an untrusted credential) and reads its
 // numeric exp claim.
 func jwtExpiry(token string) (time.Time, error) {
 	parts := strings.Split(token, ".")

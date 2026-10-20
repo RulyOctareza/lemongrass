@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"encoding/json"
 	"path"
 	"strings"
 	"time"
@@ -58,17 +59,53 @@ func containsMethod(methods []string, method string) bool {
 	return false
 }
 
+// WebScope is a web channel's limits: the origins the page may reach besides its environment's
+// own, and exclusions that block requests the page sends to the environment's base URL. There
+// is no method allow-list since a page sends GETs and preflights on its own.
+type WebScope struct {
+	Origins    []string
+	Exclusions []MethodPath
+}
+
 // HTTPChannel is the HTTP-channel sibling of Channel: a genuinely separate type since a
-// domain's many-users shape and method+exclusion scope don't fit Channel's
-// DBName/Scope/Port shape.
+// rester's many-users shape and method+exclusion scope don't fit Channel's
+// DBName/Scope/Port shape. A channel is one environment of one rester and one type: Scope
+// limits an api channel and WebScope a web one.
 type HTTPChannel struct {
-	ID        ChannelID
-	Name      string
-	Domain    string
-	Scope     HTTPScope
-	Salt      []byte
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	ID          ChannelID
+	Name        string
+	Rester      string
+	Environment string
+	Type        string
+	Scope       HTTPScope
+	WebScope    *WebScope
+	Salt        []byte
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+}
+
+// UnmarshalJSON reads a channel stored before resters existed: its rester sat under the key
+// Domain, and it has no environment or type, which read as default and api.
+func (c *HTTPChannel) UnmarshalJSON(b []byte) error {
+	type plain HTTPChannel
+	aux := struct {
+		plain
+		Domain string
+	}{}
+	if err := json.Unmarshal(b, &aux); err != nil {
+		return err
+	}
+	*c = HTTPChannel(aux.plain)
+	if c.Rester == "" {
+		c.Rester = aux.Domain
+	}
+	if c.Environment == "" {
+		c.Environment = DefaultEnvironment
+	}
+	if c.Type == "" {
+		c.Type = TypeAPI
+	}
+	return nil
 }
 
 func (c HTTPChannel) Expired(now time.Time) bool {

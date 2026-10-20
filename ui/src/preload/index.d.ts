@@ -20,9 +20,14 @@ import type {
   VaultScope,
   VaultChannel,
   VaultChannelWithShortId,
-  VaultDomain,
-  VaultDomainUser,
-  VaultDomainLoginTest,
+  WebBounds,
+  WebState,
+  VaultRester,
+  VaultResterUser,
+  VaultResterLoginTest,
+  VaultEnvironment,
+  VaultResterAPI,
+  VaultWebScope,
   VaultHTTPScope,
   VaultHTTPChannel,
   VaultHTTPChannelWithShortId,
@@ -137,6 +142,13 @@ interface Api {
     revoke: (id: string) => Promise<NodeState>
     remove: (id: string) => Promise<NodeState>
   }
+  web: {
+    attach: (tabId: string, bounds: WebBounds) => Promise<void>
+    setBounds: (tabId: string, bounds: WebBounds) => Promise<void>
+    detach: (tabId: string) => Promise<void>
+    getState: (tabId: string) => Promise<WebState>
+    onState: (callback: (state: WebState) => void) => () => void
+  }
   vault: {
     list: () => Promise<VaultChannel[]>
     create: (
@@ -164,18 +176,25 @@ interface Api {
     setPassphrase: (passphrase: string) => Promise<void>
     verifyPassphrase: (passphrase: string) => Promise<void>
     resetVault: () => Promise<void>
-    listDomains: () => Promise<string[]>
-    putDomain: (passphrase: string, name: string, domain: VaultDomain) => Promise<void>
-    getDomain: (passphrase: string, name: string) => Promise<VaultDomain>
-    updateDomain: (passphrase: string, name: string, domain: VaultDomain) => Promise<void>
-    deleteDomain: (name: string) => Promise<void>
-    testDomainLogin: (domain: VaultDomain, user: VaultDomainUser) => Promise<VaultDomainLoginTest>
+    listResters: () => Promise<string[]>
+    putRester: (passphrase: string, name: string, rester: VaultRester) => Promise<void>
+    getRester: (passphrase: string, name: string) => Promise<VaultRester>
+    updateRester: (passphrase: string, name: string, rester: VaultRester) => Promise<void>
+    deleteRester: (name: string) => Promise<void>
+    testResterLogin: (
+      api: VaultResterAPI,
+      environment: VaultEnvironment,
+      user: VaultResterUser
+    ) => Promise<VaultResterLoginTest>
     listHTTPChannels: () => Promise<VaultHTTPChannel[]>
     createHTTPChannel: (
       passphrase: string,
       name: string,
-      domainName: string,
+      rester: string,
+      environment: string,
+      type: 'api' | 'web',
       scope: VaultHTTPScope,
+      webScope: VaultWebScope | null,
       ttlSeconds: number
     ) => Promise<VaultHTTPChannelWithShortId>
     activateHTTPChannel: (

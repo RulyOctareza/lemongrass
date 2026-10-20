@@ -7,12 +7,12 @@ import "github.com/faizalv/lemongrass/internal/vault"
 // again. It runs under the same expiry and active checks as RequestHTTP, and a bring-your-own-token
 // user's pasted token is put back in the cache by that next request.
 func (g *Gate) FlushHTTPTokens(id vault.ChannelID, user string) (int, error) {
-	_, domain, err := g.vault.OpenHTTPChannel(id)
+	_, rester, err := g.openAPIChannel(id)
 	if err != nil {
 		return 0, err
 	}
 	if user != "" {
-		if user, err = resolveUser(domain, user); err != nil {
+		if user, err = resolveUser(rester, user); err != nil {
 			return 0, err
 		}
 	}

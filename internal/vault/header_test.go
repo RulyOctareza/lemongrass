@@ -5,51 +5,49 @@ import (
 	"testing"
 )
 
-func headerDomain(headers ...Header) Domain {
-	return Domain{
-		BaseURL:        "https://api.example.test",
+func headerRester(headers ...Header) Rester {
+	return NewAPIRester("https://api.example.test", ResterAPI{
 		TokenPlacement: TokenPlacement{Kind: PlacementHeader, Name: "x-api-key"},
-		Users:          []DomainUser{{Name: "alice", Token: "secret"}},
 		Headers:        headers,
-	}
+	}, []ResterUser{{Name: "alice", Token: "secret"}})
 }
 
-func TestPutDomainStoresHeaders(t *testing.T) {
+func TestPutResterStoresHeaders(t *testing.T) {
 	svc, err := NewService(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	d := headerDomain(Header{Name: "anthropic-version", Value: "2023-06-01"}, Header{Name: "X-Tenant", Value: ""})
-	if err := svc.PutDomain("root-secret", "staging", d); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	d := headerRester(Header{Name: "anthropic-version", Value: "2023-06-01"}, Header{Name: "X-Tenant", Value: ""})
+	if err := svc.PutRester("root-secret", "staging", d); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	got, err := svc.getDomain("root-secret", "staging")
+	got, err := svc.GetRester("root-secret", "staging")
 	if err != nil {
-		t.Fatalf("getDomain: %v", err)
+		t.Fatalf("GetRester: %v", err)
 	}
-	if len(got.Headers) != 2 || got.Headers[0] != d.Headers[0] || got.Headers[1] != d.Headers[1] {
-		t.Errorf("stored Headers = %v, want %v", got.Headers, d.Headers)
+	if len(got.API.Headers) != 2 || got.API.Headers[0] != d.API.Headers[0] || got.API.Headers[1] != d.API.Headers[1] {
+		t.Errorf("stored Headers = %v, want %v", got.API.Headers, d.API.Headers)
 	}
 }
 
-func TestPutDomainWithoutHeaders(t *testing.T) {
+func TestPutResterWithoutHeaders(t *testing.T) {
 	svc, err := NewService(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	if err := svc.PutDomain("root-secret", "staging", headerDomain()); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	if err := svc.PutRester("root-secret", "staging", headerRester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	got, err := svc.getDomain("root-secret", "staging")
+	got, err := svc.GetRester("root-secret", "staging")
 	if err != nil {
-		t.Fatalf("getDomain: %v", err)
+		t.Fatalf("GetRester: %v", err)
 	}
-	if len(got.Headers) != 0 {
-		t.Errorf("stored Headers = %v, want none", got.Headers)
+	if len(got.API.Headers) != 0 {
+		t.Errorf("stored Headers = %v, want none", got.API.Headers)
 	}
 }
 
-func TestPutDomainRejectsBadHeaders(t *testing.T) {
+func TestPutResterRejectsBadHeaders(t *testing.T) {
 	svc, err := NewService(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
@@ -67,15 +65,15 @@ func TestPutDomainRejectsBadHeaders(t *testing.T) {
 		{"repeated", []Header{{Name: "X-Tenant", Value: "1"}, {Name: "x-tenant", Value: "2"}}, `header "x-tenant" is set more than once`},
 	}
 	for _, c := range cases {
-		err := svc.PutDomain("root-secret", "staging", headerDomain(c.headers...))
+		err := svc.PutRester("root-secret", "staging", headerRester(c.headers...))
 		if err == nil || !strings.HasPrefix(err.Error(), "vault: ") || !strings.Contains(err.Error(), c.want) {
-			t.Errorf("%s: PutDomain = %v, want an error containing %q", c.name, err, c.want)
+			t.Errorf("%s: PutRester = %v, want an error containing %q", c.name, err, c.want)
 		}
 	}
 }
 
 func TestReservesHeaderFollowsTokenPlacement(t *testing.T) {
-	d := headerDomain()
+	d := ResolvedRester{TokenPlacement: TokenPlacement{Kind: PlacementHeader, Name: "x-api-key"}}
 	if !d.ReservesHeader("x-api-key") || !d.ReservesHeader("HOST") {
 		t.Errorf("ReservesHeader missed the token header or a proxy header")
 	}

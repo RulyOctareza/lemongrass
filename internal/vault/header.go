@@ -7,13 +7,13 @@ import (
 	"strings"
 )
 
-// Header is one extra request header, set on a domain by a human or on a single call by a model.
+// Header is one extra request header, set on a rester by a human or on a single call by a model.
 type Header struct {
 	Name  string
 	Value string
 }
 
-// proxyHeaders are set by the proxy for every call and cannot be set by a domain or a model.
+// proxyHeaders are set by the proxy for every call and cannot be set by a rester or a model.
 var proxyHeaders = []string{"Host", "Content-Type", "Content-Length", "Transfer-Encoding", "Connection"}
 
 // CheckHeader reports whether h has a token name and a value with no CR, LF or NUL.
@@ -40,38 +40,28 @@ func isTokenRune(r rune) bool {
 	return strings.ContainsRune("!#$%&'*+-.^_`|~", r)
 }
 
-// ReservesHeader reports whether name is set by the proxy on a call to d: a proxy header or d's token header.
-func (d Domain) ReservesHeader(name string) bool {
-	for _, p := range proxyHeaders {
-		if strings.EqualFold(p, name) {
+func reservesHeader(p TokenPlacement, name string) bool {
+	for _, h := range proxyHeaders {
+		if strings.EqualFold(h, name) {
 			return true
 		}
 	}
-	return d.TokenPlacement.Kind == PlacementHeader && strings.EqualFold(d.TokenPlacement.Name, name)
+	return p.Kind == PlacementHeader && strings.EqualFold(p.Name, name)
 }
 
-// SetsHeader reports whether one of d's own headers is named name.
-func (d Domain) SetsHeader(name string) bool {
-	for _, h := range d.Headers {
-		if strings.EqualFold(h.Name, name) {
-			return true
-		}
-	}
-	return false
-}
-
-func checkDomainHeaders(d Domain) error {
-	seen := make(map[string]bool, len(d.Headers))
-	for _, h := range d.Headers {
+// checkHeaderList refuses headers that are malformed, set by the proxy or repeated. what names the owner in the error.
+func checkHeaderList(headers []Header, p TokenPlacement, what string) error {
+	seen := make(map[string]bool, len(headers))
+	for _, h := range headers {
 		if err := CheckHeader(h); err != nil {
-			return fmt.Errorf("vault: %w", err)
+			return fmt.Errorf("vault: %s: %w", what, err)
 		}
-		if d.ReservesHeader(h.Name) {
-			return fmt.Errorf("vault: header %q is set by the proxy and cannot be set on a domain", h.Name)
+		if reservesHeader(p, h.Name) {
+			return fmt.Errorf("vault: %s: header %q is set by the proxy and cannot be set on a rester", what, h.Name)
 		}
 		key := http.CanonicalHeaderKey(h.Name)
 		if seen[key] {
-			return fmt.Errorf("vault: header %q is set more than once", h.Name)
+			return fmt.Errorf("vault: %s: header %q is set more than once", what, h.Name)
 		}
 		seen[key] = true
 	}

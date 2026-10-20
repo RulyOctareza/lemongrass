@@ -6,6 +6,7 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 import type { WorkgroupSpawnMember, WorkgroupSpawnResult } from '../preload/types'
 import { handleNudge } from './tabNudge'
+import { handleWebOp, registerWebHandlers } from './web'
 import {
   registerApprovalHandlers,
   requestApproval,
@@ -45,6 +46,11 @@ interface Proposal {
   }[]
   token?: string
   tab_id?: string
+  // The `web` op's fields.
+  channel_id?: string
+  command?: string
+  args?: string[]
+  flags?: Record<string, string>
 }
 
 interface Approved {
@@ -64,6 +70,8 @@ interface Reply {
   reason?: string
   withdrawn?: boolean
   join?: { project_path: string; group_id: number; tab_id: string }
+  text?: string
+  data?: string
 }
 
 const approvals = new Map<string, Approved>()
@@ -353,6 +361,7 @@ async function respond(
     if (request.op === 'claim') return handleClaim(String(request.token ?? ''))
     if (request.op === 'nudge')
       return await handleNudge(nudgeLgrassdPath, String(request.tab_id ?? ''))
+    if (request.op === 'web') return await handleWebOp(request)
     return { ok: false, error: `unknown op ${String(request.op)}` }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -368,6 +377,7 @@ export function startWorkgroupBridge(
 ): void {
   nudgeLgrassdPath = lgrassdPath
   registerApprovalHandlers(getWindow)
+  registerWebHandlers()
   ipcMain.on(
     'workgroup:spawn-result',
     (_event, payload: WorkgroupSpawnResult & { requestId: string }) => {

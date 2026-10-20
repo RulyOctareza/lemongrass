@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// requestTarget is a caller-supplied path resolved onto a domain's base URL. ScopePath is the
+// requestTarget is a caller-supplied path resolved onto a rester's base URL. ScopePath is the
 // cleaned, decoded path relative to the base, the form scope is checked against and the form
 // the server sees; URL is the full address the request is sent to.
 type requestTarget struct {
@@ -23,7 +23,7 @@ type requestTarget struct {
 func resolveRequestTarget(baseURL, input string) (requestTarget, error) {
 	base, err := url.Parse(baseURL)
 	if err != nil || base.Host == "" {
-		return requestTarget{}, fmt.Errorf("restergate: domain base URL %q is not a valid URL", baseURL)
+		return requestTarget{}, fmt.Errorf("restergate: rester base URL %q is not a valid URL", baseURL)
 	}
 
 	input = strings.TrimSpace(input)
@@ -47,10 +47,10 @@ func resolveRequestTarget(baseURL, input string) (requestTarget, error) {
 	basePath := strings.TrimRight(base.Path, "/")
 	if absolute {
 		if !strings.EqualFold(u.Scheme, base.Scheme) || !strings.EqualFold(u.Host, base.Host) || u.User != nil {
-			return requestTarget{}, fmt.Errorf("restergate: %q is not under this domain's base URL %s; pass a path or a URL on that host", input, baseURL)
+			return requestTarget{}, fmt.Errorf("restergate: %q is not under this rester's base URL %s; pass a path or a URL on that host", input, baseURL)
 		}
 		if basePath != "" && u.Path != basePath && !strings.HasPrefix(u.Path, basePath+"/") {
-			return requestTarget{}, fmt.Errorf("restergate: %q is outside this domain's base path %s", input, basePath)
+			return requestTarget{}, fmt.Errorf("restergate: %q is outside this rester's base path %s", input, basePath)
 		}
 	}
 

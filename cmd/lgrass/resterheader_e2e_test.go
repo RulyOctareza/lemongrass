@@ -13,6 +13,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/agent"
 	"github.com/faizalv/lemongrass/internal/restergate"
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 // startTokenCountChannel serves a token counting endpoint that, like the Anthropic API, wants x-api-key and anthropic-version, behind a domain holding domainHeaders.
@@ -35,16 +36,16 @@ func startTokenCountChannel(t *testing.T, domainHeaders []vault.Header) (*agent.
 
 	vaultClient, agentClient := startStack(t)
 	const passphrase = "correct horse"
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:        srv.URL,
 		TokenPlacement: vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "x-api-key"},
-		Users:          []vault.DomainUser{{Name: "key", Token: "sk-test"}},
+		Users:          []vault.ResterUser{{Name: "key", Token: "sk-test"}},
 		Headers:        domainHeaders,
 	}
-	if err := vaultClient.PutDomain(passphrase, "anthropic", domain); err != nil {
+	if err := vaultClient.PutRester(passphrase, "anthropic", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := vaultClient.CreateHTTPChannel(passphrase, "ch", "anthropic", vault.HTTPScope{Methods: []string{"POST"}}, time.Hour)
+	c, err := vaultClient.CreateHTTPChannel(passphrase, "ch", "anthropic", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"POST"}}, nil, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +107,7 @@ func TestRefusedCallHeaderThroughTheWholeChain(t *testing.T) {
 	client, shortID, seen := startTokenCountChannel(t, []vault.Header{{Name: "anthropic-version", Value: "2023-06-01"}})
 	cases := map[string]string{
 		"x-api-key: mine":               `header "x-api-key" is set by the proxy`,
-		"Anthropic-Version: 2099-01-01": `header "Anthropic-Version" is set by the domain`,
+		"Anthropic-Version: 2099-01-01": `header "Anthropic-Version" is set by the rester`,
 	}
 	for header, want := range cases {
 		_, err := runResterArgs(t, client, shortID, "post", "/v1/messages/count_tokens", "--body", countBody, "--header", header)

@@ -24,8 +24,8 @@ func newCountingLoginServer(logins *atomic.Int32) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
-func twoLoginUsers() []vault.DomainUser {
-	return []vault.DomainUser{
+func twoLoginUsers() []vault.ResterUser {
+	return []vault.ResterUser{
 		{Name: "alice", Fields: map[string]string{"u": "alice"}},
 		{Name: "bob", Fields: map[string]string{"u": "bob"}},
 	}
@@ -115,7 +115,7 @@ func TestFlushHTTPTokensOnlyTouchesItsOwnChannel(t *testing.T) {
 	srv := newCountingLoginServer(&logins)
 	defer srv.Close()
 	svc, first := setUpHTTPChannel(t, srv, twoLoginUsers(), []string{"GET"})
-	second, err := svc.CreateHTTPChannel("root-secret", "second", "test-domain", vault.HTTPScope{Methods: []string{"GET"}}, 3600e9)
+	second, err := svc.CreateHTTPChannel("root-secret", "second", "test-rester", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET"}}, nil, 3600e9)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestFlushHTTPTokensBringYourOwnTokenComesBack(t *testing.T) {
 	var logins atomic.Int32
 	srv := newCountingLoginServer(&logins)
 	defer srv.Close()
-	svc, id := setUpHTTPChannel(t, srv, []vault.DomainUser{{Name: "carol", Token: "pasted"}}, []string{"GET"})
+	svc, id := setUpHTTPChannel(t, srv, []vault.ResterUser{{Name: "carol", Token: "pasted"}}, []string{"GET"})
 
 	mustRequest(t, svc, id, "carol")
 	flushed, err := svc.FlushHTTPTokens(id, "carol")

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/vault"
+	"github.com/faizalv/lemongrass/internal/vault/vaulttest"
 )
 
 func newSlowServer(delay time.Duration) *httptest.Server {
@@ -38,18 +39,18 @@ func TestIPCRequestHTTPOutlivesConnDeadline(t *testing.T) {
 	if err := backend.SetPassphrase(rootSecret); err != nil {
 		t.Fatalf("SetPassphrase: %v", err)
 	}
-	domain := vault.Domain{
+	domain := vaulttest.Domain{
 		BaseURL:         srv.URL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
 		TokenPlacement:  vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization", Prefix: "Bearer "},
 		FixedTTLSeconds: 3600,
-		Users:           []vault.DomainUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
+		Users:           []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}},
 	}
-	if err := backend.PutDomain(rootSecret, "test-domain", domain); err != nil {
-		t.Fatalf("PutDomain: %v", err)
+	if err := backend.PutRester(rootSecret, "test-domain", domain.Rester()); err != nil {
+		t.Fatalf("PutRester: %v", err)
 	}
-	c, err := backend.CreateHTTPChannel(rootSecret, "test-channel", "test-domain", vault.HTTPScope{Methods: []string{"POST"}}, time.Hour)
+	c, err := backend.CreateHTTPChannel(rootSecret, "test-channel", "test-domain", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"POST"}}, nil, time.Hour)
 	if err != nil {
 		t.Fatalf("CreateHTTPChannel: %v", err)
 	}
@@ -86,8 +87,8 @@ func newCountingLoginServer(logins *atomic.Int32) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
-func newEditableDomain(baseURL string, users []vault.DomainUser) vault.Domain {
-	return vault.Domain{
+func newEditableDomain(baseURL string, users []vault.ResterUser) vaulttest.Domain {
+	return vaulttest.Domain{
 		BaseURL:         baseURL,
 		LoginEndpoint:   "/login",
 		TokenPath:       "access_token",
@@ -97,8 +98,8 @@ func newEditableDomain(baseURL string, users []vault.DomainUser) vault.Domain {
 	}
 }
 
-func twoLoginUsers() []vault.DomainUser {
-	return []vault.DomainUser{
+func twoLoginUsers() []vault.ResterUser {
+	return []vault.ResterUser{
 		{Name: "alice", Fields: map[string]string{"u": "alice"}},
 		{Name: "bob", Fields: map[string]string{"u": "bob"}},
 	}
@@ -111,10 +112,10 @@ func TestIPCFlushHTTPTokensRoundTrips(t *testing.T) {
 	client := startTestServer(t)
 
 	domain := newEditableDomain(srv.URL, twoLoginUsers())
-	if err := client.PutDomain(testRootSecret, "staging", domain); err != nil {
+	if err := client.PutRester(testRootSecret, "staging", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := client.CreateHTTPChannel(testRootSecret, "ch", "staging", vault.HTTPScope{Methods: []string{"GET"}}, 3600e9)
+	c, err := client.CreateHTTPChannel(testRootSecret, "ch", "staging", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET"}}, nil, 3600e9)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package vault
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -29,36 +28,73 @@ func (s *Service) OpenChannel(id ChannelID) (Channel, []byte, error) {
 	return c, secret, nil
 }
 
-// OpenHTTPChannel returns an active HTTP channel's metadata and its decrypted domain config. An expired channel has its cached key released and fails with ErrChannelExpired.
-func (s *Service) OpenHTTPChannel(id ChannelID) (HTTPChannel, Domain, error) {
+// OpenHTTPChannel returns an active HTTP channel's metadata and its decrypted resolved rester. An expired channel has its cached key released and fails with ErrChannelExpired.
+func (s *Service) OpenHTTPChannel(id ChannelID) (HTTPChannel, ResolvedRester, error) {
 	c, err := s.loadHTTPMeta(id)
 	if err != nil {
-		return HTTPChannel{}, Domain{}, err
+		return HTTPChannel{}, ResolvedRester{}, err
 	}
 	if c.Expired(time.Now()) {
 		s.forgetKey(id)
-		return HTTPChannel{}, Domain{}, ErrChannelExpired
+		return HTTPChannel{}, ResolvedRester{}, ErrChannelExpired
 	}
-	domain, err := s.ChannelDomain(id)
+	resolved, err := s.ChannelResolved(id)
 	if err != nil {
-		return HTTPChannel{}, Domain{}, err
+		return HTTPChannel{}, ResolvedRester{}, err
 	}
-	return c, domain, nil
+	return c, resolved, nil
 }
 
-// ChannelDomain decrypts channel id's own copy of its domain config, failing when the channel is not active.
-func (s *Service) ChannelDomain(id ChannelID) (Domain, error) {
+// ChannelResolved decrypts channel id's own copy of its rester, failing when the channel is not active.
+func (s *Service) ChannelResolved(id ChannelID) (ResolvedRester, error) {
 	wrapped, err := s.channelSecret(id)
 	if err != nil {
-		return Domain{}, err
+		return ResolvedRester{}, err
 	}
 	defer Zero(wrapped)
 
-	var domain Domain
-	if err := json.Unmarshal(wrapped, &domain); err != nil {
-		return Domain{}, fmt.Errorf("vault: decoding this channel's domain: %w", err)
+	resolved, err := decodeResolved(wrapped)
+	if err != nil {
+		return ResolvedRester{}, fmt.Errorf("vault: decoding this channel's rester: %w", err)
 	}
-	return domain, nil
+	return resolved, nil
+}
+
+// ResolvedWeb is what a web channel grants the browser: its environment's origin and login
+// steps and the effective users that can log in on the web side. BaseURL, TokenPath and
+// TokenPlacement come from the api side and are empty without one; they tell the browser which
+// requests carry a token to redact.
+type ResolvedWeb struct {
+	Environment    string
+	Origin         string
+	BaseURL        string
+	Login          []LoginStep
+	Users          []ResterUser
+	TokenPath      string
+	TokenPlacement TokenPlacement
+}
+
+// ErrNotWebChannel is returned where a web channel is required and the channel is an api one.
+var ErrNotWebChannel = errors.New("vault: this channel is not a web channel")
+
+// OpenWebChannel returns an active web channel's metadata and its resolved web side, failing for an api channel, an inactive one or an expired one.
+func (s *Service) OpenWebChannel(id ChannelID) (HTTPChannel, ResolvedWeb, error) {
+	c, resolved, err := s.OpenHTTPChannel(id)
+	if err != nil {
+		return HTTPChannel{}, ResolvedWeb{}, err
+	}
+	if c.Type != TypeWeb {
+		return HTTPChannel{}, ResolvedWeb{}, ErrNotWebChannel
+	}
+	return c, ResolvedWeb{
+		Environment:    resolved.Environment,
+		Origin:         resolved.Origin,
+		BaseURL:        resolved.BaseURL,
+		Login:          resolved.Login,
+		Users:          resolved.Users,
+		TokenPath:      resolved.TokenPath,
+		TokenPlacement: resolved.TokenPlacement,
+	}, nil
 }
 
 // WithConnection decrypts dbName's stored connection string under rootSecret, passes it to fn, and zeroes it before returning.

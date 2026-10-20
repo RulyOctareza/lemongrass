@@ -26,18 +26,18 @@ body flags, at most one kind per request:
   --form <key>=<value>                  a form field, repeatable; with --file it joins the multipart body,
                                         alone it makes an application/x-www-form-urlencoded body
 
-info prints the channel's base URL, how long it stays valid, the methods it allows and its
-users. users prints just the users with their tags. The request form proxies one HTTP call
-through the channel's domain; the vault handles login and token injection. <path> is relative
-to the domain's base URL, a full URL under it also works. --user may be left out when the
-domain has a single user. A user is named as users shows it: lowercase, with underscores for
+info prints the channel's rester, environment and type, its base URL, how long it stays valid,
+the methods it allows and its users. users prints just the users with their tags. The request
+form proxies one HTTP call through the channel's rester; the vault handles login and token injection. <path> is relative
+to the environment's base URL, a full URL under it also works. --user may be left out when the
+channel has a single user. A user is named as users shows it: lowercase, with underscores for
 spaces, and a name typed in another case or with spaces reaches the same user. Response is printed as JSON:
 {"status": N, "headers": {...}, "body": ..., "url": "..."}.
 
 --header adds one request header to this call and may be repeated, with or without --out. The
-domain may already send headers of its own, which are not shown and cannot be replaced. A header
+rester may already send headers of its own, which are not shown and cannot be replaced. A header
 that carries the token or a credential (Authorization, Cookie), Content-Type (use --content-type
-with --body-file), or one the domain sets is refused with the header named.
+with --body-file), or one the rester sets is refused with the header named.
 
 --out saves the response body of a successful call to a file instead of printing it, byte for
 byte and with no size limit, and prints {"status": N, "headers": {...}, "size": N, "url": "...",
@@ -237,6 +237,9 @@ func (c resterCommand) checkBodyFlags() error {
 }
 
 func cmdRester(args []string) {
+	if routeResterWeb(args) {
+		return
+	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
 		fmt.Print(resterUsage)
 		return
