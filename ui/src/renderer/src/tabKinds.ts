@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import DeviceView from './components/DeviceView.vue'
 import DiffViewer from './components/DiffViewer.vue'
 import DocView from './components/DocView.vue'
 import HistoryView from './components/HistoryView.vue'
@@ -107,6 +108,18 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     body: VaultPanel,
     keepAlive: true,
     bodyProps: (_tab, ctx) => ({ active: ctx.active })
+  },
+  device: {
+    icon: [
+      { tag: 'rect', attrs: { x: 3.5, y: 1.5, width: 7, height: 11, rx: 1.4 } },
+      { tag: 'path', attrs: { d: 'M6 10.5h2' } }
+    ],
+    label: () => ({ text: 'Device' }),
+    title: () => 'Device',
+    body: DeviceView,
+    // Kept alive so switching tabs does not restart the mirror on the phone.
+    keepAlive: true,
+    bodyProps: () => ({})
   },
   workgroup: {
     icon: [
