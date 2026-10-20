@@ -24,3 +24,6 @@ biblio/
 .codex
 .aws
 .agents
+
+# frozen UI builds launched by make dev
+/ui/.snapshot/

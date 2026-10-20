@@ -43,19 +43,30 @@ build-rpm: dist-linux
 build-mac: dist-darwin
 	npm --prefix ui run build:mac
 
-# Host-arch build for local dev iteration. lgrass goes to ~/.local/bin, lgrassd to ~/.lemongrass/bin, and lgrassconf beside lgrass with its service unit registered. A running executable cannot be overwritten in place, so lgrassconf and lgrassd are built beside the old file and renamed over it.
-install: submodules
+# Host-arch build for local dev iteration. lgrass goes to ~/.local/bin, lgrassd to ~/.lemongrass/bin, and lgrassconf beside lgrass with its service unit registered. Every binary is built beside its destination first and only renamed into place once all of them built, so a failed install leaves the previous set untouched and `make dev` keeps running on it. A running executable cannot be overwritten in place, which the rename also avoids. The submodule update runs inside the same guarded block so a failure there is just as loud.
+install:
 	mkdir -p $(BIN_DIR) $(D_BIN_DIR)
-	go build $(LDFLAGS) -o $(BIN_DIR)/lgrassconf.new ./cmd/lgrassconf
+	@if ! { $(MAKE) --no-print-directory bibliothek-update \
+		&& go build $(LDFLAGS) -o $(BIN_DIR)/lgrassconf.new ./cmd/lgrassconf \
+		&& go build $(LDFLAGS) -o $(BIN_DIR)/lgrass.new ./cmd/lgrass \
+		&& go build $(LDFLAGS) -o $(D_BIN_DIR)/lgrassd.new ./cmd/lgrassd; }; then \
+		rm -f $(BIN_DIR)/lgrassconf.new $(BIN_DIR)/lgrass.new $(D_BIN_DIR)/lgrassd.new; \
+		echo >&2; \
+		echo "==================================================================" >&2; \
+		echo "make install FAILED. Nothing was installed." >&2; \
+		echo "The previous stable lgrass, lgrassd and lgrassconf are still in place." >&2; \
+		echo "You can run make dev as it is and it will use them." >&2; \
+		echo "==================================================================" >&2; \
+		exit 1; \
+	fi
 	mv -f $(BIN_DIR)/lgrassconf.new $(BIN_DIR)/lgrassconf
-	$(BIN_DIR)/lgrassconf install
-	go build $(LDFLAGS) -o $(BIN_DIR)/lgrass ./cmd/lgrass
-	go build $(LDFLAGS) -o $(D_BIN_DIR)/lgrassd.new ./cmd/lgrassd
+	mv -f $(BIN_DIR)/lgrass.new $(BIN_DIR)/lgrass
 	mv -f $(D_BIN_DIR)/lgrassd.new $(D_BIN_DIR)/lgrassd
+	$(BIN_DIR)/lgrassconf install
 
-# bibliothek-update comes first so install's own submodules prerequisite, already run once here, does not check the old pin back out.
-dev: bibliothek-update install
-	npm --prefix ui run dev
+# Builds the UI once and launches it from its own snapshot, with no hot reload and nothing installed, so editing the source never reaches a running instance. It uses the binaries `make install` last installed.
+dev:
+	./scripts/dev.sh
 
 # Compiles everything and discards the output, since a plain `go build` of a single main package writes its binary into the source directory.
 verify: submodules

@@ -85,7 +85,7 @@ function copyBundled(name: BinName, installDir: string = resolveInstallDir()): s
 // permanent version lockstep with the running app. Never throws.
 //
 // Unpackaged (electron-vite dev) has no resourcesPath bundle to copy
-// from. `make dev` builds lgrass straight to the install dir instead.
+// from. `make install` builds lgrass straight to the install dir instead.
 export function installLgrass(): string | null {
   if (!app.isPackaged) {
     const dest = join(resolveInstallDir(), 'lgrass')
@@ -93,7 +93,7 @@ export function installLgrass(): string | null {
       console.error(
         'lgrass: not found at',
         dest,
-        '. Run `make dev` from the repo root instead of `npm run dev` directly.'
+        '. Run `make install` from the repo root.'
       )
       return null
     }
@@ -103,7 +103,7 @@ export function installLgrass(): string | null {
 }
 
 // Same pattern for lgrassd, installed into ~/.lemongrass/bin. Unpackaged,
-// `make dev` builds it there instead.
+// `make install` builds it there instead.
 export function installLgrassd(): string | null {
   if (!app.isPackaged) {
     const dest = join(lgrassdInstallDir(), 'lgrassd')
@@ -111,7 +111,7 @@ export function installLgrassd(): string | null {
       console.error(
         'lgrassd: not found at',
         dest,
-        '. Run `make dev` from the repo root instead of `npm run dev` directly.'
+        '. Run `make install` from the repo root.'
       )
       return null
     }
