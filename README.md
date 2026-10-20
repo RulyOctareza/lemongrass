@@ -11,9 +11,10 @@ It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. C
 `lgrass db` and `lgrass rester` send queries and HTTP calls through a vault daemon. The vault is the only process that decrypts anything. The agent holds a six-character channel id that means nothing without the vault's own mapping.
 
 - **Databases (MySQL, MariaDB, Postgres).** The vault parses each statement and checks the tables it actually touches against the channel's scope, so a query that joins a table outside the scope is refused. DDL and multi-statement calls are refused. A write runs as a dry run first and commits in a separate call, and an `UPDATE` or `DELETE` without a `WHERE` clause is refused. Database errors are redacted before the agent sees them.
-- **HTTP APIs.** A domain holds a base URL, a login endpoint and many users, each with credentials or a pasted token. The vault logs in, keeps the token in locked memory and never on disk, injects it into each request, and logs in again once when a token has gone stale. A channel grants a list of methods and excludes method and path pairs. A request path is resolved onto the domain's base URL and cannot address another host. A call can add its own headers, upload a file or form, and save a response body to disk without the agent seeing its bytes.
+- **HTTP APIs.** A rester holds the login shape of one backend, its environments (such as staging and production, each with its own base URL) and many users, each with credentials or a pasted token, assigned to the environments they belong to. The vault logs in, keeps the token in locked memory and never on disk, injects it into each request, and logs in again once when a token has gone stale. A channel picks a rester, an environment and a type. An API channel grants a list of methods and excludes method and path pairs. A request path is resolved onto the environment's base URL and cannot address another host. A call can add its own headers, upload a file or form, and save a response body to disk without the agent seeing its bytes.
+- **Web apps.** A web channel gives an agent a browser inside the app, logged in as a named user from the rester's saved login steps. The agent reads page snapshots, clicks, types, waits and reads the requests and console the page produced, and you can watch the page live in a workspace tab. Passwords, tokens and cookies never reach the agent: the vault hands login values only to the app, and one central scrub strips secrets from everything the agent reads.
 - **Lifetime.** Channels expire, and a revoke takes effect at the vault. Database writes are recorded in an audit table with a 7-day retention.
-- **Managed from one place.** The Connector tab creates, tests and revokes connections and channels behind a single vault passphrase unlock with auto-lock.
+- **Managed from one place.** The Vault tab creates, tests and revokes connections, resters and channels behind a single vault passphrase unlock with auto-lock.
 
 ### Agents work as a team, across vendors
 
@@ -50,7 +51,7 @@ Panes are `xterm.js` in the renderer over `node-pty` in the main process, the st
 
 Built:
 
-- The vault, `lgrass db` reads and writes, `lgrass rester`, and the Connector tab.
+- The vault, `lgrass db` reads and writes, `lgrass rester` for APIs and for web apps, and the Vault tab.
 - Workgroups with Claude Code members, the thread layer, the approval modal and the workgroup pane.
 - Several Claude accounts, picked per tab and per workgroup thinker.
 - The guard for Claude Code, unit tested and denying live in a tab. The sealed-policy round trip through the Safety pane has not been run live.
@@ -78,7 +79,7 @@ Limits:
 
 ## How it fits together
 
-- `ui/` is the Electron app: terminal panes, project and layout management, the bibliothek tree and reader, and the Connector tab.
+- `ui/` is the Electron app: terminal panes, project and layout management, the bibliothek tree and reader, and the Vault tab.
 - `cmd/lgrass` is the Go CLI models and users call: session and thread coordination, `lgrass db`, `lgrass rester`, and `lgrass workgroup`.
 - `cmd/lgrassd` is the binary only the app and the agents' hooks call, installed off `PATH`: the hooks and their gates, the vault, agent and node daemons, tab records and account management.
 - `cmd/lgrassconf` is a small Go daemon, a systemd user service on Linux and a LaunchAgent on macOS. It registers the Claude Code and Codex hooks, installs each agent's skills and keeps every Claude account's hooks and shared folders in place.
