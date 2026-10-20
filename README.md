@@ -55,12 +55,12 @@ Built:
 - Several Claude accounts, picked per tab and per workgroup thinker.
 - The guard for Claude Code, unit tested and denying live in a tab. The sealed-policy round trip through the Safety pane has not been run live.
 - The bibliothek browser and editor, and the Git panel.
+- The biblio history: the watcher in the agent daemon, 90-day pruning, and `lgrass biblio log` and `show`.
 
 In progress:
 
 - The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. Its transport has been checked over a live tunnel with curl. The app screen has not been checked by hand yet, and a real MCP client, live revoke and expiry have not been run yet. Search and an `lgrass node` client for Lemongrass users are planned.
 - A wire-protocol proxy so a whole app can point its own database driver at a local port. Port allocation and the MySQL handshake listener are done. Query execution and the Postgres listener are not.
-- The biblio history: the watcher in the agent daemon, pruning, and `lgrass biblio log` and `show`, built and unit tested. Not run in the app yet.
 - Codex as a workgroup member. Its tabs cannot write the lgrass database under Codex's default sandbox yet.
 
 Planned:
