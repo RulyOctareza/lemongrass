@@ -52,7 +52,8 @@ COMMANDS
                                      under ~/.lemongrass
   agent run                         Starts the gatekeeper agent daemon, listening on a unix socket
                                      under ~/.lemongrass; maps short channel ids to real vault
-                                     channels and forwards queries to a running vault daemon
+                                     channels and forwards queries to a running vault daemon; also
+                                     keeps the private history of every registered project's biblio
   node run                          Starts the node daemon, which serves granted books and tasks
                                      read-only over a tunnel while node.json says it is open
   tabs list                         Tab id to session id map for the project at the working directory, as JSON

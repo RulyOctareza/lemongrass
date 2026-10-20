@@ -68,12 +68,16 @@ linux:
       to: "bin/linux-amd64/lgrassconf"
     - from: "../dist/linux-arm64/lgrassconf"
       to: "bin/linux-arm64/lgrassconf"
+# git backs the biblio history in lgrassd. Passed to fpm rather than set as depends, which would replace
+# electron-builder's default dependency list instead of adding to it.
 deb:
   afterInstall: build/deb-after-install.sh
   afterRemove: build/deb-after-remove.sh
+  fpm: ['--depends', 'git']
 rpm:
   afterInstall: build/rpm-after-install.sh
   afterRemove: build/rpm-after-remove.sh
+  fpm: ['--depends', 'git']
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false

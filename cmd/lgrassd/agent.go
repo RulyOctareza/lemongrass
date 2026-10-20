@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/agent"
+	"github.com/faizalv/lemongrass/internal/bibliohistory"
 	"github.com/faizalv/lemongrass/internal/config"
 	"github.com/faizalv/lemongrass/internal/gatekeeper"
+	"github.com/faizalv/lemongrass/internal/project"
 	"github.com/faizalv/lemongrass/internal/session"
 	"github.com/faizalv/lemongrass/internal/threadsvc"
 	"github.com/faizalv/lemongrass/internal/vault"
@@ -22,6 +24,11 @@ const (
 
 	threadRetryInterval = 30 * time.Second
 	threadPruneInterval = time.Hour
+
+	historyDebounce = 5 * time.Second
+	historyPass     = 10 * time.Minute
+	historyKeep     = 90 * 24 * time.Hour
+	historyPrune    = 24 * time.Hour
 )
 
 func cmdAgent(args []string) {
@@ -63,6 +70,7 @@ func cmdAgentRun() {
 	limiter := vault.NewFailureLimiter(agentQueryMaxFailures, agentQueryWindow, agentQueryLockout)
 
 	startThreadService()
+	go runHistoryWatcher()
 
 	fmt.Printf("lgrassd agent: listening on %s\n", sockPath)
 	if err := agent.Serve(svc, l, limiter); err != nil {
@@ -96,4 +104,37 @@ func startThreadService() {
 	go svc.Serve(l)
 	go svc.Run(context.Background(), threadRetryInterval, threadPruneInterval)
 	fmt.Printf("lgrassd agent: thread service listening on %s\n", threadSock)
+}
+
+// Runs inside the agent daemon, so it lives only while the app runs; its pass at start commits what changed while the
+// app was closed. A failure is logged and never stops the agent.
+func runHistoryWatcher() {
+	w := &bibliohistory.Watcher{
+		Projects: project.List,
+		GitDir:   bibliohistory.GitDir,
+		Sessions: historySessions,
+		Logf: func(format string, args ...any) {
+			fmt.Fprintf(os.Stderr, "lgrassd agent: "+format+"\n", args...)
+		},
+		Debounce:   historyDebounce,
+		Pass:       historyPass,
+		Keep:       historyKeep,
+		PruneEvery: historyPrune,
+	}
+	if err := w.Run(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "lgrassd agent: biblio history not started: %v\n", err)
+	}
+}
+
+func historySessions(p project.Project, paths []string, since time.Time) []string {
+	store, err := session.Open(session.DBPath(), p.ID)
+	if err != nil {
+		return nil
+	}
+	defer store.Close()
+	touches, err := store.FileActivitySince(since)
+	if err != nil {
+		return nil
+	}
+	return bibliohistory.Attribute(p.Path, touches, paths)
 }

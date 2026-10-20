@@ -660,3 +660,23 @@ func TestClearTabsKeepsSavedSessionsAndClearsTabState(t *testing.T) {
 		t.Errorf("the cleared tab's stale prompting state still blocks a nudge")
 	}
 }
+
+func TestFileActivitySince(t *testing.T) {
+	store := openTestStore(t)
+	if err := store.LogFileActivity("old", "/p/biblio/a.md"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	since := time.Now()
+	time.Sleep(10 * time.Millisecond)
+	store.LogFileActivity("s1", "/p/biblio/a.md")
+	store.LogFileActivity("s2", "/p/biblio/b.md")
+
+	touches, err := store.FileActivitySince(since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(touches) != 2 || touches[0].SessionID != "s1" || touches[1].SessionID != "s2" {
+		t.Fatalf("touches = %+v", touches)
+	}
+}

@@ -163,6 +163,33 @@ func (s *Store) LogFileActivity(sessionID, filePath string) error {
 	return err
 }
 
+type FileTouch struct {
+	SessionID string
+	FilePath  string
+}
+
+// Oldest first, so callers that keep the first touch per session get them in the order they started editing.
+func (s *Store) FileActivitySince(since time.Time) ([]FileTouch, error) {
+	rows, err := s.db.Query(`
+		SELECT session_id, file_path FROM file_activity
+		WHERE project_id = ? AND touched_at > ?
+		ORDER BY touched_at
+	`, s.projectID, since.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var touches []FileTouch
+	for rows.Next() {
+		var t FileTouch
+		if err := rows.Scan(&t.SessionID, &t.FilePath); err != nil {
+			return nil, err
+		}
+		touches = append(touches, t)
+	}
+	return touches, rows.Err()
+}
+
 type ActivityHit struct {
 	SessionID string
 	FilePath  string
