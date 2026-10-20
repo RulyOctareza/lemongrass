@@ -66,7 +66,7 @@ const HANDOVER_INDEX = 'whiteboard'
 function normalShare(s: Partial<NodeShare> & { alias: string }): NodeShare {
   return {
     alias: s.alias,
-    books: [...new Set(s.books ?? [])],
+    books: [...new Set((s.books ?? []).map(bookIdentity))],
     tasks: [...new Set(s.tasks ?? [])],
     laws: [...new Set(s.laws ?? [])],
     handovers: [...new Set(s.handovers ?? [])]
@@ -183,10 +183,11 @@ function docs(dir: string, index: string): NodeDoc[] {
   ]
 }
 
-// Mirrors node.BookIdentity: the title and creation date, unchanged by a tag edit.
-function bookIdentity(name: string): string | null {
-  const m = /^([^[]+\[[^\]]*\])/.exec(name)
-  return m ? m[1] : null
+// Mirrors node.BookIdentity: the title before any bracketed date or tags, so a grant stored as
+// `title[date]` and a folder named `title[date][tags]` both match the plain folder `title`.
+function bookIdentity(name: string): string {
+  const open = name.indexOf('[')
+  return open < 0 ? name : name.slice(0, open)
 }
 
 function aliasFor(cfg: NodeConfig, project: RegistryProject): string {
@@ -203,7 +204,7 @@ function projectContent(cfg: NodeConfig): NodeProjectContent[] {
     const biblio = join(p.path, 'biblio')
     const books = realDirs(join(biblio, 'books'))
       .map(bookIdentity)
-      .filter((id): id is string => id !== null)
+      .filter((id) => id !== '')
     const tasks: NodeTask[] = [
       ...realDirs(join(biblio, 'scratchpad'))
         .filter((slug) => slug !== 'archive')

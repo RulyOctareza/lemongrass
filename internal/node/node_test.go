@@ -12,7 +12,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/project"
 )
 
-const testBook = "garden_design[2026-01-02][soil,water]"
+const testBook = "garden_design"
 
 type fixture struct {
 	lib   *Library
@@ -35,9 +35,9 @@ func newFixture(t *testing.T) fixture {
 	t.Helper()
 	dir := t.TempDir()
 	root := filepath.Join(dir, "biblio")
-	write(t, filepath.Join(root, "books", testBook, "beds[soil].md"), "raised beds\n")
+	write(t, filepath.Join(root, "books", testBook, "beds.md"), "raised beds\n")
 	write(t, filepath.Join(root, "books", testBook, "images", "a.md"), "nested")
-	write(t, filepath.Join(root, "books", "secret_plans[2026-01-03][x]", "plan[x].md"), "hidden")
+	write(t, filepath.Join(root, "books", "secret_plans", "plan.md"), "hidden")
 	write(t, filepath.Join(root, "scratchpad", "irrigation", "prd.md"), "drip lines\n")
 	write(t, filepath.Join(root, "scratchpad", "irrigation", "notes.txt"), "not markdown")
 	write(t, filepath.Join(root, "scratchpad", "irrigation", "app", "x.md"), "nested")
@@ -51,7 +51,7 @@ func newFixture(t *testing.T) fixture {
 	grant := Grant{
 		ID:        "g1",
 		ExpiresAt: time.Now().Add(time.Hour),
-		Shares:    []Share{{Alias: "garden", Books: []string{"garden_design[2026-01-02]"}, Tasks: []string{"irrigation", "compost", "missing"}}},
+		Shares:    []Share{{Alias: "garden", Books: []string{"garden_design"}, Tasks: []string{"irrigation", "compost", "missing"}}},
 	}
 	cfg := Config{Projects: []ProjectAlias{{Alias: "garden", ProjectID: "p1"}}, Grants: []Grant{grant}}
 	return fixture{lib: lib, cfg: cfg, grant: grant, root: root}
@@ -77,14 +77,13 @@ func TestContentsListsOnlyGrantedBooksAndTasks(t *testing.T) {
 func TestReadsBookChaptersAndTaskFiles(t *testing.T) {
 	f := newFixture(t)
 	cases := map[string]string{
-		"garden/books/" + testBook:                    "beds[soil].md\n",
-		"garden/books/garden_design[2026-01-02]":      "beds[soil].md\n",
-		"garden/books/" + testBook + "/beds[soil].md": "raised beds\n",
-		"garden/books/" + testBook + "/beds[soil]":    "raised beds\n",
-		"garden/tasks/irrigation":                     "prd.md\n",
-		"garden/tasks/irrigation/prd.md":              "drip lines\n",
-		"garden/tasks/compost":                        "(archived task)\nprd.md\n",
-		"garden/tasks/compost/prd":                    "done\n",
+		"garden/books/" + testBook:              "beds.md\n",
+		"garden/books/" + testBook + "/beds.md": "raised beds\n",
+		"garden/books/" + testBook + "/beds":    "raised beds\n",
+		"garden/tasks/irrigation":               "prd.md\n",
+		"garden/tasks/irrigation/prd.md":        "drip lines\n",
+		"garden/tasks/compost":                  "(archived task)\nprd.md\n",
+		"garden/tasks/compost/prd":              "done\n",
 	}
 	for path, want := range cases {
 		got, err := f.read(t, path)
@@ -98,15 +97,28 @@ func TestReadsBookChaptersAndTaskFiles(t *testing.T) {
 	}
 }
 
-func TestBookSurvivesATagChange(t *testing.T) {
+func TestBracketFormGrantMatchesPlainFolder(t *testing.T) {
+	f := newFixture(t)
+	f.grant.Shares[0].Books = []string{"garden_design[2026-01-02]"}
+	got, err := f.read(t, "garden/books/garden_design/beds.md")
+	if err != nil || got != "raised beds\n" {
+		t.Errorf("read under a bracket-form grant = %q, %v", got, err)
+	}
+	if got, _ := f.read(t, ""); !strings.Contains(got, "garden/books/garden_design\n") {
+		t.Errorf("contents under a bracket-form grant = %q", got)
+	}
+}
+
+func TestBracketFormFolderIsServed(t *testing.T) {
 	f := newFixture(t)
 	books := filepath.Join(f.root, "books")
-	if err := os.Rename(filepath.Join(books, testBook), filepath.Join(books, "garden_design[2026-01-02][soil,water,light]")); err != nil {
+	if err := os.Rename(filepath.Join(books, testBook), filepath.Join(books, "garden_design[2026-01-02][soil,water]")); err != nil {
 		t.Fatal(err)
 	}
-	got, err := f.read(t, "garden/books/garden_design[2026-01-02][soil,water]/beds[soil].md")
-	if err != nil || got != "raised beds\n" {
-		t.Errorf("read after tag change = %q, %v", got, err)
+	for _, p := range []string{"garden/books/garden_design/beds.md", "garden/books/garden_design[2026-01-02][soil,water]/beds.md"} {
+		if got, err := f.read(t, p); err != nil || got != "raised beds\n" {
+			t.Errorf("read %q = %q, %v", p, got, err)
+		}
 	}
 }
 
@@ -116,8 +128,8 @@ func TestOutsideTheGrantIsNotFound(t *testing.T) {
 		"other",
 		"garden/laws",
 		"garden/laws/summary.md",
-		"garden/books/secret_plans[2026-01-03][x]",
-		"garden/books/secret_plans[2026-01-03][x]/plan[x].md",
+		"garden/books/secret_plans",
+		"garden/books/secret_plans/plan.md",
 		"garden/tasks/private",
 		"garden/tasks/private/prd.md",
 		"garden/tasks/missing",

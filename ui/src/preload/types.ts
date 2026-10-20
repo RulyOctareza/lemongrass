@@ -36,6 +36,9 @@ export interface BiblioNode {
   name: string
   path: string
   type: 'dir' | 'file'
+  // Set only under books/, for the toc viewer's written and updated dates.
+  createdMs?: number
+  modifiedMs?: number
   children?: BiblioNode[]
 }
 

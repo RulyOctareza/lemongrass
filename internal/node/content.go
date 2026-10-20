@@ -159,14 +159,13 @@ func shareFor(g Grant, alias string) (Share, bool) {
 	return Share{}, false
 }
 
-// BookIdentity is a book folder's title and creation date, the part a tag change does not alter.
+// BookIdentity is a book's title, the folder name before any bracketed suffix, so a bracket-form
+// folder `title[date][tags]` and a grant stored as `title[date]` both match the plain folder `title`.
 func BookIdentity(name string) string {
-	open := strings.Index(name, "[")
-	end := strings.Index(name, "]")
-	if open <= 0 || end < open {
-		return ""
+	if open := strings.IndexByte(name, '['); open >= 0 {
+		return name[:open]
 	}
-	return name[:end+1]
+	return name
 }
 
 func readBooks(root, alias string, share Share, rest []string, offset int) (string, error) {
@@ -298,7 +297,7 @@ func grantedBooks(root string, share Share) ([]string, error) {
 	}
 	var out []string
 	for _, id := range share.Books {
-		if name, ok := uniqueBook(dirs, id); ok {
+		if name, ok := uniqueBook(dirs, BookIdentity(id)); ok {
 			out = append(out, name)
 		}
 	}
@@ -308,7 +307,8 @@ func grantedBooks(root string, share Share) ([]string, error) {
 
 func bookDir(root string, share Share, requested string) (string, error) {
 	id := BookIdentity(requested)
-	if id == "" || !slices.Contains(share.Books, id) {
+	granted := slices.ContainsFunc(share.Books, func(b string) bool { return BookIdentity(b) == id })
+	if id == "" || !granted {
 		return "", ErrNotFound
 	}
 	booksDir := filepath.Join(root, "books")

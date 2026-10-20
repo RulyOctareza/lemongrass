@@ -28,6 +28,9 @@ export interface BiblioNode {
   name: string
   path: string
   type: 'dir' | 'file'
+  // Set only under books/, for the toc viewer's written and updated dates.
+  createdMs?: number
+  modifiedMs?: number
   children?: BiblioNode[]
 }
 
@@ -69,8 +72,17 @@ function createdMs(path: string): number {
   return stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.mtimeMs
 }
 
+function times(path: string): Pick<BiblioNode, 'createdMs' | 'modifiedMs'> {
+  const stats = statSync(path)
+  return {
+    createdMs: stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.mtimeMs,
+    modifiedMs: stats.mtimeMs
+  }
+}
+
 function walk(dir: string, relativeTo: string): BiblioNode[] {
   const parent = relative(relativeTo, dir)
+  const inBooks = parent.split(sep)[0] === 'books'
   const newestFirst = parent === 'scratchpad' || parent === join('scratchpad', ARCHIVE_DIR)
   const entries = readdirSync(dir, { withFileTypes: true })
     .filter((e) => (e.isDirectory() && e.name !== IMAGES_DIR) || e.name.endsWith('.md'))
@@ -87,10 +99,17 @@ function walk(dir: string, relativeTo: string): BiblioNode[] {
   return entries.map((entry) => {
     const fullPath = join(dir, entry.name)
     const relPath = relative(relativeTo, fullPath)
+    const dated = inBooks ? times(fullPath) : {}
     if (entry.isDirectory()) {
-      return { name: entry.name, path: relPath, type: 'dir', children: walk(fullPath, relativeTo) }
+      return {
+        name: entry.name,
+        path: relPath,
+        type: 'dir',
+        ...dated,
+        children: walk(fullPath, relativeTo)
+      }
     }
-    return { name: entry.name, path: relPath, type: 'file' }
+    return { name: entry.name, path: relPath, type: 'file', ...dated }
   })
 }
 

@@ -27,8 +27,8 @@ Dated records of what happened: activity logs and archived tasks.
 4. **Handover shape.** A handover exists only for a paused or delegated task. It points at a `prd.md` only, and its Status holds where to resume, what is next and what is blocked.
 5. **Git against PRD marks.** Compare each PRD's Plans marks with the code and with `git log` for the paths involved. An item the code shows as shipped gets marked `[x]`, and a mark the code does not support is cleared. Work that looks fully finished is reported as ready for `lgrass-howtodo-taskclosing` and is not closed or archived here.
 6. **Books against code.** Check each chapter's claims against the code. A stale fact is corrected in place, with no changelog and no dated narrative. A book that is wholly obsolete gets a `warning:` on its toc line naming what to read instead.
-7. **toc.md.** One line per existing book, in the bibliothek form: the folder name and nothing else. Drop the line of a book that no longer exists and add the line of one that is missing. The bracketed tags equal the union of the tags on the book's chapters. A description is removed. The only allowed addition is a one-sentence `warning:`.
-8. **Renames.** A rename propagates to file names, tags, the toc, and every reference.
+7. **toc.md.** One line per existing book, in the bibliothek form: the folder name and its bracketed tags. Drop the line of a book that no longer exists and add the line of one that is missing. A description or a `[WIP]` marker is removed. The only allowed addition is a one-sentence `warning:`.
+8. **Renames.** A book folder or chapter file whose name carries a bracketed date or tags is renamed to its plain snake_case title, its tags kept on the toc line. A rename propagates to the toc and every reference.
 
 ## Report
 

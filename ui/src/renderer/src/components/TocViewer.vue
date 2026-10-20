@@ -10,7 +10,7 @@ const props = defineProps<{
 interface ChapterEntry {
   path: string
   title: string
-  tags: string[]
+  updated?: number
 }
 
 interface WarningPart {
@@ -23,7 +23,8 @@ interface BookEntry {
   kind: 'book'
   name: string
   title: string
-  date: string
+  written?: number
+  updated?: number
   tags: string[]
   warning: WarningPart[]
   chapters: ChapterEntry[]
@@ -36,8 +37,10 @@ interface TextEntry {
 
 type TocEntry = BookEntry | TextEntry
 
-const BOOK_LINE = /^(\S+?)\[(\d{4}-\d{2}-\d{2})\]\[([^\]]*)\](?:\s+warning:\s*(.+))?$/
-const CHAPTER_NAME = /^(.+?)\[([^\]]*)\]$/
+const BOOK_LINE = /^([^\s[]+)\s+\[([^\]]*)\](?:\s+warning:\s*(.+))?$/
+// The bracket form, books `title[date][tags]` and chapters `title[tags].md`, is still read for projects that use it.
+const LEGACY_BOOK_LINE = /^([^\s[]+)\[\d{4}-\d{2}-\d{2}\]\[([^\]]*)\](?:\s+warning:\s*(.+))?$/
+const LEGACY_TAGS = /\[[^\]]*\]$/
 
 function humanize(snakeCase: string): string {
   const spaced = snakeCase.replaceAll('_', ' ')
@@ -52,10 +55,31 @@ function splitTags(raw: string): string[] {
 }
 
 function parseChapter(node: BiblioNode): ChapterEntry {
-  const stripped = node.name.replace(/\.md$/, '')
-  const match = CHAPTER_NAME.exec(stripped)
-  if (!match) return { path: node.path, title: humanize(stripped), tags: [] }
-  return { path: node.path, title: humanize(match[1]), tags: splitTags(match[2]) }
+  const name = node.name.replace(/\.md$/, '').replace(LEGACY_TAGS, '')
+  return { path: node.path, title: humanize(name), updated: node.modifiedMs }
+}
+
+const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric'
+})
+
+function formatDate(ms: number): string {
+  return DATE_FORMAT.format(new Date(ms))
+}
+
+// A book's folder mtime moves only when entries are added or removed, so its newest chapter says when it was last updated.
+function lastUpdated(
+  bookDir: BiblioNode | undefined,
+  chapters: ChapterEntry[]
+): number | undefined {
+  const times = chapters.map((c) => c.updated).filter((t): t is number => t !== undefined)
+  return times.length ? Math.max(...times) : bookDir?.modifiedMs
+}
+
+function matchBookLine(line: string): RegExpExecArray | null {
+  return BOOK_LINE.exec(line) ?? LEGACY_BOOK_LINE.exec(line)
 }
 
 function parseWarning(raw: string | undefined, bookNames: Set<string>): WarningPart[] {
@@ -77,7 +101,8 @@ function findBooksDir(tree: BiblioNode[]): BiblioNode | undefined {
 }
 
 function findBookDir(booksDir: BiblioNode | undefined, name: string): BiblioNode | undefined {
-  return booksDir?.children?.find((n) => n.type === 'dir' && n.name.startsWith(`${name}[`))
+  const dirs = booksDir?.children?.filter((n) => n.type === 'dir') ?? []
+  return dirs.find((n) => n.name === name) ?? dirs.find((n) => n.name.startsWith(`${name}[`))
 }
 
 function parseToc(raw: string, tree: BiblioNode[]): TocEntry[] {
@@ -87,12 +112,12 @@ function parseToc(raw: string, tree: BiblioNode[]): TocEntry[] {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
   const bookNames = new Set(
-    lines.map((line) => BOOK_LINE.exec(line)?.[1]).filter((n): n is string => !!n)
+    lines.map((line) => matchBookLine(line)?.[1]).filter((n): n is string => !!n)
   )
   return lines.map((line): TocEntry => {
-    const bookMatch = BOOK_LINE.exec(line)
+    const bookMatch = matchBookLine(line)
     if (!bookMatch) return { kind: 'text', text: line }
-    const [, name, date, tagsRaw, warningRaw] = bookMatch
+    const [, name, tagsRaw, warningRaw] = bookMatch
     const bookDir = findBookDir(booksDir, name)
     const chapters = (bookDir?.children ?? [])
       .filter((n) => n.type === 'file' && n.name.endsWith('.md'))
@@ -101,7 +126,8 @@ function parseToc(raw: string, tree: BiblioNode[]): TocEntry[] {
       kind: 'book',
       name,
       title: humanize(name),
-      date,
+      written: bookDir?.createdMs,
+      updated: lastUpdated(bookDir, chapters),
       tags: splitTags(tagsRaw),
       warning: parseWarning(warningRaw, bookNames),
       chapters
@@ -157,7 +183,14 @@ function openChapter(path: string): void {
         <div v-else class="book-card" :data-book="entry.name">
           <div class="book-header">
             <h4 class="book-title">{{ entry.title }}</h4>
-            <span class="date-capsule">{{ entry.date }}</span>
+            <div class="date-row">
+              <span v-if="entry.written" class="date-capsule"
+                >Written {{ formatDate(entry.written) }}</span
+              >
+              <span v-if="entry.updated" class="date-capsule"
+                >Updated {{ formatDate(entry.updated) }}</span
+              >
+            </div>
           </div>
           <div v-if="entry.tags.length" class="tag-row">
             <span v-for="tag in entry.tags" :key="tag" class="tag-capsule">{{ tag }}</span>
@@ -180,11 +213,9 @@ function openChapter(path: string): void {
               @click="openChapter(chapter.path)"
             >
               <span class="chapter-title">{{ chapter.title }}</span>
-              <span v-if="chapter.tags.length" class="tag-row">
-                <span v-for="tag in chapter.tags" :key="tag" class="tag-capsule small">{{
-                  tag
-                }}</span>
-              </span>
+              <span v-if="chapter.updated" class="chapter-date" title="Last updated">{{
+                formatDate(chapter.updated)
+              }}</span>
             </button>
           </div>
         </div>
@@ -225,13 +256,6 @@ function openChapter(path: string): void {
   border-radius: var(--radius-xl);
 }
 
-.book-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
 .book-title {
   font-family: var(--font-display);
   font-size: var(--text-md);
@@ -239,12 +263,24 @@ function openChapter(path: string): void {
   color: var(--color-fg-primary);
 }
 
-.date-capsule {
+.book-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.date-row {
+  display: flex;
   flex-shrink: 0;
+  gap: var(--space-1);
+}
+
+.date-capsule {
   padding: 1px var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--color-surface-3);
-  color: var(--color-fg-muted);
+  color: var(--color-fg-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
@@ -261,10 +297,6 @@ function openChapter(path: string): void {
   background: var(--color-amber-muted);
   color: var(--color-fg-accent);
   font-size: var(--text-xs);
-}
-
-.tag-capsule.small {
-  padding: 0px var(--space-1);
 }
 
 .book-warning {
@@ -336,5 +368,12 @@ function openChapter(path: string): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chapter-date {
+  flex-shrink: 0;
+  color: var(--color-fg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 </style>
