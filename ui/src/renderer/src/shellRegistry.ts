@@ -178,6 +178,16 @@ function createSession(spec: ShellSpec): ShellSession {
     if (session.shellId) window.api.pty.write(session.shellId, data)
   })
   term.attachCustomKeyEventHandler((event) => {
+    const clipboardKey = event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey
+    if (clipboardKey && (event.code === 'KeyC' || event.code === 'KeyV')) {
+      // Chromium also fires a native paste for Ctrl+Shift+V, which xterm would paste a second time.
+      event.preventDefault()
+      if (event.type === 'keydown') {
+        if (event.code === 'KeyC') void copySelection(session)
+        else void pasteClipboard(session)
+      }
+      return false
+    }
     if (event.key !== 'Enter' || !event.shiftKey) return true
     if (event.type === 'keydown' && session.shellId) {
       window.api.pty.write(session.shellId, NEWLINE_SEQUENCE)
@@ -185,6 +195,17 @@ function createSession(spec: ShellSpec): ShellSession {
     return false
   })
   return session
+}
+
+async function copySelection(session: ShellSession): Promise<void> {
+  const text = session.term.getSelection()
+  if (text) await navigator.clipboard.writeText(text)
+}
+
+// Goes through Terminal.paste so a shell in bracketed paste mode receives the text as one paste.
+async function pasteClipboard(session: ShellSession): Promise<void> {
+  const text = await navigator.clipboard.readText()
+  if (text && !session.disposed) session.term.paste(text)
 }
 
 async function start(session: ShellSession): Promise<void> {
@@ -256,6 +277,20 @@ export function fitShell(tabId: string): void {
   if (!session || session.host.clientWidth === 0 || session.host.clientHeight === 0) return
   session.fit.fit()
   if (session.shellId) window.api.pty.resize(session.shellId, session.term.cols, session.term.rows)
+}
+
+export function shellHasSelection(tabId: string): boolean {
+  return sessions.get(tabId)?.term.hasSelection() ?? false
+}
+
+export async function copyShellSelection(tabId: string): Promise<void> {
+  const session = sessions.get(tabId)
+  if (session) await copySelection(session)
+}
+
+export async function pasteIntoShell(tabId: string): Promise<void> {
+  const session = sessions.get(tabId)
+  if (session) await pasteClipboard(session)
 }
 
 export function focusShell(tabId: string): void {

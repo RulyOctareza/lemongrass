@@ -4,13 +4,18 @@ import {
   attachShell,
   closeFailedShell,
   continueOnPrimary,
+  copyShellSelection,
   fitShell,
+  focusShell,
+  pasteIntoShell,
   shellAccountGone,
+  shellHasSelection,
   shellRestoreFailures,
   startFreshShell,
   type ShellSpec
 } from '../shellRegistry'
 import AppButton from './AppButton.vue'
+import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
 
 const props = defineProps<{
   spec: ShellSpec
@@ -18,6 +23,25 @@ const props = defineProps<{
 
 const containerEl = ref<HTMLDivElement>()
 let resizeObserver: ResizeObserver | undefined
+const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+
+function openMenu(event: MouseEvent): void {
+  menu.value = {
+    x: event.clientX,
+    y: event.clientY,
+    items: [
+      { key: 'copy', label: 'Copy', disabled: !shellHasSelection(props.spec.id) },
+      { key: 'paste', label: 'Paste' }
+    ]
+  }
+}
+
+function onMenuSelect(key: string): void {
+  menu.value = null
+  if (key === 'copy') void copyShellSelection(props.spec.id)
+  else void pasteIntoShell(props.spec.id)
+  focusShell(props.spec.id)
+}
 
 onMounted(() => {
   if (!containerEl.value) return
@@ -31,7 +55,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
 <template>
   <div class="terminal-card fade-in">
-    <div ref="containerEl" class="terminal-pane"></div>
+    <div ref="containerEl" class="terminal-pane" @contextmenu.prevent="openMenu"></div>
     <div v-if="shellAccountGone[spec.id]" class="restore-failure">
       <span class="restore-message">
         The account {{ shellAccountGone[spec.id] }} was deleted, so this tab can't continue under
@@ -49,6 +73,17 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
       <AppButton class="close-tab" @click="closeFailedShell(spec.id)">Close tab</AppButton>
       <AppButton variant="primary" @click="startFreshShell(spec.id)">Start a new session</AppButton>
     </div>
+    <!-- The card's fade-in leaves a transform on it, which would clip a fixed menu to the card. -->
+    <Teleport to="body">
+      <AppContextMenu
+        v-if="menu"
+        :x="menu.x"
+        :y="menu.y"
+        :items="menu.items"
+        @select="onMenuSelect"
+        @close="menu = null"
+      />
+    </Teleport>
   </div>
 </template>
 
