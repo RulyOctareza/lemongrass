@@ -80,8 +80,11 @@ func TestReadsBookChaptersAndTaskFiles(t *testing.T) {
 		"garden/books/" + testBook:              "beds.md\n",
 		"garden/books/" + testBook + "/beds.md": "raised beds\n",
 		"garden/books/" + testBook + "/beds":    "raised beds\n",
-		"garden/tasks/irrigation":               "prd.md\n",
+		"garden/tasks/irrigation":               "notes.txt\nprd.md\napp/x.md\n",
 		"garden/tasks/irrigation/prd.md":        "drip lines\n",
+		"garden/tasks/irrigation/notes.txt":     "not markdown",
+		"garden/tasks/irrigation/app":           "x.md\n",
+		"garden/tasks/irrigation/app/x":         "nested",
 		"garden/tasks/compost":                  "(archived task)\nprd.md\n",
 		"garden/tasks/compost/prd":              "done\n",
 	}
@@ -134,9 +137,9 @@ func TestOutsideTheGrantIsNotFound(t *testing.T) {
 		"garden/tasks/private/prd.md",
 		"garden/tasks/missing",
 		"garden/tasks/archive",
-		"garden/tasks/irrigation/notes.txt",
-		"garden/tasks/irrigation/app",
-		"garden/tasks/irrigation/app/x.md",
+		"garden/tasks/irrigation/notes",
+		"garden/tasks/irrigation/app/../prd.md",
+		"garden/tasks/irrigation//prd.md",
 		"garden/books/" + testBook + "/images",
 		"garden/books/" + testBook + "/images/a.md",
 		"garden/books/" + testBook + "/../../laws/summary.md",
@@ -235,6 +238,83 @@ func TestSymlinkedEntriesAreRefused(t *testing.T) {
 	got, _ := f.read(t, "garden/tasks/irrigation")
 	if strings.Contains(got, "link.md") {
 		t.Errorf("listing shows a symlink: %q", got)
+	}
+}
+
+func TestTaskSubfolders(t *testing.T) {
+	f := newFixture(t)
+	task := filepath.Join(f.root, "scratchpad", "irrigation")
+	write(t, filepath.Join(task, "feature", "handoff.md"), "contract\n")
+	write(t, filepath.Join(task, "feature", "types.ts"), "export type A = string\n")
+	write(t, filepath.Join(task, "feature", "snapshots", "shot.png"), "\x89PNG\x00\x00")
+	write(t, filepath.Join(task, "feature", ".DS_Store"), "junk")
+	write(t, filepath.Join(task, ".git", "HEAD"), "ref")
+	write(t, filepath.Join(task, "a", "b", "c", "d", "deep.md"), "four down")
+	write(t, filepath.Join(task, "a", "b", "c", "d", "e", "deeper.md"), "five down")
+
+	got, err := f.read(t, "garden/tasks/irrigation/feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "handoff.md\ntypes.ts\nsnapshots/shot.png (binary, not served)\n"; got != want {
+		t.Errorf("feature listing = %q, want %q", got, want)
+	}
+	got, _ = f.read(t, "garden/tasks/irrigation")
+	if !strings.Contains(got, "a/b/c/d/deep.md\n") || strings.Contains(got, "deeper") || strings.Contains(got, ".git") {
+		t.Errorf("task listing ignores the depth limit or shows dot entries: %q", got)
+	}
+	for path, want := range map[string]string{
+		"garden/tasks/irrigation/feature/handoff":  "contract\n",
+		"garden/tasks/irrigation/feature/types.ts": "export type A = string\n",
+		"garden/tasks/irrigation/a/b/c/d/deep.md":  "four down",
+	} {
+		if got, err := f.read(t, path); err != nil || got != want {
+			t.Errorf("read %q = %q, %v, want %q", path, got, err, want)
+		}
+	}
+	for _, p := range []string{
+		"garden/tasks/irrigation/feature/snapshots/shot.png",
+		"garden/tasks/irrigation/feature/.DS_Store",
+		"garden/tasks/irrigation/.git/HEAD",
+		"garden/tasks/irrigation/a/b/c/d/e",
+		"garden/tasks/irrigation/a/b/c/d/e/deeper.md",
+		"garden/tasks/irrigation/feature/handoff.md/x",
+	} {
+		if got, err := f.read(t, p); !errors.Is(err, ErrNotFound) {
+			t.Errorf("read %q = %q, %v, want ErrNotFound", p, got, err)
+		}
+	}
+}
+
+func TestSymlinkedSubfolderIsRefused(t *testing.T) {
+	f := newFixture(t)
+	outside := t.TempDir()
+	write(t, filepath.Join(outside, "secret.md"), "outside")
+	if err := os.Symlink(outside, filepath.Join(f.root, "scratchpad", "irrigation", "linked")); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"garden/tasks/irrigation/linked", "garden/tasks/irrigation/linked/secret.md"} {
+		if _, err := f.read(t, p); !errors.Is(err, ErrNotFound) {
+			t.Errorf("read %q: err = %v, want ErrNotFound", p, err)
+		}
+	}
+	if got, _ := f.read(t, "garden/tasks/irrigation"); strings.Contains(got, "linked") {
+		t.Errorf("listing follows a symlinked folder: %q", got)
+	}
+}
+
+func TestTaskListingIsCapped(t *testing.T) {
+	f := newFixture(t)
+	for i := range maxListing + 5 {
+		write(t, filepath.Join(f.root, "scratchpad", "irrigation", "many", fmt.Sprintf("f%03d.md", i)), "x")
+	}
+	got, err := f.read(t, "garden/tasks/irrigation/many")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(got, "\n"), "\n")
+	if len(lines) != maxListing+1 || lines[maxListing] != "[listing cut: 5 more files not shown, read a subfolder to list it]" {
+		t.Errorf("capped listing has %d lines ending %q", len(lines), lines[len(lines)-1])
 	}
 }
 

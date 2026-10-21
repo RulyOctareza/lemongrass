@@ -134,3 +134,52 @@ func TestSocketOps(t *testing.T) {
 		}
 	}
 }
+
+func TestLeftoverTunnelStaysClosedAtStart(t *testing.T) {
+	svc, path, _ := setup(t, time.Now().Add(time.Hour), "fake")
+	svc.holdLeftover()
+	svc.Sync()
+	if svc.Status().Running {
+		t.Fatal("a tunnel left open in node.json reopened at start")
+	}
+	writeConfig(t, path, node.Config{Tunnel: node.Tunnel{Provider: "fake", Until: time.Now().Add(2 * time.Hour)}})
+	svc.Sync()
+	if !svc.Status().Running {
+		t.Fatal("an open written after start did not open")
+	}
+	writeConfig(t, path, node.Config{Tunnel: node.Tunnel{Provider: "fake"}})
+	svc.Sync()
+	if svc.Status().Running {
+		t.Error("tunnel still open after close")
+	}
+}
+
+type gated struct{ release chan struct{} }
+
+func (p gated) Listen(ctx context.Context) (net.Listener, string, error) {
+	<-p.release
+	return loopback{}.Listen(ctx)
+}
+
+func TestConnectingWhileTheTunnelOpens(t *testing.T) {
+	svc, _, _ := setup(t, time.Now().Add(time.Hour), "fake")
+	p := gated{release: make(chan struct{})}
+	svc.provider = func(tn node.Tunnel) (tunnel.Provider, string) { return p, tn.Provider }
+	done := make(chan struct{})
+	go func() {
+		svc.Sync()
+		close(done)
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for !svc.Status().Connecting {
+		if time.Now().After(deadline) {
+			t.Fatal("status never reported connecting")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	close(p.release)
+	<-done
+	if st := svc.Status(); st.Connecting || !st.Running {
+		t.Errorf("status after connecting: %+v", st)
+	}
+}

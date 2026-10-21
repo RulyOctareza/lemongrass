@@ -560,6 +560,7 @@ export interface NodeProjectContent {
 
 export interface NodeStatus {
   running: boolean
+  connecting?: boolean
   url?: string
   until?: string
   error?: string

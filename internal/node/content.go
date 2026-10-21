@@ -3,6 +3,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,8 +24,19 @@ const (
 // ReadCap is the most bytes of one file a single read returns.
 const ReadCap = 16 * 1024
 
+const (
+	// maxTaskDepth is how many folder levels below a task directory are listed and served.
+	maxTaskDepth = 4
+	// maxListing is the most files one task listing names, so a folder of app code cannot flood a reply.
+	maxListing = 200
+	// sniffLen is how much of a file is checked for a NUL byte to tell text from binary, as git does.
+	sniffLen = 8000
+)
+
 var (
-	ErrNotFound  = errors.New("node: not found")
+	// The text never names the path, so a miss inside the grant reads the same as one outside it.
+	// It avoids a bare "not found", which a client model took for a missing Node.js runtime.
+	ErrNotFound  = errors.New("node: nothing shared at this path; read its parent path to list what is there, or read with no path for the contents")
 	ErrBadOffset = errors.New("node: offset is past the end of the file")
 )
 
@@ -37,7 +49,7 @@ func NewLibrary() *Library {
 	return &Library{Projects: project.List}
 }
 
-// Read answers the contents for an empty path, then alias, alias/books, alias/tasks, alias/laws, alias/handovers, a book or task, and a file read from offset.
+// Read answers the contents for an empty path, then alias, alias/books, alias/tasks, alias/laws, alias/handovers, a book or task, a task subfolder, and a file read from offset.
 func (l *Library) Read(cfg Config, g Grant, path string, offset int) (string, error) {
 	path = strings.Trim(path, "/")
 	if path == "" {
@@ -194,8 +206,7 @@ func readBooks(root, alias string, share Share, rest []string, offset int) (stri
 }
 
 func readTasks(root, alias string, share Share, rest []string, offset int) (string, error) {
-	switch len(rest) {
-	case 0:
+	if len(rest) == 0 {
 		var slugs []string
 		for _, slug := range share.Tasks {
 			if _, _, err := taskDir(root, slug); err == nil {
@@ -203,28 +214,132 @@ func readTasks(root, alias string, share Share, rest []string, offset int) (stri
 			}
 		}
 		return listing(alias+"/tasks/", slugs), nil
-	case 1, 2:
-		if !slices.Contains(share.Tasks, rest[0]) {
-			return "", ErrNotFound
-		}
-		dir, archived, err := taskDir(root, rest[0])
-		if err != nil {
-			return "", err
-		}
-		if len(rest) == 2 {
-			return readFile(dir, rest[1], offset)
-		}
-		files, err := markdownFiles(dir)
-		if err != nil {
-			return "", err
-		}
-		out := listing("", files)
-		if archived {
-			out = "(archived task)\n" + out
-		}
-		return out, nil
 	}
-	return "", ErrNotFound
+	if !slices.Contains(share.Tasks, rest[0]) {
+		return "", ErrNotFound
+	}
+	dir, archived, err := taskDir(root, rest[0])
+	if err != nil {
+		return "", err
+	}
+	target, isDir, err := taskPath(dir, rest[1:])
+	if err != nil {
+		return "", err
+	}
+	if !isDir {
+		return readText(target, offset)
+	}
+	out, err := taskListing(target, len(rest)-1)
+	if err != nil {
+		return "", err
+	}
+	if archived && len(rest) == 1 {
+		out = "(archived task)\n" + out
+	}
+	return out, nil
+}
+
+// taskPath walks a task-relative path one listed entry at a time, through real directories only,
+// and accepts a last segment without its .md like the other reads.
+func taskPath(dir string, segs []string) (path string, isDir bool, err error) {
+	for i, seg := range segs {
+		last := i == len(segs)-1
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return "", false, ErrNotFound
+		}
+		match := findEntry(entries, seg)
+		if match == nil && last {
+			if md := findEntry(entries, seg+".md"); md != nil && md.Type().IsRegular() {
+				match = md
+			}
+		}
+		switch {
+		case match == nil:
+			return "", false, ErrNotFound
+		case match.Type()&os.ModeType == os.ModeDir && i < maxTaskDepth:
+			dir = filepath.Join(dir, match.Name())
+			if last {
+				return dir, true, nil
+			}
+		case match.Type().IsRegular() && last:
+			return filepath.Join(dir, match.Name()), false, nil
+		default:
+			return "", false, ErrNotFound
+		}
+	}
+	return dir, true, nil
+}
+
+// taskListing lists a task folder's files as paths relative to it, its own files before its
+// subfolders', down to maxTaskDepth below the task, and names how many it left out past maxListing.
+func taskListing(dir string, depth int) (string, error) {
+	var names []string
+	more := 0
+	var walk func(dir, prefix string, depth int) error
+	walk = func(dir, prefix string, depth int) error {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return fmt.Errorf("node: listing %s: %w", dir, err)
+		}
+		var subdirs []string
+		for _, e := range entries {
+			switch {
+			case hidden(e):
+			case e.Type().IsRegular():
+				if len(names) == maxListing {
+					more++
+					continue
+				}
+				name := prefix + e.Name()
+				if !isText(filepath.Join(dir, e.Name())) {
+					name += " (binary, not served)"
+				}
+				names = append(names, name)
+			case e.Type()&os.ModeType == os.ModeDir && depth < maxTaskDepth:
+				subdirs = append(subdirs, e.Name())
+			}
+		}
+		for _, d := range subdirs {
+			if err := walk(filepath.Join(dir, d), prefix+d+"/", depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(dir, "", depth); err != nil {
+		return "", err
+	}
+	out := listing("", names)
+	if more > 0 {
+		out += fmt.Sprintf("[listing cut: %d more files not shown, read a subfolder to list it]\n", more)
+	}
+	return out, nil
+}
+
+func findEntry(entries []os.DirEntry, name string) os.DirEntry {
+	for _, e := range entries {
+		if e.Name() == name && !hidden(e) {
+			return e
+		}
+	}
+	return nil
+}
+
+// hidden skips dot entries such as .git or .DS_Store, which are tooling, not task content.
+func hidden(e os.DirEntry) bool {
+	return strings.HasPrefix(e.Name(), ".")
+}
+
+func isText(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, sniffLen)
+	n, _ := io.ReadFull(f, buf)
+	return !slices.Contains(buf[:n], 0)
 }
 
 // readDocs serves single-file documents, laws or handovers, listing the granted ones or reading one.
@@ -406,14 +521,21 @@ func readFile(dir, requested string, offset int) (string, error) {
 	if name == "" {
 		return "", ErrNotFound
 	}
-	full := filepath.Join(dir, name)
+	return readText(filepath.Join(dir, name), offset)
+}
+
+// readText serves a regular text file and refuses a binary one, which the reply could not carry as text.
+func readText(full string, offset int) (string, error) {
 	info, err := os.Lstat(full)
 	if err != nil || !info.Mode().IsRegular() {
 		return "", ErrNotFound
 	}
 	data, err := os.ReadFile(full)
 	if err != nil {
-		return "", fmt.Errorf("node: reading %s: %w", name, err)
+		return "", fmt.Errorf("node: reading %s: %w", filepath.Base(full), err)
+	}
+	if slices.Contains(data[:min(len(data), sniffLen)], 0) {
+		return "", ErrNotFound
 	}
 	return cut(data, offset)
 }

@@ -111,6 +111,7 @@ function loadRegistry(): RegistryProject[] {
 
 interface DaemonStatus {
   running: boolean
+  connecting?: boolean
   url?: string
   until?: string
   error?: string
@@ -225,7 +226,13 @@ function projectContent(cfg: NodeConfig): NodeProjectContent[] {
 
 function toStatus(st: DaemonStatus | null): NodeStatus {
   if (!st) return { running: false, daemonDown: true }
-  return { running: st.running, url: st.url, until: st.until, error: st.error }
+  return {
+    running: st.running,
+    connecting: !!st.connecting,
+    url: st.url,
+    until: st.until,
+    error: st.error
+  }
 }
 
 async function state(op: 'reload' | 'status' = 'status'): Promise<NodeState> {

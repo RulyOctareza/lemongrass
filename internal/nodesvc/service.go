@@ -30,13 +30,15 @@ type request struct {
 	Op string `json:"op"`
 }
 
-// Status is what the app shows; it holds no token.
+// Status is what the app shows; it holds no token. Connecting is true while the provider is
+// opening the tunnel, which can take seconds.
 type Status struct {
-	Running  bool                 `json:"running"`
-	URL      string               `json:"url,omitempty"`
-	Until    time.Time            `json:"until,omitzero"`
-	Error    string               `json:"error,omitempty"`
-	LastUsed map[string]time.Time `json:"lastUsed"`
+	Running    bool                 `json:"running"`
+	Connecting bool                 `json:"connecting"`
+	URL        string               `json:"url,omitempty"`
+	Until      time.Time            `json:"until,omitzero"`
+	Error      string               `json:"error,omitempty"`
+	LastUsed   map[string]time.Time `json:"lastUsed"`
 }
 
 type response struct {
@@ -57,8 +59,11 @@ type Service struct {
 	mu        sync.Mutex
 	running   *run
 	failedKey string
-	lastErr   string
-	lastUsed  map[string]time.Time
+	// heldKey is the tunnel node.json already asked for when the daemon started, which it never opens.
+	heldKey    string
+	connecting bool
+	lastErr    string
+	lastUsed   map[string]time.Time
 }
 
 type run struct {
@@ -94,8 +99,7 @@ func (s *Service) Sync() {
 	}
 	t := cfg.Tunnel
 	want := t.Until.After(s.now())
-	provider, key := s.provider(t)
-	key = fmt.Sprintf("%s|%d", key, t.Until.UnixNano())
+	provider, key := s.tunnelKey(t)
 
 	s.mu.Lock()
 	var old *run
@@ -103,9 +107,10 @@ func (s *Service) Sync() {
 		old, s.running = s.running, nil
 	}
 	if !want {
-		s.failedKey, s.lastErr = "", ""
+		s.failedKey, s.heldKey, s.lastErr = "", "", ""
 	}
-	start := want && s.running == nil && s.failedKey != key
+	start := want && s.running == nil && s.failedKey != key && s.heldKey != key
+	s.connecting = start
 	s.mu.Unlock()
 	shutdown(old)
 	if !start {
@@ -115,6 +120,7 @@ func (s *Service) Sync() {
 	ln, url, cancel, err := listen(provider)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.connecting = false
 	if err != nil {
 		s.failedKey, s.lastErr = key, err.Error()
 		log.Printf("nodesvc: tunnel not opened: %v", err)
@@ -134,6 +140,24 @@ func (s *Service) Sync() {
 		}
 	}()
 	log.Printf("nodesvc: tunnel open at %s until %s", url, t.Until.Format(time.RFC3339))
+}
+
+func (s *Service) tunnelKey(t node.Tunnel) (tunnel.Provider, string) {
+	provider, key := s.provider(t)
+	return provider, fmt.Sprintf("%s|%d", key, t.Until.UnixNano())
+}
+
+// holdLeftover keeps a tunnel that node.json still asks for at start closed, so a reboot or a
+// daemon restart never reopens one; only an open written while the daemon runs changes the key.
+func (s *Service) holdLeftover() {
+	cfg, err := s.store.Config()
+	if err != nil || !cfg.Tunnel.Until.After(s.now()) {
+		return
+	}
+	_, key := s.tunnelKey(cfg.Tunnel)
+	s.mu.Lock()
+	s.heldKey = key
+	s.mu.Unlock()
 }
 
 // listen gives the provider a context that lives as long as the tunnel, cancelled early only when connecting takes too long.
@@ -195,6 +219,7 @@ func (s *Service) Status() Status {
 	for id, at := range s.lastUsed {
 		st.LastUsed[id] = at
 	}
+	st.Connecting = s.connecting
 	if s.running != nil {
 		st.Running, st.URL, st.Until = true, s.running.url, s.running.until
 	}
@@ -203,6 +228,7 @@ func (s *Service) Status() Status {
 
 // Run syncs on every tick, which is what closes the tunnel when its time is up.
 func (s *Service) Run(ctx context.Context, every time.Duration) {
+	s.holdLeftover()
 	s.Sync()
 	t := time.NewTicker(every)
 	defer t.Stop()

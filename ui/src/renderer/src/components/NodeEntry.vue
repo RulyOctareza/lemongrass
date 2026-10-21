@@ -1,17 +1,36 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import NodeModal from './NodeModal.vue'
 
-const running = ref(false)
-const open = ref(false)
-let timer: ReturnType<typeof setInterval> | undefined
+type Phase = 'checking' | 'connecting' | 'shared' | 'off'
 
-async function refresh(): Promise<void> {
-  try {
-    running.value = (await window.api.node.state()).status.running
-  } catch {
-    running.value = false
+const phase = ref<Phase>('checking')
+const open = ref(false)
+let timer: ReturnType<typeof setTimeout> | undefined
+
+const view = computed(() => {
+  switch (phase.value) {
+    case 'checking':
+      return { text: 'Checking', dot: 'Checking' }
+    case 'connecting':
+      return { text: 'Connecting', dot: 'Connecting' }
+    case 'shared':
+      return { text: 'Shared', dot: 'Connected' }
+    default:
+      return { text: 'Off', dot: 'Disconnected' }
   }
+})
+
+// Polls quickly while ngrok is connecting, which takes seconds, so Connecting does not linger.
+async function refresh(): Promise<void> {
+  clearTimeout(timer)
+  try {
+    const st = (await window.api.node.state()).status
+    phase.value = st.running ? 'shared' : st.connecting ? 'connecting' : 'off'
+  } catch {
+    phase.value = 'off'
+  }
+  timer = setTimeout(refresh, phase.value === 'connecting' ? 2_000 : 15_000)
 }
 
 function close(): void {
@@ -19,16 +38,13 @@ function close(): void {
   void refresh()
 }
 
-onMounted(() => {
-  void refresh()
-  timer = setInterval(refresh, 15_000)
-})
-onBeforeUnmount(() => clearInterval(timer))
+onMounted(() => void refresh())
+onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
   <div class="node-panel">
-    <button class="node-item" :class="{ on: running }" @click="open = true">
+    <button class="node-item" @click="open = true">
       <svg
         width="13"
         height="13"
@@ -45,8 +61,8 @@ onBeforeUnmount(() => clearInterval(timer))
         <path d="M3.5 3.8L5.5 5.8M10.5 3.8L8.5 5.8M7 9v1.8" />
       </svg>
       <span class="node-label">Node</span>
-      <span class="node-state">{{ running ? 'Shared' : 'Off' }}</span>
-      <span v-if="running" class="node-dot" />
+      <span class="node-state">{{ view.text }}</span>
+      <span class="node-dot" :class="phase" :title="view.dot" />
     </button>
     <NodeModal v-if="open" @close="close" />
   </div>
@@ -79,11 +95,6 @@ onBeforeUnmount(() => clearInterval(timer))
   background: var(--color-surface-3);
 }
 
-.node-item.on {
-  background: var(--color-amber-muted);
-  color: var(--color-fg-accent);
-}
-
 .node-label {
   flex-shrink: 0;
 }
@@ -97,9 +108,26 @@ onBeforeUnmount(() => clearInterval(timer))
 }
 
 .node-dot {
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-amber);
+  background: var(--color-error);
+}
+
+.node-dot.shared {
+  background: var(--color-success);
+}
+
+.node-dot.checking,
+.node-dot.connecting {
+  background: var(--color-fg-muted);
+  animation: node-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes node-pulse {
+  50% {
+    opacity: 0.3;
+  }
 }
 </style>
