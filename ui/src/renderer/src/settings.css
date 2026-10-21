@@ -152,6 +152,16 @@
   cursor: default;
 }
 
+.settings-action.danger,
+.settings-action.danger:hover {
+  border-color: color-mix(in srgb, var(--color-error) 50%, transparent);
+  color: var(--color-error);
+}
+
+.settings-action.danger:hover {
+  background: var(--color-error-muted);
+}
+
 .settings-action.confirming,
 .settings-action.confirming:hover {
   background: var(--color-error-muted);

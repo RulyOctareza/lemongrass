@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import AppModal from './AppModal.vue'
 import AppButton from './AppButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
@@ -166,10 +166,25 @@ function openTunnel(): Promise<void> {
   })
 }
 
-const closeTunnel = (): Promise<void> => run(() => window.api.node.closeTunnel())
-
 const status = computed(() => state.value?.status)
 const nodeURL = computed(() => status.value?.url ?? '')
+
+// Close drops every connected client, so it takes a second click to run.
+const confirmingClose = ref(false)
+
+watch(
+  () => status.value?.running,
+  () => (confirmingClose.value = false)
+)
+
+function closeTunnel(): void {
+  if (!confirmingClose.value) {
+    confirmingClose.value = true
+    return
+  }
+  confirmingClose.value = false
+  void run(() => window.api.node.closeTunnel())
+}
 
 function grantState(g: NodeGrantView): 'Active' | 'Expired' | 'Disconnected' {
   if (g.revoked) return 'Disconnected'
@@ -491,7 +506,9 @@ function copy(key: string, text: string): void {
         <ul class="settings-rows">
           <li class="settings-row">
             <span class="node-dot" :class="{ on: status?.running }" aria-hidden="true"></span>
-            <span class="settings-row-title">{{ status?.running ? 'Open' : 'Closed' }}</span>
+            <span class="settings-row-title node-state" :class="{ on: status?.running }">
+              {{ status?.running ? 'Open' : 'Closed' }}
+            </span>
             <span v-if="status?.daemonDown" class="settings-row-meta">
               The node daemon is not running. Restart the app to start it.
             </span>
@@ -500,11 +517,42 @@ function copy(key: string, text: string): void {
             </span>
             <span v-else class="settings-row-meta">Nobody outside this machine can reach it.</span>
             <template v-if="status?.running">
-              <button type="button" class="settings-action" @click="copy('url', nodeURL)">
-                {{ copied === 'url' ? 'Copied' : 'Copy URL' }}
+              <button
+                type="button"
+                class="node-icon-action"
+                :title="copied === 'url' ? 'Copied' : 'Copy URL'"
+                :aria-label="copied === 'url' ? 'Copied' : 'Copy URL'"
+                @click="copy('url', nodeURL)"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path v-if="copied === 'url'" d="M3 7.5l2.5 2.5L11 4.5" />
+                  <template v-else>
+                    <rect x="4.5" y="4.5" width="7" height="8" rx="1.2" />
+                    <path
+                      d="M9.5 4.5V3.2A1.2 1.2 0 0 0 8.3 2H3.2A1.2 1.2 0 0 0 2 3.2v5.1a1.2 1.2 0 0 0 1.2 1.2h1.3"
+                    />
+                  </template>
+                </svg>
               </button>
-              <button type="button" class="settings-action" :disabled="busy" @click="closeTunnel">
-                Close
+              <button
+                type="button"
+                class="settings-action danger"
+                :class="{ confirming: confirmingClose }"
+                :disabled="busy"
+                @click="closeTunnel"
+                @mouseleave="confirmingClose = false"
+              >
+                {{ confirmingClose ? 'Click again' : 'Close' }}
               </button>
             </template>
           </li>
@@ -855,7 +903,38 @@ function copy(key: string, text: string): void {
 }
 
 .node-dot.on {
-  background: var(--color-amber);
+  background: var(--color-success);
+}
+
+.node-state {
+  color: var(--color-fg-muted);
+}
+
+.node-state.on {
+  color: var(--color-success);
+}
+
+.node-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-pill);
+  color: var(--color-fg-secondary);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.node-icon-action:hover {
+  background: var(--color-surface-3);
+  color: var(--color-fg-primary);
 }
 
 .node-token {
