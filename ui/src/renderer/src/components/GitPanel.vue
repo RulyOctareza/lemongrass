@@ -12,6 +12,7 @@ import {
 import { activeDiffPath, openDiff, openHistory, type ProjectRef } from '../workspace'
 import type { GitFile, GitFileGroup, GitFileKind } from '../../../preload/types'
 import AppButton from './AppButton.vue'
+import GitIcon from './GitIcon.vue'
 import GitBranchModal from './GitBranchModal.vue'
 import GitStashSection from './GitStashSection.vue'
 import GitSyncSection from './GitSyncSection.vue'
@@ -192,11 +193,17 @@ watch(() => props.project.id, refresh)
       >
         <span class="branch-switch-label">Branch</span>
         <span class="branch-switch-name">{{ status.branch ?? 'detached HEAD' }}</span>
-        <span class="branch-switch-action">Switch</span>
+        <GitIcon class="branch-switch-action" name="switch" />
       </button>
-      <button v-if="status?.isRepo" class="history-open" @click="openHistory(project)">
+      <button
+        v-if="status?.isRepo"
+        class="history-open"
+        title="Open history"
+        aria-label="Open history"
+        @click="openHistory(project)"
+      >
         <span class="branch-switch-label">History</span>
-        <span class="branch-switch-action">Open</span>
+        <GitIcon class="branch-switch-action" name="open" />
       </button>
       <GitSyncSection v-if="status?.isRepo" :project="project" />
 
@@ -443,12 +450,14 @@ watch(() => props.project.id, refresh)
 }
 
 .branch-switch-action {
-  flex-shrink: 0;
-  color: var(--color-fg-accent);
+  color: var(--color-fg-muted);
 }
 
-.branch-switch:disabled .branch-switch-action {
-  color: var(--color-fg-muted);
+.branch-switch:hover:not(:disabled) .branch-switch-action,
+.branch-switch:focus-visible:not(:disabled) .branch-switch-action,
+.history-open:hover .branch-switch-action,
+.history-open:focus-visible .branch-switch-action {
+  color: var(--color-fg-accent);
 }
 
 .changes-head {

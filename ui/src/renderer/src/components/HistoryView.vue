@@ -9,6 +9,7 @@ import AppButton from './AppButton.vue'
 import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
 import AppSegmented from './AppSegmented.vue'
 import HistoryAmendModal from './HistoryAmendModal.vue'
+import GitIcon from './GitIcon.vue'
 import HistoryResetModal from './HistoryResetModal.vue'
 import RevisionView from './RevisionView.vue'
 
@@ -16,6 +17,7 @@ const PAGE = 200
 const LANE_WIDTH = 14
 const ROW_HEIGHT = 26
 const MAX_LANES = 8
+const MAX_REFS = 2
 const LANE_COLORS = [
   'var(--color-info)',
   'var(--color-success)',
@@ -279,17 +281,28 @@ function laneX(lane: number): number {
           </svg>
           <span class="commit-main">
             <span
-              v-for="label in commit.refs"
+              v-for="label in commit.refs.slice(0, MAX_REFS)"
               :key="`${label.kind}-${label.name}`"
               class="commit-ref"
               :class="label.kind"
+              :title="label.name"
               >{{ label.name }}</span
+            >
+            <span
+              v-if="commit.refs.length > MAX_REFS"
+              class="commit-ref more"
+              :title="commit.refs.map((label) => label.name).join('\n')"
+              >+{{ commit.refs.length - MAX_REFS }}</span
             >
             <span class="commit-subject" :title="commit.subject">{{ commit.subject }}</span>
           </span>
-          <span class="commit-pushed" :class="{ local: commit.unpushed }">{{
-            commit.unpushed ? 'not pushed' : 'pushed'
-          }}</span>
+          <span
+            class="commit-pushed"
+            :class="{ local: commit.unpushed }"
+            :title="commit.unpushed ? 'Not pushed' : 'Pushed'"
+          >
+            <GitIcon :name="commit.unpushed ? 'unpushed' : 'pushed'" />
+          </span>
           <span class="commit-author" :title="commit.author">{{ commit.author }}</span>
           <span class="commit-hash">{{ commit.hash.slice(0, 7) }}</span>
           <span class="commit-age" :title="formatDate(commit.time)">{{
@@ -407,6 +420,7 @@ function laneX(lane: number): number {
   min-width: 0;
   overflow-y: auto;
   border-right: 1px solid var(--color-border-subtle);
+  container-type: inline-size;
 }
 
 .commit-row {
@@ -450,6 +464,7 @@ function laneX(lane: number): number {
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  overflow: hidden;
 }
 
 .commit-subject {
@@ -460,7 +475,7 @@ function laneX(lane: number): number {
 }
 
 .commit-ref {
-  flex-shrink: 0;
+  min-width: 0;
   max-width: 120px;
   padding: 0 6px;
   overflow: hidden;
@@ -469,6 +484,15 @@ function laneX(lane: number): number {
   border: 1px solid currentColor;
   border-radius: var(--radius-pill);
   line-height: 16px;
+}
+
+.commit-ref.head,
+.commit-ref.more {
+  flex-shrink: 0;
+}
+
+.commit-ref.more {
+  color: var(--color-fg-muted);
 }
 
 .commit-ref.head {
@@ -494,6 +518,10 @@ function laneX(lane: number): number {
   color: var(--color-fg-muted);
 }
 
+.commit-pushed {
+  display: flex;
+}
+
 .commit-pushed.local {
   color: var(--color-warning);
 }
@@ -517,6 +545,19 @@ function laneX(lane: number): number {
   width: 30px;
   color: var(--color-fg-muted);
   text-align: right;
+}
+
+/* A narrow pane drops the author and then the hash, so the subject and refs keep the room. */
+@container (max-width: 480px) {
+  .commit-author {
+    display: none;
+  }
+}
+
+@container (max-width: 360px) {
+  .commit-hash {
+    display: none;
+  }
 }
 
 .history-detail {

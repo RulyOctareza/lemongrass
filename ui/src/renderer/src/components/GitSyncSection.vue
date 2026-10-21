@@ -6,6 +6,7 @@ import type { ProjectRef } from '../workspace'
 import type { GitIncomingCommit } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import GitBranchModal from './GitBranchModal.vue'
+import GitIcon from './GitIcon.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -85,9 +86,10 @@ const canIntegrate = computed(
         class="sync-fetch"
         :disabled="state.busy !== null"
         title="Fetch every remote"
+        aria-label="Fetch every remote"
         @click="perform('fetch')"
       >
-        Fetch
+        <GitIcon :class="{ spin: state.busy === 'sync' }" name="fetch" />
       </button>
     </div>
 
@@ -116,10 +118,16 @@ const canIntegrate = computed(
     </div>
 
     <template v-if="!folded">
-      <button class="sync-target" :disabled="state.busy !== null" @click="picking = true">
+      <button
+        class="sync-target"
+        :disabled="state.busy !== null"
+        title="Change the reference branch"
+        aria-label="Change the reference branch"
+        @click="picking = true"
+      >
         <span class="sync-target-label">Reference</span>
         <span class="sync-target-name">{{ target ?? 'no upstream, choose a branch' }}</span>
-        <span class="sync-target-action">Change</span>
+        <GitIcon class="sync-target-action" name="change" />
       </button>
       <p v-if="error" class="sync-error">{{ error }}</p>
       <p v-if="!target" class="sync-empty">The current branch has no upstream.</p>
@@ -222,18 +230,21 @@ const canIntegrate = computed(
 }
 
 .sync-fetch {
+  display: flex;
   margin-left: auto;
   padding: 0;
   background: none;
   border: none;
-  color: var(--color-fg-accent);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
+  color: var(--color-fg-muted);
   cursor: pointer;
 }
 
+.sync-fetch:hover:not(:disabled),
+.sync-fetch:focus-visible:not(:disabled) {
+  color: var(--color-fg-accent);
+}
+
 .sync-fetch:disabled {
-  color: var(--color-fg-muted);
   cursor: default;
 }
 
@@ -283,7 +294,11 @@ const canIntegrate = computed(
 }
 
 .sync-target-action {
-  flex-shrink: 0;
+  color: var(--color-fg-muted);
+}
+
+.sync-target:hover:not(:disabled) .sync-target-action,
+.sync-target:focus-visible:not(:disabled) .sync-target-action {
   color: var(--color-fg-accent);
 }
 

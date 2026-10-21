@@ -7,6 +7,7 @@ import type { GitStash } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
 import AppModal from './AppModal.vue'
+import GitIcon from './GitIcon.vue'
 import RevisionView from './RevisionView.vue'
 
 const props = defineProps<{
@@ -76,10 +77,11 @@ async function drop(stash: GitStash): Promise<void> {
       <button
         class="stash-new"
         :disabled="!hasChanges || state.busy !== null"
-        :title="hasChanges ? 'Stash the current changes' : 'No changes to stash'"
+        :title="hasChanges ? 'Stash changes' : 'No changes to stash'"
+        :aria-label="hasChanges ? 'Stash changes' : 'No changes to stash'"
         @click="((saving = !saving), (folded = false))"
       >
-        Stash changes
+        <GitIcon name="stash" />
       </button>
     </div>
 
@@ -107,18 +109,32 @@ async function drop(stash: GitStash): Promise<void> {
             <span class="stash-age">{{ formatAge(stash.time) }}</span>
           </button>
           <div class="stash-actions">
-            <button :disabled="state.busy !== null" @click="perform('apply', stash.ref)">
-              Apply
+            <button
+              title="Apply and keep the stash"
+              aria-label="Apply and keep the stash"
+              :disabled="state.busy !== null"
+              @click="perform('apply', stash.ref)"
+            >
+              <GitIcon name="apply" />
             </button>
-            <button :disabled="state.busy !== null" @click="perform('pop', stash.ref)">Pop</button>
+            <button
+              title="Apply and remove the stash"
+              aria-label="Apply and remove the stash"
+              :disabled="state.busy !== null"
+              @click="perform('pop', stash.ref)"
+            >
+              <GitIcon name="pop" />
+            </button>
             <button
               class="drop"
               :class="{ confirming: confirmingDrop === stash.ref }"
+              :title="confirmingDrop === stash.ref ? 'Click again to drop' : 'Drop the stash'"
+              :aria-label="confirmingDrop === stash.ref ? 'Click again to drop' : 'Drop the stash'"
               :disabled="state.busy !== null"
               @click="drop(stash)"
               @blur="confirmingDrop = null"
             >
-              {{ confirmingDrop === stash.ref ? 'Confirm drop' : 'Drop' }}
+              <GitIcon name="drop" />
             </button>
           </div>
         </li>
@@ -178,18 +194,22 @@ async function drop(stash: GitStash): Promise<void> {
 }
 
 .stash-new {
+  display: flex;
   margin-left: auto;
   padding: 0;
   background: none;
   border: none;
-  color: var(--color-fg-accent);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
+  color: var(--color-fg-muted);
   cursor: pointer;
 }
 
+.stash-new:hover:not(:disabled),
+.stash-new:focus-visible:not(:disabled) {
+  color: var(--color-fg-accent);
+}
+
 .stash-new:disabled {
-  color: var(--color-fg-muted);
+  opacity: 0.5;
   cursor: default;
 }
 
@@ -283,20 +303,26 @@ async function drop(stash: GitStash): Promise<void> {
 }
 
 .stash-actions button {
+  display: flex;
   padding: 0;
   background: none;
   border: none;
-  color: var(--color-fg-accent);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
+  color: var(--color-fg-muted);
   cursor: pointer;
 }
 
+.stash-actions button:hover:not(:disabled),
+.stash-actions button:focus-visible:not(:disabled) {
+  color: var(--color-fg-accent);
+}
+
 .stash-actions button:disabled {
-  color: var(--color-fg-muted);
+  opacity: 0.5;
   cursor: default;
 }
 
+.stash-actions .drop:hover:not(:disabled),
+.stash-actions .drop:focus-visible:not(:disabled),
 .stash-actions .drop.confirming {
   color: var(--color-error);
 }
