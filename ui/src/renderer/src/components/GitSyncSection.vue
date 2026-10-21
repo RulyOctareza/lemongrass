@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { gitStateOf, runSync, syncTargetOf } from '../git'
+import { gitStateOf, pushBranch, runSync, syncTargetOf } from '../git'
 import { formatAge } from '../gitTime'
 import type { ProjectRef } from '../workspace'
 import type { GitIncomingCommit } from '../../../preload/types'
 import AppButton from './AppButton.vue'
-import GitBranchModal from './GitBranchModal.vue'
+import GitBranchMenu from './GitBranchMenu.vue'
 import GitIcon from './GitIcon.vue'
 
 const props = defineProps<{
@@ -16,7 +16,6 @@ const state = computed(() => gitStateOf(props.project.id))
 const status = computed(() => state.value.status)
 const target = computed(() => syncTargetOf(props.project.id))
 const folded = ref(true)
-const picking = ref(false)
 const error = ref<string | null>(null)
 const confirmingRebase = ref(false)
 const incoming = ref<GitIncomingCommit[]>([])
@@ -54,6 +53,23 @@ async function rebase(): Promise<void> {
   await perform('rebase')
 }
 
+// Without an upstream the push sets one, so there is nothing to compare ahead against yet.
+const pushBlockedReason = computed((): string | null => {
+  if (status.value?.detached) return 'HEAD is detached'
+  if (!status.value?.pushTarget) return 'No remote to push to'
+  if (status.value.upstream && status.value.ahead === 0) return 'Nothing to push'
+  return null
+})
+
+const pushTitle = computed(
+  () => pushBlockedReason.value ?? `Push ${status.value?.branch} to ${status.value?.pushTarget}`
+)
+
+async function push(): Promise<void> {
+  error.value = null
+  error.value = await pushBranch(props.project)
+}
+
 const canIntegrate = computed(
   () => !state.value.busy && !status.value?.operation && incoming.value.length > 0
 )
@@ -78,19 +94,34 @@ const canIntegrate = computed(
           <path d="M3 2l3 3-3 3" />
         </svg>
         <span class="sync-heading">Sync</span>
-        <span v-if="status && (status.behind > 0 || status.ahead > 0)" class="sync-counts">
-          {{ status.behind }} behind, {{ status.ahead }} ahead
-        </span>
       </button>
       <button
-        class="sync-fetch"
+        class="sync-icon"
         :disabled="state.busy !== null"
         title="Fetch every remote"
         aria-label="Fetch every remote"
         @click="perform('fetch')"
       >
-        <GitIcon :class="{ spin: state.busy === 'sync' }" name="fetch" />
+        <GitIcon v-if="state.busy === 'sync'" class="spin" name="spinner" />
+        <GitIcon v-else name="fetch" />
       </button>
+      <button
+        class="sync-icon"
+        :disabled="state.busy !== null || pushBlockedReason !== null"
+        :title="pushTitle"
+        :aria-label="pushTitle"
+        @click="push"
+      >
+        <GitIcon v-if="state.busy === 'push'" class="spin" name="spinner" />
+        <GitIcon v-else name="push" />
+      </button>
+      <span
+        v-if="status && (status.behind > 0 || status.ahead > 0)"
+        class="sync-counts"
+        :title="`${status.behind} behind, ${status.ahead} ahead`"
+      >
+        ↓{{ status.behind }} ↑{{ status.ahead }}
+      </span>
     </div>
 
     <div v-if="status?.operation" class="sync-operation">
@@ -118,22 +149,19 @@ const canIntegrate = computed(
     </div>
 
     <template v-if="!folded">
-      <button
-        class="sync-target"
+      <GitBranchMenu
+        :project="project"
+        pick-only
         :disabled="state.busy !== null"
-        title="Change the reference branch"
-        aria-label="Change the reference branch"
-        @click="picking = true"
+        title="Reference branch to bring in from"
+        @pick="state.syncTarget = $event"
       >
-        <span class="sync-target-label">Reference</span>
-        <span class="sync-target-name">{{ target ?? 'no upstream, choose a branch' }}</span>
-        <GitIcon class="sync-target-action" name="change" />
-      </button>
+        <GitIcon class="sync-target-icon" name="fetch" />
+        <span class="sync-target-name">{{ target ?? 'Choose a branch' }}</span>
+      </GitBranchMenu>
       <p v-if="error" class="sync-error">{{ error }}</p>
       <p v-if="!target" class="sync-empty">The current branch has no upstream.</p>
-      <p v-else-if="incoming.length === 0" class="sync-empty">
-        Nothing to bring in from {{ target }}.
-      </p>
+      <p v-else-if="incoming.length === 0" class="sync-empty">Up to date</p>
       <template v-else>
         <p class="sync-incoming">{{ incoming.length }} incoming from {{ target }}</p>
         <ul class="sync-list">
@@ -169,15 +197,6 @@ const canIntegrate = computed(
         cannot be pushed again without a force push, which this app never does.
       </p>
     </template>
-
-    <GitBranchModal
-      v-if="picking"
-      :project="project"
-      pick-only
-      title="Choose the reference branch"
-      @pick="state.syncTarget = $event"
-      @close="picking = false"
-    />
   </div>
 </template>
 
@@ -229,9 +248,8 @@ const canIntegrate = computed(
   font-size: var(--text-xs);
 }
 
-.sync-fetch {
+.sync-icon {
   display: flex;
-  margin-left: auto;
   padding: 0;
   background: none;
   border: none;
@@ -239,13 +257,18 @@ const canIntegrate = computed(
   cursor: pointer;
 }
 
-.sync-fetch:hover:not(:disabled),
-.sync-fetch:focus-visible:not(:disabled) {
+.sync-icon:hover:not(:disabled),
+.sync-icon:focus-visible:not(:disabled) {
   color: var(--color-fg-accent);
 }
 
-.sync-fetch:disabled {
+.sync-icon:disabled {
+  opacity: 0.5;
   cursor: default;
+}
+
+.sync-icon:has(.spin) {
+  opacity: 1;
 }
 
 .sync-operation {
@@ -260,46 +283,15 @@ const canIntegrate = computed(
   font-size: var(--text-xs);
 }
 
-.sync-target {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px var(--space-2);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-fg-secondary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  text-align: left;
-  cursor: pointer;
-}
-
-.sync-target:hover:not(:disabled) {
-  background: var(--color-surface-2);
-}
-
-.sync-target-label {
-  flex-shrink: 0;
-  font-weight: var(--weight-semibold);
+.sync-target-icon {
+  color: var(--color-fg-muted);
 }
 
 .sync-target-name {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-fg-primary);
-}
-
-.sync-target-action {
-  color: var(--color-fg-muted);
-}
-
-.sync-target:hover:not(:disabled) .sync-target-action,
-.sync-target:focus-visible:not(:disabled) .sync-target-action {
-  color: var(--color-fg-accent);
 }
 
 .sync-incoming {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import {
   commitChanges,
   gitStateOf,
@@ -13,7 +13,7 @@ import { activeDiffPath, openDiff, openHistory, type ProjectRef } from '../works
 import type { GitFile, GitFileGroup, GitFileKind } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import GitIcon from './GitIcon.vue'
-import GitBranchModal from './GitBranchModal.vue'
+import GitBranchMenu from './GitBranchMenu.vue'
 import GitStashSection from './GitStashSection.vue'
 import GitSyncSection from './GitSyncSection.vue'
 
@@ -28,7 +28,6 @@ const status = computed(() => state.value.status)
 const files = computed(() => status.value?.files ?? [])
 const selectedPath = computed(() => activeDiffPath(props.project.id))
 const stagedCount = computed(() => files.value.filter((file) => file.staged).length)
-const switching = ref(false)
 const switchBlockedReason = computed((): string | null => {
   if (state.value.busy) return 'An operation is running'
   if (stagedCount.value > 0) return 'Commit or unstage the staged changes before switching branches'
@@ -184,26 +183,18 @@ watch(() => props.project.id, refresh)
     </button>
 
     <div v-if="!state.folded" class="git-body">
-      <button
+      <GitBranchMenu
         v-if="status?.isRepo"
-        class="branch-switch"
+        :project="project"
         :disabled="switchBlockedReason !== null"
         :title="switchBlockedReason ?? 'Switch branch'"
-        @click="switching = true"
       >
-        <span class="branch-switch-label">Branch</span>
-        <span class="branch-switch-name">{{ status.branch ?? 'detached HEAD' }}</span>
-        <GitIcon class="branch-switch-action" name="switch" />
-      </button>
-      <button
-        v-if="status?.isRepo"
-        class="history-open"
-        title="Open history"
-        aria-label="Open history"
-        @click="openHistory(project)"
-      >
-        <span class="branch-switch-label">History</span>
-        <GitIcon class="branch-switch-action" name="open" />
+        <GitIcon class="row-icon" name="branch" />
+        <span class="row-name">{{ status.branch ?? 'detached HEAD' }}</span>
+      </GitBranchMenu>
+      <button v-if="status?.isRepo" class="history-open" @click="openHistory(project)">
+        <GitIcon class="row-icon" name="open" />
+        <span>History</span>
       </button>
       <GitSyncSection v-if="status?.isRepo" :project="project" />
 
@@ -305,7 +296,6 @@ watch(() => props.project.id, refresh)
         </div>
       </template>
     </div>
-    <GitBranchModal v-if="switching" :project="project" @close="switching = false" />
   </div>
 </template>
 
@@ -390,21 +380,6 @@ watch(() => props.project.id, refresh)
   padding: var(--space-2) var(--space-1) 0;
 }
 
-.branch-switch {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px var(--space-2);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-fg-secondary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  text-align: left;
-  cursor: pointer;
-}
-
 .history-open {
   display: flex;
   align-items: center;
@@ -419,44 +394,23 @@ watch(() => props.project.id, refresh)
   cursor: pointer;
 }
 
-.history-open .branch-switch-action {
-  margin-left: auto;
-}
-
 .history-open:hover {
   background: var(--color-surface-2);
 }
 
-.branch-switch:hover:not(:disabled) {
-  background: var(--color-surface-2);
+.row-icon {
+  color: var(--color-fg-muted);
 }
 
-.branch-switch:disabled {
-  cursor: default;
-}
-
-.branch-switch-label {
-  flex-shrink: 0;
-  font-weight: var(--weight-semibold);
-}
-
-.branch-switch-name {
-  flex: 1;
+.row-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-fg-primary);
 }
 
-.branch-switch-action {
-  color: var(--color-fg-muted);
-}
-
-.branch-switch:hover:not(:disabled) .branch-switch-action,
-.branch-switch:focus-visible:not(:disabled) .branch-switch-action,
-.history-open:hover .branch-switch-action,
-.history-open:focus-visible .branch-switch-action {
+.history-open:hover .row-icon,
+.history-open:focus-visible .row-icon {
   color: var(--color-fg-accent);
 }
 

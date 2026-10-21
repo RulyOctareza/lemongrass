@@ -72,7 +72,7 @@ async function drop(stash: GitStash): Promise<void> {
           <path d="M3 2l3 3-3 3" />
         </svg>
         <span class="git-heading">Stashes</span>
-        <span class="stash-count">{{ stashes.length }}</span>
+        <span v-if="stashes.length > 0" class="stash-count">{{ stashes.length }}</span>
       </button>
       <button
         class="stash-new"
@@ -189,13 +189,18 @@ async function drop(stash: GitStash): Promise<void> {
 }
 
 .stash-count {
-  color: var(--color-fg-muted);
-  font-size: var(--text-xs);
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-3);
+  color: var(--color-fg-secondary);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
 }
 
 .stash-new {
   display: flex;
-  margin-left: auto;
   padding: 0;
   background: none;
   border: none;
