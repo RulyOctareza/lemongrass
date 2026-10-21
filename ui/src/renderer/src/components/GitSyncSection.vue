@@ -95,8 +95,46 @@ const canIntegrate = computed(
         </svg>
         <span class="sync-heading">Sync</span>
       </button>
+      <span
+        v-if="status && (status.behind > 0 || status.ahead > 0)"
+        class="sync-counts"
+        :title="`${status.behind} behind, ${status.ahead} ahead`"
+      >
+        <span class="sync-count behind" :class="{ zero: status.behind === 0 }">
+          <svg
+            width="9"
+            height="9"
+            viewBox="0 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 1.5v7M2 5.5l3 3 3-3" />
+          </svg>
+          {{ status.behind }}
+        </span>
+        <span class="sync-count ahead" :class="{ zero: status.ahead === 0 }">
+          <svg
+            width="9"
+            height="9"
+            viewBox="0 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 8.5v-7M2 4.5l3-3 3 3" />
+          </svg>
+          {{ status.ahead }}
+        </span>
+      </span>
       <button
-        class="sync-icon"
+        class="sync-icon fetch"
         :disabled="state.busy !== null"
         title="Fetch every remote"
         aria-label="Fetch every remote"
@@ -106,7 +144,7 @@ const canIntegrate = computed(
         <GitIcon v-else name="fetch" />
       </button>
       <button
-        class="sync-icon"
+        class="sync-icon push"
         :disabled="state.busy !== null || pushBlockedReason !== null"
         :title="pushTitle"
         :aria-label="pushTitle"
@@ -115,13 +153,6 @@ const canIntegrate = computed(
         <GitIcon v-if="state.busy === 'push'" class="spin" name="spinner" />
         <GitIcon v-else name="push" />
       </button>
-      <span
-        v-if="status && (status.behind > 0 || status.ahead > 0)"
-        class="sync-counts"
-        :title="`${status.behind} behind, ${status.ahead} ahead`"
-      >
-        ↓{{ status.behind }} ↑{{ status.ahead }}
-      </span>
     </div>
 
     <div v-if="status?.operation" class="sync-operation">
@@ -241,25 +272,64 @@ const canIntegrate = computed(
 }
 
 .sync-counts {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   white-space: nowrap;
-  color: var(--color-fg-muted);
   font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.sync-count {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Each count shares its color with the button that resolves it: Fetch for behind, Push for ahead. */
+.sync-count.behind {
+  color: var(--color-info);
+}
+
+.sync-count.ahead {
+  color: var(--color-amber);
+}
+
+.sync-count.zero {
+  color: var(--color-fg-muted);
+  font-weight: var(--weight-regular);
 }
 
 .sync-icon {
+  --tint: var(--color-fg-muted);
   display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
   padding: 0;
-  background: none;
+  background: color-mix(in srgb, var(--tint) 14%, transparent);
   border: none;
-  color: var(--color-fg-muted);
+  border-radius: var(--radius-sm);
+  color: var(--tint);
   cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.sync-icon.fetch {
+  --tint: var(--color-info);
+  margin-left: auto;
+}
+
+.sync-icon.push {
+  --tint: var(--color-amber);
 }
 
 .sync-icon:hover:not(:disabled),
 .sync-icon:focus-visible:not(:disabled) {
-  color: var(--color-fg-accent);
+  background: color-mix(in srgb, var(--tint) 28%, transparent);
 }
 
 .sync-icon:disabled {

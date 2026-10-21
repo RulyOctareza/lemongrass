@@ -12,6 +12,7 @@ import {
 import { activeDiffPath, openDiff, openHistory, type ProjectRef } from '../workspace'
 import type { GitFile, GitFileGroup, GitFileKind } from '../../../preload/types'
 import AppButton from './AppButton.vue'
+import AppCheckbox from './AppCheckbox.vue'
 import GitIcon from './GitIcon.vue'
 import GitBranchMenu from './GitBranchMenu.vue'
 import GitStashSection from './GitStashSection.vue'
@@ -199,15 +200,14 @@ watch(() => props.project.id, refresh)
       <GitSyncSection v-if="status?.isRepo" :project="project" />
 
       <div class="changes-head">
-        <input
+        <AppCheckbox
           v-if="files.length > 0"
-          type="checkbox"
           class="file-check"
           title="Select all"
           aria-label="Select all changes"
           :checked="allChecked"
-          :indeterminate.prop="someChecked"
-          @change="setAllChecked(project.id, files, !allChecked)"
+          :indeterminate="someChecked"
+          @click="setAllChecked(project.id, files, !allChecked)"
         />
         <p class="git-heading">Changes</p>
         <span v-if="files.length > 0" class="git-selected"
@@ -244,12 +244,11 @@ watch(() => props.project.id, refresh)
             </button>
             <ul v-if="!state.foldedGroups.includes(group.id)" class="group-files">
               <li v-for="file in group.files" :key="file.path" class="file-item">
-                <input
-                  type="checkbox"
+                <AppCheckbox
                   class="file-check"
                   :aria-label="`Include ${file.path} in the commit`"
                   :checked="isChecked(project.id, file.path)"
-                  @change="toggleFile(project.id, file.path)"
+                  @click="toggleFile(project.id, file.path)"
                 />
                 <button
                   class="file-row"
@@ -433,13 +432,10 @@ watch(() => props.project.id, refresh)
   font-size: var(--text-xs);
 }
 
+/* The panel rows are compact, so the checkbox drops its own vertical padding. */
 .file-check {
   flex-shrink: 0;
-  width: 13px;
-  height: 13px;
-  margin: 0;
-  accent-color: var(--color-amber);
-  cursor: pointer;
+  padding: 0;
 }
 
 .file-item {

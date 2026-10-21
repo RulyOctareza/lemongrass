@@ -1,11 +1,18 @@
 <script setup lang="ts">
+// Indeterminate is the partly-checked state of a select-all box and wins over checked.
 defineProps<{
   checked: boolean
+  indeterminate?: boolean
 }>()
 </script>
 
 <template>
-  <button type="button" role="checkbox" class="app-check" :aria-checked="checked">
+  <button
+    type="button"
+    role="checkbox"
+    class="app-check"
+    :aria-checked="indeterminate ? 'mixed' : checked"
+  >
     <span class="box" aria-hidden="true">
       <svg
         width="10"
@@ -17,10 +24,11 @@ defineProps<{
         stroke-linecap="round"
         stroke-linejoin="round"
       >
-        <polyline points="20 6 9 17 4 12" />
+        <line v-if="indeterminate" x1="6" y1="12" x2="18" y2="12" />
+        <polyline v-else points="20 6 9 17 4 12" />
       </svg>
     </span>
-    <span class="label"><slot /></span>
+    <span v-if="$slots.default" class="label"><slot /></span>
   </button>
 </template>
 
@@ -61,12 +69,14 @@ defineProps<{
   opacity: 0;
 }
 
-.app-check[aria-checked='true'] .box {
+.app-check[aria-checked='true'] .box,
+.app-check[aria-checked='mixed'] .box {
   background: var(--color-amber);
   border-color: var(--color-amber);
 }
 
-.app-check[aria-checked='true'] .box svg {
+.app-check[aria-checked='true'] .box svg,
+.app-check[aria-checked='mixed'] .box svg {
   opacity: 1;
 }
 

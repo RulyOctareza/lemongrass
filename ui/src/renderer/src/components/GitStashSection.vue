@@ -192,9 +192,10 @@ async function drop(stash: GitStash): Promise<void> {
   min-width: 16px;
   padding: 0 5px;
   border-radius: var(--radius-pill);
-  background: var(--color-surface-3);
-  color: var(--color-fg-secondary);
+  background: var(--color-info);
+  color: var(--color-white);
   font-size: 10px;
+  font-weight: var(--weight-bold);
   line-height: 16px;
   text-align: center;
 }
