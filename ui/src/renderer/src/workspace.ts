@@ -56,6 +56,7 @@ type VaultTab = Extract<WorkspaceTab, { kind: 'connector' }>
 type ShellTab = Extract<WorkspaceTab, { kind: 'shell' }>
 type WorkgroupTab = Extract<WorkspaceTab, { kind: 'workgroup' }>
 type WebTab = Extract<WorkspaceTab, { kind: 'web' }>
+type DeviceTab = Extract<WorkspaceTab, { kind: 'device' }>
 
 const AUTOSAVE_MS = 600
 const LAYOUT_SAVE_MS = 400
@@ -110,6 +111,10 @@ function newHistoryTab(): HistoryTab {
 // The persisted tab kind stays 'connector' so saved layouts keep loading.
 function newVaultTab(): VaultTab {
   return { id: crypto.randomUUID(), kind: 'connector' }
+}
+
+function newDeviceTab(): DeviceTab {
+  return { id: crypto.randomUUID(), kind: 'device' }
 }
 
 function newWorkgroupTab(groupId: number): WorkgroupTab {
@@ -517,6 +522,26 @@ export function openVault(project: ProjectRef): void {
   }
   const focused = leaves.find((leaf) => leaf.id === layout.focusedPaneId) ?? leaves[0]
   commit(project, tree.addTab(root, focused.id, newVaultTab()), focused.id)
+}
+
+// One device tab per project: opening it again focuses the existing tab wherever it lives.
+export function openDevice(project: ProjectRef): void {
+  const layout = workspaces[project.id].layout
+  const root = layout.root
+  if (!root) {
+    const leaf = tree.createLeaf<WorkspaceTab>([newDeviceTab()])
+    commit(project, leaf, leaf.id)
+    return
+  }
+  const leaves = tree.allLeaves(root)
+  for (const leaf of leaves) {
+    const existing = leaf.tabs.find((tab) => tab.kind === 'device')
+    if (!existing) continue
+    commit(project, tree.setActiveTab(root, leaf.id, existing.id), leaf.id)
+    return
+  }
+  const focused = leaves.find((leaf) => leaf.id === layout.focusedPaneId) ?? leaves[0]
+  commit(project, tree.addTab(root, focused.id, newDeviceTab()), focused.id)
 }
 
 // One tab per workgroup: opening it again focuses the existing tab wherever it lives.

@@ -40,6 +40,10 @@ func main() {
 		cmdHow(os.Args[2:])
 	case "biblio":
 		cmdBiblio(os.Args[2:])
+	case "device":
+		cmdDevice(os.Args[2:])
+	case "flutter":
+		cmdFlutter(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		usage()
@@ -113,6 +117,15 @@ COMMANDS
   rester <short-id> <get|post|put|patch|delete|head|options> <path> [--user <name>] [--body '<json>']
                                      Model-facing: proxies one HTTP call through the channel's
                                      rester as user, through the running agent and vault daemons
+
+  device [--device <serial>] <list|screenshot|tree|tap|swipe|type|key|logs> ...
+                                     Drives a connected Android phone over adb; lgrass device alone
+                                     prints each command. tap --text "<label>" finds the element in the
+                                     accessibility tree, which a Flutter app fills from its semantics
+
+  flutter <run|status|reload|restart|stop|test|report|http> ...
+                                     Runs a Flutter project's app on the phone and its tests, from inside
+                                     the project; lgrass flutter alone prints each command
 
   version                           Print version
 `)

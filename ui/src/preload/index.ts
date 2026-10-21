@@ -4,6 +4,11 @@ import type {
   AccountAddResult,
   AccountInfo,
   AccountRemoveResult,
+  DeviceEnd,
+  DeviceListResult,
+  DevicePacket,
+  DeviceStartRequest,
+  DeviceStartResult,
   PtySpawnOptions,
   PtyDataPayload,
   PtyExitPayload,
@@ -207,6 +212,26 @@ const git = {
     ipcRenderer.invoke('git:amendMessage', projectPath, message)
 }
 
+const device = {
+  list: (): Promise<DeviceListResult> => ipcRenderer.invoke('device:list'),
+  start: (request: DeviceStartRequest): Promise<DeviceStartResult> =>
+    ipcRenderer.invoke('device:start', request),
+  stop: (id: string): void => ipcRenderer.send('device:stop', id),
+  control: (id: string, message: Uint8Array): void =>
+    ipcRenderer.send('device:control', id, message),
+  onPacket: (callback: (packet: DevicePacket) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, packet: DevicePacket): void =>
+      callback(packet)
+    ipcRenderer.on('device:packet', listener)
+    return () => ipcRenderer.removeListener('device:packet', listener)
+  },
+  onEnd: (callback: (end: DeviceEnd) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, end: DeviceEnd): void => callback(end)
+    ipcRenderer.on('device:end', listener)
+    return () => ipcRenderer.removeListener('device:end', listener)
+  }
+}
+
 const node = {
   state: (): Promise<NodeState> => ipcRenderer.invoke('node:state'),
   saveTunnel: (
@@ -404,6 +429,7 @@ const api = {
   tabSessions,
   biblio,
   git,
+  device,
   node,
   vault,
   web,

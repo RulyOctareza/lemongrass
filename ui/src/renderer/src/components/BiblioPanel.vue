@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import AppModal from './AppModal.vue'
 import BiblioTreeItem from './BiblioTreeItem.vue'
+import DeviceEntry from './DeviceEntry.vue'
 import GitPanel from './GitPanel.vue'
 import MarkdownEditor from './MarkdownEditor.vue'
 import NodeEntry from './NodeEntry.vue'
@@ -175,6 +176,7 @@ function onGutterUp(): void {
       <WorkgroupPanel :project="project" />
       <GitPanel :project="project" />
       <VaultEntry @open="emit('openVault')" />
+      <DeviceEntry :project="project" />
       <NodeEntry />
     </div>
 
