@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,13 +32,28 @@ const (
 	maxListing = 200
 	// sniffLen is how much of a file is checked for a NUL byte to tell text from binary, as git does.
 	sniffLen = 8000
+	// MaxImage keeps an image's base64 well inside the 16 MiB response Claude Code accepts from an MCP server.
+	MaxImage = 5 << 20
 )
+
+// The image types both Claude and Codex accept as image input from an MCP tool result.
+var imageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+// Content is what a read returns: text, or an image's bytes with its MIME type.
+type Content struct {
+	Text  string
+	Image []byte
+	MIME  string
+}
 
 var (
 	// The text never names the path, so a miss inside the grant reads the same as one outside it.
 	// It avoids a bare "not found", which a client model took for a missing Node.js runtime.
 	ErrNotFound  = errors.New("node: nothing shared at this path; read its parent path to list what is there, or read with no path for the contents")
 	ErrBadOffset = errors.New("node: offset is past the end of the file")
+	// These name a file the listing already shows, so they reveal nothing outside the grant.
+	ErrNotServed     = errors.New("node: binary file, only text and images are served")
+	ErrImageTooLarge = errors.New("node: image is larger than 5 MiB")
 )
 
 // Library matches every requested name against directory listings it reads itself, never joining a name into a path as given.
@@ -50,35 +66,39 @@ func NewLibrary() *Library {
 }
 
 // Read answers the contents for an empty path, then alias, alias/books, alias/tasks, alias/laws, alias/handovers, a book or task, a task subfolder, and a file read from offset.
-func (l *Library) Read(cfg Config, g Grant, path string, offset int) (string, error) {
+func (l *Library) Read(cfg Config, g Grant, path string, offset int) (Content, error) {
 	path = strings.Trim(path, "/")
 	if path == "" {
-		return l.contents(cfg, g, "")
+		return asText(l.contents(cfg, g, ""))
 	}
 	parts := strings.Split(path, "/")
 	alias := parts[0]
 	if _, ok := shareFor(g, alias); !ok {
-		return "", ErrNotFound
+		return Content{}, ErrNotFound
 	}
 	if len(parts) == 1 {
-		return l.contents(cfg, g, alias)
+		return asText(l.contents(cfg, g, alias))
 	}
 	root, err := l.projectRoot(cfg, alias)
 	if err != nil {
-		return "", err
+		return Content{}, err
 	}
 	share, _ := shareFor(g, alias)
 	switch parts[1] {
 	case "books":
-		return readBooks(root, alias, share, parts[2:], offset)
+		return asText(readBooks(root, alias, share, parts[2:], offset))
 	case "tasks":
 		return readTasks(root, alias, share, parts[2:], offset)
 	case "laws":
-		return readDocs(filepath.Join(root, "laws"), lawsIndex, alias+"/laws/", share.Laws, parts[2:], offset)
+		return asText(readDocs(filepath.Join(root, "laws"), lawsIndex, alias+"/laws/", share.Laws, parts[2:], offset))
 	case "handovers":
-		return readDocs(filepath.Join(root, "handover"), handoverIndex, alias+"/handovers/", share.Handovers, parts[2:], offset)
+		return asText(readDocs(filepath.Join(root, "handover"), handoverIndex, alias+"/handovers/", share.Handovers, parts[2:], offset))
 	}
-	return "", ErrNotFound
+	return Content{}, ErrNotFound
+}
+
+func asText(text string, err error) (Content, error) {
+	return Content{Text: text}, err
 }
 
 func (l *Library) contents(cfg Config, g Grant, only string) (string, error) {
@@ -205,7 +225,7 @@ func readBooks(root, alias string, share Share, rest []string, offset int) (stri
 	return "", ErrNotFound
 }
 
-func readTasks(root, alias string, share Share, rest []string, offset int) (string, error) {
+func readTasks(root, alias string, share Share, rest []string, offset int) (Content, error) {
 	if len(rest) == 0 {
 		var slugs []string
 		for _, slug := range share.Tasks {
@@ -213,30 +233,74 @@ func readTasks(root, alias string, share Share, rest []string, offset int) (stri
 				slugs = append(slugs, slug)
 			}
 		}
-		return listing(alias+"/tasks/", slugs), nil
+		return Content{Text: listing(alias+"/tasks/", slugs)}, nil
 	}
 	if !slices.Contains(share.Tasks, rest[0]) {
-		return "", ErrNotFound
+		return Content{}, ErrNotFound
 	}
 	dir, archived, err := taskDir(root, rest[0])
 	if err != nil {
-		return "", err
+		return Content{}, err
 	}
 	target, isDir, err := taskPath(dir, rest[1:])
 	if err != nil {
-		return "", err
+		return Content{}, err
 	}
 	if !isDir {
-		return readText(target, offset)
+		return readTaskFile(target, offset)
 	}
 	out, err := taskListing(target, len(rest)-1)
 	if err != nil {
-		return "", err
+		return Content{}, err
 	}
 	if archived && len(rest) == 1 {
 		out = "(archived task)\n" + out
 	}
-	return out, nil
+	return Content{Text: out}, nil
+}
+
+// readTaskFile serves a task file as paged text or as a whole image, by its leading bytes rather than its name.
+func readTaskFile(full string, offset int) (Content, error) {
+	info, err := os.Lstat(full)
+	if err != nil || !info.Mode().IsRegular() {
+		return Content{}, ErrNotFound
+	}
+	data, err := os.ReadFile(full)
+	if err != nil {
+		return Content{}, fmt.Errorf("node: reading %s: %w", filepath.Base(full), err)
+	}
+	switch kind, mime := fileKind(data); kind {
+	case kindImage:
+		if offset != 0 {
+			return Content{}, ErrBadOffset
+		}
+		if len(data) > MaxImage {
+			return Content{}, ErrImageTooLarge
+		}
+		return Content{Image: data, MIME: mime}, nil
+	case kindText:
+		text, err := cut(data, offset)
+		return Content{Text: text}, err
+	}
+	return Content{}, ErrNotServed
+}
+
+type kind int
+
+const (
+	kindOther kind = iota
+	kindText
+	kindImage
+)
+
+func fileKind(head []byte) (kind, string) {
+	if mime := http.DetectContentType(head[:min(len(head), 512)]); slices.Contains(imageTypes, mime) {
+		return kindImage, mime
+	}
+	if !slices.Contains(head[:min(len(head), sniffLen)], 0) {
+		return kindText, ""
+	}
+	return kindOther, ""
 }
 
 // taskPath walks a task-relative path one listed entry at a time, through real directories only,
@@ -292,7 +356,7 @@ func taskListing(dir string, depth int) (string, error) {
 					continue
 				}
 				name := prefix + e.Name()
-				if !isText(filepath.Join(dir, e.Name())) {
+				if !servable(filepath.Join(dir, e.Name())) {
 					name += " (binary, not served)"
 				}
 				names = append(names, name)
@@ -331,7 +395,7 @@ func hidden(e os.DirEntry) bool {
 	return strings.HasPrefix(e.Name(), ".")
 }
 
-func isText(path string) bool {
+func servable(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
 		return false
@@ -339,7 +403,8 @@ func isText(path string) bool {
 	defer f.Close()
 	buf := make([]byte, sniffLen)
 	n, _ := io.ReadFull(f, buf)
-	return !slices.Contains(buf[:n], 0)
+	k, _ := fileKind(buf[:n])
+	return k != kindOther
 }
 
 // readDocs serves single-file documents, laws or handovers, listing the granted ones or reading one.
@@ -524,7 +589,7 @@ func readFile(dir, requested string, offset int) (string, error) {
 	return readText(filepath.Join(dir, name), offset)
 }
 
-// readText serves a regular text file and refuses a binary one, which the reply could not carry as text.
+// readText serves a regular text file for books, laws and handovers, and refuses a binary one.
 func readText(full string, offset int) (string, error) {
 	info, err := os.Lstat(full)
 	if err != nil || !info.Mode().IsRegular() {

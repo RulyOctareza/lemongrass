@@ -47,7 +47,7 @@ const hourOptions = [1, 4, 8, 24].map((h) => ({
 const state = ref<NodeState | null>(null)
 const error = ref('')
 const busy = ref(false)
-const section = ref<Section>('access')
+const section = ref<Section>('tunnel')
 
 const tunnel = reactive({
   provider: 'ngrok' as 'ngrok' | 'local',

@@ -1,7 +1,11 @@
 package nodehttp
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +27,7 @@ type env struct {
 	cfgPath string
 	cfg     node.Config
 	saves   int
+	dir     string
 }
 
 func newEnv(t *testing.T) *env {
@@ -39,7 +44,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &env{token: token, cfgPath: filepath.Join(t.TempDir(), "node.json")}
+	e := &env{token: token, cfgPath: filepath.Join(t.TempDir(), "node.json"), dir: dir}
 	e.cfg = node.Config{
 		Projects: []node.ProjectAlias{{Alias: "garden", ProjectID: "p1"}},
 		Grants: []node.Grant{{
@@ -247,5 +252,45 @@ func TestMCPMethods(t *testing.T) {
 	_, out = rpc(t, e, `not json`)
 	if out["error"].(map[string]any)["code"] != float64(codeParse) {
 		t.Errorf("parse error: %v", out)
+	}
+}
+
+func TestImagesAndUnsupportedFiles(t *testing.T) {
+	e := newEnv(t)
+	var shot bytes.Buffer
+	if err := png.Encode(&shot, image.NewGray(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	task := filepath.Join(e.dir, "biblio", "scratchpad", "shots")
+	if err := os.MkdirAll(task, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(task, "a.png"), shot.Bytes(), 0o644)
+	os.WriteFile(filepath.Join(task, "b.zip"), []byte("PK\x03\x04\x00\x00"), 0o644)
+	e.cfg.Grants[0].Shares[0].Tasks = []string{"shots"}
+	e.save(t)
+
+	code, body, h := e.do(t, "GET", "/read/garden/tasks/shots/a.png", e.token, "")
+	if code != 200 || h.Get("Content-Type") != "image/png" || body != shot.String() {
+		t.Errorf("GET image: %d %q, %d bytes", code, h.Get("Content-Type"), len(body))
+	}
+	if code, _, _ := e.do(t, "GET", "/read/garden/tasks/shots/b.zip", e.token, ""); code != 415 {
+		t.Errorf("GET unsupported binary: %d, want 415", code)
+	}
+
+	_, out := rpc(t, e, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read","arguments":{"path":"garden/tasks/shots/a.png"}}}`)
+	res := out["result"].(map[string]any)
+	block := res["content"].([]any)[0].(map[string]any)
+	data, _ := base64.StdEncoding.DecodeString(block["data"].(string))
+	if block["type"] != "image" || block["mimeType"] != "image/png" || !bytes.Equal(data, shot.Bytes()) || res["isError"] != false {
+		t.Errorf("tools/call image: %v", block["type"])
+	}
+	if _, ok := res["structuredContent"]; ok {
+		t.Errorf("image result carries structuredContent, which makes Codex drop the image")
+	}
+	_, out = rpc(t, e, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read","arguments":{"path":"garden/tasks/shots/b.zip"}}}`)
+	res = out["result"].(map[string]any)
+	if text := res["content"].([]any)[0].(map[string]any)["text"]; res["isError"] != true || text != node.ErrNotServed.Error() {
+		t.Errorf("tools/call unsupported binary: %v", res)
 	}
 }

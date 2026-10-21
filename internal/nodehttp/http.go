@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -117,10 +116,14 @@ func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, cfg node.Conf
 		}
 		offset = n
 	}
-	body, err := s.Library.Read(cfg, grant, strings.TrimPrefix(r.URL.Path, "/read"), offset)
+	content, err := s.Library.Read(cfg, grant, strings.TrimPrefix(r.URL.Path, "/read"), offset)
 	if err != nil {
 		writeReadError(w, err)
 		return
+	}
+	body, contentType := []byte(content.Text), "text/plain; charset=utf-8"
+	if content.Image != nil {
+		body, contentType = content.Image, content.MIME
 	}
 	etag := `"` + contentHash(body) + `"`
 	w.Header().Set("ETag", etag)
@@ -129,11 +132,11 @@ func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, cfg node.Conf
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", contentType)
 	if r.Method == http.MethodHead {
 		return
 	}
-	fmt.Fprint(w, body)
+	w.Write(body)
 }
 
 func writeReadError(w http.ResponseWriter, err error) {
@@ -142,6 +145,10 @@ func writeReadError(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 	case errors.Is(err, node.ErrBadOffset):
 		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, node.ErrNotServed):
+		http.Error(w, err.Error(), http.StatusUnsupportedMediaType)
+	case errors.Is(err, node.ErrImageTooLarge):
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
 	default:
 		log.Printf("nodehttp: %v", err)
 		http.Error(w, "nodehttp: internal error", http.StatusInternalServerError)
@@ -153,7 +160,7 @@ func methodNotAllowed(w http.ResponseWriter, allow string) {
 	http.Error(w, "nodehttp: method not allowed, the node is read-only", http.StatusMethodNotAllowed)
 }
 
-func contentHash(body string) string {
-	sum := sha256.Sum256([]byte(body))
+func contentHash(body []byte) string {
+	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:16])
 }

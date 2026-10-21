@@ -1,8 +1,11 @@
 package node
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,9 +60,19 @@ func newFixture(t *testing.T) fixture {
 	return fixture{lib: lib, cfg: cfg, grant: grant, root: root}
 }
 
+func pngBytes(t *testing.T) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewGray(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
 func (f fixture) read(t *testing.T, path string) (string, error) {
 	t.Helper()
-	return f.lib.Read(f.cfg, f.grant, path, 0)
+	c, err := f.lib.Read(f.cfg, f.grant, path, 0)
+	return c.Text, err
 }
 
 func TestContentsListsOnlyGrantedBooksAndTasks(t *testing.T) {
@@ -246,7 +259,8 @@ func TestTaskSubfolders(t *testing.T) {
 	task := filepath.Join(f.root, "scratchpad", "irrigation")
 	write(t, filepath.Join(task, "feature", "handoff.md"), "contract\n")
 	write(t, filepath.Join(task, "feature", "types.ts"), "export type A = string\n")
-	write(t, filepath.Join(task, "feature", "snapshots", "shot.png"), "\x89PNG\x00\x00")
+	write(t, filepath.Join(task, "feature", "snapshots", "shot.png"), string(pngBytes(t)))
+	write(t, filepath.Join(task, "feature", "snapshots", "archive.zip"), "PK\x03\x04\x00\x00")
 	write(t, filepath.Join(task, "feature", ".DS_Store"), "junk")
 	write(t, filepath.Join(task, ".git", "HEAD"), "ref")
 	write(t, filepath.Join(task, "a", "b", "c", "d", "deep.md"), "four down")
@@ -256,7 +270,7 @@ func TestTaskSubfolders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "handoff.md\ntypes.ts\nsnapshots/shot.png (binary, not served)\n"; got != want {
+	if want := "handoff.md\ntypes.ts\nsnapshots/archive.zip (binary, not served)\nsnapshots/shot.png\n"; got != want {
 		t.Errorf("feature listing = %q, want %q", got, want)
 	}
 	got, _ = f.read(t, "garden/tasks/irrigation")
@@ -273,7 +287,6 @@ func TestTaskSubfolders(t *testing.T) {
 		}
 	}
 	for _, p := range []string{
-		"garden/tasks/irrigation/feature/snapshots/shot.png",
 		"garden/tasks/irrigation/feature/.DS_Store",
 		"garden/tasks/irrigation/.git/HEAD",
 		"garden/tasks/irrigation/a/b/c/d/e",
@@ -283,6 +296,31 @@ func TestTaskSubfolders(t *testing.T) {
 		if got, err := f.read(t, p); !errors.Is(err, ErrNotFound) {
 			t.Errorf("read %q = %q, %v, want ErrNotFound", p, got, err)
 		}
+	}
+}
+
+func TestTaskImagesAndBinaries(t *testing.T) {
+	f := newFixture(t)
+	dir := filepath.Join(f.root, "scratchpad", "irrigation")
+	shot := pngBytes(t)
+	write(t, filepath.Join(dir, "shot.png"), string(shot))
+	write(t, filepath.Join(dir, "huge.png"), string(shot[:8])+strings.Repeat("x", MaxImage))
+	write(t, filepath.Join(dir, "archive.zip"), "PK\x03\x04\x00\x00")
+	read := func(path string, offset int) (Content, error) {
+		return f.lib.Read(f.cfg, f.grant, "garden/tasks/irrigation/"+path, offset)
+	}
+	c, err := read("shot.png", 0)
+	if err != nil || !bytes.Equal(c.Image, shot) || c.MIME != "image/png" || c.Text != "" {
+		t.Errorf("image read = %d bytes %q %q, %v", len(c.Image), c.MIME, c.Text, err)
+	}
+	if _, err := read("shot.png", 4); !errors.Is(err, ErrBadOffset) {
+		t.Errorf("image with an offset: %v, want ErrBadOffset", err)
+	}
+	if _, err := read("huge.png", 0); !errors.Is(err, ErrImageTooLarge) {
+		t.Errorf("image over the cap: %v, want ErrImageTooLarge", err)
+	}
+	if _, err := read("archive.zip", 0); !errors.Is(err, ErrNotServed) {
+		t.Errorf("unsupported binary: %v, want ErrNotServed", err)
 	}
 }
 
