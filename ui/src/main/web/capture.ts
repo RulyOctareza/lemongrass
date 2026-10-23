@@ -19,6 +19,14 @@ export interface RequestEntry {
   responseBody?: string
   failed?: string
   done: boolean
+  // Started after the human clicked or typed in the watch tab and before the model's next action.
+  human: boolean
+}
+
+export interface FileChooser {
+  backendNodeId: number
+  // selectSingle or selectMultiple.
+  mode: string
 }
 
 export interface ConsoleEntry {
@@ -32,7 +40,8 @@ const SHOWN_TYPES = new Set(['Document', 'XHR', 'Fetch', 'Ping'])
 // Streams stay open on purpose, so they never count as a request in flight.
 const NOT_IN_FLIGHT = new Set(['WebSocket', 'EventSource'])
 const TEXT_MIME = /json|text\/|xml|javascript|x-www-form-urlencoded/i
-const BODY_CAP = 2000
+// One request printed alone can afford a larger body than a list could.
+const SINGLE_BODY_CAP = 8000
 const LIST_CAP = 60
 
 function cap(text: string, limit: number): string {
@@ -43,6 +52,14 @@ function cap(text: string, limit: number): string {
 
 export class Capture {
   action = 0
+  private humanClicks = 0
+  private humanKeys = 0
+  private humanRequests = 0
+  private humanActive = false
+  // Mouse presses the engine itself sent and has not seen arrive yet; any other press is the human's.
+  private ownClicks = 0
+  private cancelledDownloads: string[] = []
+  private chooserWaiter: ((chooser: FileChooser) => void) | undefined
   private requests: RequestEntry[] = []
   private byRequestId = new Map<string, RequestEntry>()
   private inflight = new Map<string, number>()
@@ -68,6 +85,80 @@ export class Capture {
     this.requests = []
     this.byRequestId.clear()
     this.messages = []
+    this.humanClicks = this.humanKeys = this.humanRequests = 0
+    this.humanActive = false
+  }
+
+  // A model action begins: requests from here on are the model's again.
+  startAction(): number {
+    this.humanActive = false
+    // Every press the last action sent has arrived by now, so a count left over would only hide a human click.
+    this.ownClicks = 0
+    return ++this.action
+  }
+
+  // Called just before the engine sends a mouse press, so its arrival is not taken for the human's.
+  expectClick(): void {
+    this.ownClicks++
+  }
+
+  // A mouse press reached the page. Presses the engine sent arrive here too, so those are subtracted.
+  mouseDown(): void {
+    if (this.ownClicks > 0) {
+      this.ownClicks--
+      return
+    }
+    this.humanClicks++
+    this.humanActive = true
+  }
+
+  // Whether the human clicked or typed since the model's last action began.
+  get humanInputSinceAction(): boolean {
+    return this.humanActive
+  }
+
+  noteCancelledDownload(name: string, size: number): void {
+    const known = size > 0 ? ` (${size} bytes)` : ''
+    this.cancelledDownloads.push(`${name}${known}`)
+  }
+
+  // The downloads cancelled since this was last printed, or nothing.
+  takeDownloadNotes(): string {
+    const names = this.cancelledDownloads
+    this.cancelledDownloads = []
+    if (names.length === 0) return ''
+    return `download cancelled: ${names.join(', ')} started without download; use download <ref> --out <file-or-directory>`
+  }
+
+  // Resolves with the next file chooser the page opens while interception is on.
+  nextFileChooser(): Promise<FileChooser> {
+    return new Promise((resolve) => {
+      this.chooserWaiter = resolve
+    })
+  }
+
+  forgetFileChooser(): void {
+    this.chooserWaiter = undefined
+  }
+
+  // A key reached the page from a real keyboard. Keys the engine sends over CDP never arrive here.
+  keyDown(): void {
+    this.humanKeys++
+    this.humanActive = true
+  }
+
+  // What the human did in the watch tab since this was last printed, or nothing when the human did nothing.
+  takeHumanSummary(): string {
+    const { humanClicks: clicks, humanKeys: keys, humanRequests: requests } = this
+    this.humanClicks = this.humanKeys = this.humanRequests = 0
+    if (clicks === 0 && keys === 0 && requests === 0) return ''
+    const parts = [
+      `${clicks} click${clicks === 1 ? '' : 's'}`,
+      `${keys} key${keys === 1 ? '' : 's'}`,
+      `${requests} request${requests === 1 ? '' : 's'}`
+    ]
+    const list = requests > 0 ? ` (network --since ${this.action} marks them human)` : ''
+    return `human input since your last call: ${parts.join(', ')}${list}`
   }
 
   handle(method: string, params: Record<string, unknown>): void {
@@ -86,6 +177,8 @@ export class Capture {
         return this.exceptionThrown(params)
       case 'Log.entryAdded':
         return this.logEntry(params)
+      case 'Page.fileChooserOpened':
+        return this.fileChooserOpened(params)
     }
   }
 
@@ -121,8 +214,10 @@ export class Capture {
       resourceType,
       requestHeaders: request.headers ?? {},
       requestBody: request.postData,
-      done: false
+      done: false,
+      human: this.humanActive
     }
+    if (entry.human && this.isShown(entry)) this.humanRequests++
     this.requests.push(entry)
     this.byRequestId.set(requestId, entry)
     if (request.hasPostData && request.postData === undefined) {
@@ -135,6 +230,12 @@ export class Capture {
           .catch(() => undefined)
       )
     }
+  }
+
+  private fileChooserOpened(params: Record<string, unknown>): void {
+    const waiter = this.chooserWaiter
+    this.chooserWaiter = undefined
+    waiter?.({ backendNodeId: Number(params.backendNodeId), mode: String(params.mode) })
   }
 
   private responseReceived(params: Record<string, unknown>): void {
@@ -245,31 +346,34 @@ export class Capture {
     return `${entry.method} ${redactUrl(entry.url, this.hints())} ${this.statusText(entry)}${arrow}`
   }
 
-  // The requests an action caused, short: bodies only for the failures, since those are what the model reads.
+  // Counts only: the model lists what it needs with network and console, so a result never carries bodies or polls.
   actionSummary(action: number): string {
     const caused = this.requests.filter((e) => e.action === action && this.isShown(e))
-    if (caused.length === 0) return 'requests: none'
-    const out = ['requests:']
-    for (const entry of caused.slice(0, LIST_CAP)) {
-      out.push(`  ${this.line(entry)}`)
-      if (this.isFailure(entry) && entry.responseBody)
-        out.push(`    response: ${cap(redactBody(entry.responseBody, this.hints()), 500)}`)
+    const errors = this.messages.filter((m) => m.action === action && isError(m.level)).length
+    const out: string[] = []
+    if (caused.length === 0) out.push('requests: none')
+    else {
+      const failed = caused.filter((e) => this.isFailure(e)).length
+      const nonGet = caused.filter((e) => e.method !== 'GET').length
+      const repeats = caused.length - new Set(caused.map((e) => `${e.method} ${e.url}`)).size
+      const parts = [
+        failed > 0 ? `${failed} failed` : '',
+        nonGet > 0 ? `${nonGet} non-GET` : '',
+        repeats > 0 ? `${repeats} repeats` : ''
+      ].filter((p) => p !== '')
+      const detail = parts.length > 0 ? ` (${parts.join(', ')})` : ''
+      out.push(`requests: ${caused.length} new${detail}, list them with network --since ${action}`)
     }
-    if (caused.length > LIST_CAP) out.push(`  ... ${caused.length - LIST_CAP} more`)
+    if (errors > 0)
+      out.push(
+        `console: ${errors} error${errors === 1 ? '' : 's'}, list them with console --errors`
+      )
     return out.join('\n')
   }
 
-  // The consoles messages an action caused, or nothing when it logged none.
-  actionConsole(action: number): string {
-    const errors = this.messages.filter((m) => m.action === action && isError(m.level))
-    if (errors.length === 0) return ''
-    return ['console errors:', ...errors.slice(0, 10).map((m) => `  ${cap(m.text, 300)}`)].join(
-      '\n'
-    )
-  }
-
+  // One line per request, no bodies. Identical method, address and status fold into one line under the newest
+  // id with ×N; the status is part of the key so a failure never hides among successes.
   network(options: { failed: boolean; since?: number }): string {
-    const hints = this.hints()
     const list = this.requests.filter(
       (e) =>
         this.isShown(e) &&
@@ -277,32 +381,77 @@ export class Capture {
         (options.since === undefined || e.action >= options.since)
     )
     if (list.length === 0) return 'no requests'
-    const shown = list.slice(-LIST_CAP)
+    const groups = fold(list, (e) => `${e.human ? '(human) ' : ''}${this.line(e)}`)
+    const shown = groups.slice(-LIST_CAP)
     const out: string[] = []
-    if (shown.length < list.length)
-      out.push(`(${list.length - shown.length} older requests not shown)`)
-    for (const entry of shown) {
-      out.push(`#${entry.id} (action ${entry.action}) ${this.line(entry)}`)
-      const headers = Object.entries(redactHeaders(entry.requestHeaders, hints))
-      if (headers.length > 0)
-        out.push('  request headers: ' + headers.map(([k, v]) => `${k}: ${v}`).join('; '))
-      if (entry.requestBody)
-        out.push(`  request body: ${cap(redactBody(entry.requestBody, hints), BODY_CAP)}`)
-      if (entry.responseBody)
-        out.push(`  response body: ${cap(redactBody(entry.responseBody, hints), BODY_CAP)}`)
-    }
+    if (shown.length < groups.length)
+      out.push(`(${groups.length - shown.length} older lines not shown)`)
+    for (const group of shown)
+      out.push(`r${group.last.id} (${actions(group)}) ${group.key}${times(group)}`)
+    out.push('one request in full: network r<id>')
+    return out.join('\n')
+  }
+
+  // One request with its redacted headers and capped bodies, or undefined when the id is unknown.
+  request(id: number): string | undefined {
+    const entry = this.requests.find((e) => e.id === id)
+    if (!entry) return undefined
+    const hints = this.hints()
+    const human = entry.human ? '(human) ' : ''
+    const out = [`r${entry.id} (action ${entry.action}) ${human}${this.line(entry)}`]
+    const headers = Object.entries(redactHeaders(entry.requestHeaders, hints))
+    if (headers.length > 0) out.push('request headers:', ...headers.map(([k, v]) => `  ${k}: ${v}`))
+    if (entry.requestBody)
+      out.push(`request body: ${cap(redactBody(entry.requestBody, hints), SINGLE_BODY_CAP)}`)
+    if (entry.mime) out.push(`response type: ${entry.mime}`)
+    if (entry.responseBody)
+      out.push(`response body: ${cap(redactBody(entry.responseBody, hints), SINGLE_BODY_CAP)}`)
+    else if (entry.resourceType === 'Document') out.push('response body: not read for a page load')
     return out.join('\n')
   }
 
   consoleLog(options: { errors: boolean }): string {
     const list = this.messages.filter((m) => !options.errors || isError(m.level))
     if (list.length === 0) return options.errors ? 'no console errors' : 'no console messages'
-    const shown = list.slice(-LIST_CAP)
-    const out = shown.map((m) => `[${m.level}] (action ${m.action}) ${cap(m.text, 500)}`)
-    if (shown.length < list.length)
-      out.unshift(`(${list.length - shown.length} older messages not shown)`)
+    const groups = fold(list, (m) => `${m.level}\n${m.text}`)
+    const shown = groups.slice(-LIST_CAP)
+    const out = shown.map(
+      (g) => `[${g.last.level}] (${actions(g)}) ${cap(g.last.text, 500)}${times(g)}`
+    )
+    if (shown.length < groups.length)
+      out.unshift(`(${groups.length - shown.length} older lines not shown)`)
     return out.join('\n')
   }
+}
+
+interface Group<T> {
+  key: string
+  first: T
+  last: T
+  count: number
+}
+
+// Folds entries with the same key into one group, ordered by each group's newest entry.
+function fold<T extends { id: number }>(list: T[], keyOf: (entry: T) => string): Group<T>[] {
+  const groups = new Map<string, Group<T>>()
+  for (const entry of list) {
+    const key = keyOf(entry)
+    const group = groups.get(key)
+    if (group) {
+      group.last = entry
+      group.count++
+    } else groups.set(key, { key, first: entry, last: entry, count: 1 })
+  }
+  return [...groups.values()].sort((a, b) => a.last.id - b.last.id)
+}
+
+function actions(group: Group<{ action: number }>): string {
+  const [from, to] = [group.first.action, group.last.action]
+  return from === to ? `action ${to}` : `actions ${from}-${to}`
+}
+
+function times(group: Group<unknown>): string {
+  return group.count > 1 ? ` ×${group.count}` : ''
 }
 
 function isError(level: string): boolean {

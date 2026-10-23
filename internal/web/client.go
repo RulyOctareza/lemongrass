@@ -33,13 +33,15 @@ type reply struct {
 	OK    bool   `json:"ok"`
 	Text  string `json:"text,omitempty"`
 	Data  []byte `json:"data,omitempty"`
+	Name  string `json:"name,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
-// Result is what a web command returns. Text is what the model reads, and Data holds a screenshot's PNG bytes, empty for every other command.
+// Result is what a web command returns. Text is what the model reads, Data holds a screenshot's PNG bytes or a download's bytes, and Name the file name a download's server suggested.
 type Result struct {
 	Text string `json:"text"`
 	Data []byte `json:"data,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 // SocketPath is the socket the lemongrass app listens on, the same one `lgrass workgroup` uses.
@@ -69,5 +71,5 @@ func Call(socketPath string, req Request) (Result, error) {
 		}
 		return Result{}, errors.New("web: " + resp.Error)
 	}
-	return Result{Text: resp.Text, Data: resp.Data}, nil
+	return Result{Text: resp.Text, Data: resp.Data, Name: resp.Name}, nil
 }

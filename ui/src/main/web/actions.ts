@@ -1,5 +1,6 @@
 import { sleep, type Page } from './page'
 import { notSettledText, settledText, settleVerdict } from './settle'
+import { RefGoneError } from './snapshot'
 import { WebError } from './types'
 
 const READY_TIMEOUT_MS = 5_000
@@ -11,7 +12,7 @@ const WAIT_TIMEOUT_MS = 10_000
 // stability check is left out on purpose. A failure names the check, and `detail` says what was seen.
 const READINESS = `function (kind) {
   const el = this
-  if (!el.isConnected) return { fail: 'attached', detail: 'the element is no longer in the page' }
+  if (!el.isConnected) return { fail: 'attached', detail: 'the element left the page, run snapshot again' }
   el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
   const rect = el.getBoundingClientRect()
   const style = getComputedStyle(el)
@@ -89,7 +90,7 @@ async function ready(
   timeoutMs = READY_TIMEOUT_MS
 ): Promise<{ objectId: string; x: number; y: number }> {
   const deadline = Date.now() + timeoutMs
-  let last = 'attached: the element was not found in the page'
+  let last = 'attached: the element left the page, run snapshot again'
   for (;;) {
     const objectId = await target.find()
     if (objectId) {
@@ -128,19 +129,35 @@ async function mouse(page: Page, type: string, x: number, y: number): Promise<vo
 export async function click(page: Page, target: Target): Promise<void> {
   const { x, y } = await ready(page, target, 'click')
   await mouse(page, 'mouseMoved', x, y)
+  page.capture.expectClick()
   await mouse(page, 'mousePressed', x, y)
   await mouse(page, 'mouseReleased', x, y)
 }
 
+// Keys with text insert it on keyDown; the others go as rawKeyDown so the page sees only the key event.
 const KEYS: Record<string, { key: string; code: string; vk: number; text?: string }> = {
   enter: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
   tab: { key: 'Tab', code: 'Tab', vk: 9 },
-  escape: { key: 'Escape', code: 'Escape', vk: 27 }
+  escape: { key: 'Escape', code: 'Escape', vk: 27 },
+  space: { key: ' ', code: 'Space', vk: 32, text: ' ' },
+  backspace: { key: 'Backspace', code: 'Backspace', vk: 8 },
+  delete: { key: 'Delete', code: 'Delete', vk: 46 },
+  arrowup: { key: 'ArrowUp', code: 'ArrowUp', vk: 38 },
+  arrowdown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40 },
+  arrowleft: { key: 'ArrowLeft', code: 'ArrowLeft', vk: 37 },
+  arrowright: { key: 'ArrowRight', code: 'ArrowRight', vk: 39 },
+  home: { key: 'Home', code: 'Home', vk: 36 },
+  end: { key: 'End', code: 'End', vk: 35 },
+  pageup: { key: 'PageUp', code: 'PageUp', vk: 33 },
+  pagedown: { key: 'PageDown', code: 'PageDown', vk: 34 }
 }
+
+const KEY_NAMES =
+  'Enter, Tab, Escape, Space, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp or PageDown'
 
 export async function press(page: Page, name: string): Promise<void> {
   const spec = KEYS[name.toLowerCase()]
-  if (!spec) throw new WebError(`press: ${name} is not supported, use Enter, Tab or Escape`)
+  if (!spec) throw new WebError(`press: ${name} is not supported, use ${KEY_NAMES}`)
   const base = { key: spec.key, code: spec.code, windowsVirtualKeyCode: spec.vk }
   await page.cdp.send('Input.dispatchKeyEvent', {
     ...base,
@@ -148,6 +165,59 @@ export async function press(page: Page, name: string): Promise<void> {
     text: spec.text
   })
   await page.cdp.send('Input.dispatchKeyEvent', { ...base, type: 'keyUp' })
+}
+
+const CHOOSER_TIMEOUT_MS = 5_000
+
+// Gives files to a file input ref directly, or to the input whose chooser opens when the ref is clicked, such as
+// a "browse" link. The chooser is intercepted only for this command, so the human's own clicks in the watch tab
+// still open the native dialog, and no dialog ever opens for the model.
+export async function upload(
+  page: Page,
+  target: Target,
+  backendNodeId: number,
+  files: string[]
+): Promise<void> {
+  const objectId = await target.find()
+  if (!objectId)
+    throw new WebError(`upload ${target.label}: the element left the page, run snapshot again`)
+  const { result } = await page.cdp.send<{ result: { value?: string } }>('Runtime.callFunctionOn', {
+    objectId,
+    functionDeclaration: `function () { return this.tagName === 'INPUT' && this.type === 'file' ? (this.multiple ? 'selectMultiple' : 'selectSingle') : '' }`,
+    returnByValue: true
+  })
+  if (result.value) {
+    checkCount(target, result.value, files)
+    await page.cdp.send('DOM.setFileInputFiles', { files, backendNodeId })
+    return
+  }
+  const chooser = page.capture.nextFileChooser()
+  await page.cdp.send('Page.setInterceptFileChooserDialog', { enabled: true })
+  try {
+    await click(page, target)
+    let timer: NodeJS.Timeout | undefined
+    const timeout = new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), CHOOSER_TIMEOUT_MS)
+    })
+    const opened = await Promise.race([chooser, timeout])
+    clearTimeout(timer)
+    if (!opened)
+      throw new WebError(
+        `upload: clicking ${target.label} opened no file chooser within ${CHOOSER_TIMEOUT_MS / 1000}s, and a drop zone with no file input behind it is not supported`
+      )
+    checkCount(target, opened.mode, files)
+    await page.cdp.send('DOM.setFileInputFiles', { files, backendNodeId: opened.backendNodeId })
+  } finally {
+    page.capture.forgetFileChooser()
+    await page.cdp
+      .send('Page.setInterceptFileChooserDialog', { enabled: false })
+      .catch(() => undefined)
+  }
+}
+
+function checkCount(target: Target, mode: string, files: string[]): void {
+  if (mode === 'selectSingle' && files.length > 1)
+    throw new WebError(`upload: ${target.label} takes one file, not ${files.length}`)
 }
 
 // Replaces whatever the field held: select it all, then insert the text as one input.
@@ -245,7 +315,14 @@ export async function waitUrl(page: Page, pattern: string): Promise<void> {
 }
 
 export async function waitGone(page: Page, ref: string): Promise<void> {
-  const target = refTarget(page, ref)
+  let target: Target
+  try {
+    target = refTarget(page, ref)
+  } catch (err) {
+    // A ref whose node already left the page is what the wait is for.
+    if (err instanceof RefGoneError) return
+    throw err
+  }
   const gone = async (): Promise<boolean> => {
     const objectId = await target.find()
     if (!objectId) return true

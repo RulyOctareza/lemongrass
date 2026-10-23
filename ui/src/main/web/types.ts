@@ -40,11 +40,14 @@ export interface WebFlags {
   failed?: string
   errors?: string
   since?: string
+  within?: string
 }
 
 export interface WebResult {
   text: string
   data?: string
+  // The file name a download's server suggested.
+  name?: string
 }
 
 // A command failure whose message is meant to be read by the model as is.

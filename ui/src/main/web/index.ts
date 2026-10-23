@@ -1,7 +1,19 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { WebBounds, WebState } from '../../preload/types'
 import { vaultCall } from '../vault'
-import { click, press, refTarget, settle, type, waitGone, waitText, waitUrl } from './actions'
+import { accessSync, constants, statSync } from 'fs'
+import { basename, isAbsolute } from 'path'
+import {
+  click,
+  press,
+  refTarget,
+  settle,
+  type,
+  upload,
+  waitGone,
+  waitText,
+  waitUrl
+} from './actions'
 import { runLogin } from './login'
 import { scrubText, secretFieldValues } from './redact'
 import {
@@ -149,23 +161,43 @@ function resolveUrl(inst: Instance, target: string): string {
   return url
 }
 
-// What an action returns: what it did, how the page settled, the requests it caused, console errors and
-// the fresh snapshot. One call gives the model what it needs to judge the result.
+// What an action returns: what it did, how the page settled, counts of the requests and console errors it
+// caused, and what changed on the page. The requests themselves are listed only when the model asks with network.
 async function report(inst: Instance, page: Page, label: string, action: number): Promise<string> {
   const note = await settle(page)
   await page.capture.settled()
-  const consoleErrors = page.capture.actionConsole(action)
-  const snapshot = await page.snapshot()
+  const snapshot = await page.actionSnapshot()
   return [
     `as ${inst.active?.user ?? ''}`,
     `action ${action}: ${label}`,
+    page.capture.takeHumanSummary(),
+    page.capture.takeDownloadNotes(),
     note,
     page.capture.actionSummary(action),
-    consoleErrors,
     snapshot
   ]
     .filter((part) => part !== '')
     .join('\n')
+}
+
+// A request id as network prints it, r12, or the bare number. #12 is taken too, for a quoted copy.
+function requestId(arg: string): number {
+  const match = /^[r#]?(\d+)$/i.exec(arg.trim())
+  if (!match) throw new WebError(`network: ${arg} is not a request id, give it as r12`)
+  return Number(match[1])
+}
+
+// The CLI checked the files already; the app checks again, since it is the one that hands them to the page.
+function checkUploadFile(file: string): void {
+  if (!isAbsolute(file)) throw new WebError(`upload: ${file} is not an absolute path`)
+  let regular = false
+  try {
+    regular = statSync(file).isFile()
+    accessSync(file, constants.R_OK)
+  } catch {
+    throw new WebError(`upload: ${file} does not exist or cannot be read`)
+  }
+  if (!regular) throw new WebError(`upload: ${file} is not a regular file`)
 }
 
 function needArgs(command: string, args: string[], count: number, usage: string): void {
@@ -182,7 +214,7 @@ async function run(
   if (command === 'open') {
     needArgs(command, args, 1, 'open <path-or-url> [--user <name>]')
     const page = await pageFor(inst, user)
-    const action = ++page.capture.action
+    const action = page.capture.startAction()
     const url = resolveUrl(inst, args[0])
     await page.goto(url)
     return { text: await report(inst, page, `opened ${page.url()}`, action) }
@@ -190,25 +222,41 @@ async function run(
   if (command === 'user') {
     needArgs(command, args, 1, 'user <name>')
     const page = await pageFor(inst, args[0])
-    page.capture.action++
+    page.capture.startAction()
     return {
       text: [`active user: ${inst.active?.user ?? args[0]}`, await page.snapshot()].join('\n')
     }
   }
   const page = activePage(inst)
   if (command === 'snapshot')
-    return { text: `as ${inst.active?.user ?? ''}\n${await page.snapshot()}` }
+    return {
+      text: [
+        `as ${inst.active?.user ?? ''}`,
+        page.capture.takeHumanSummary(),
+        page.capture.takeDownloadNotes(),
+        await page.snapshot({ within: flags.within || undefined })
+      ]
+        .filter((part) => part !== '')
+        .join('\n')
+    }
   if (command === 'network') {
     await page.capture.settled()
     const since = flags.since === undefined || flags.since === '' ? undefined : Number(flags.since)
     if (since !== undefined && !Number.isInteger(since))
       throw new WebError('network: --since takes an action number')
+    if (args.length > 0) {
+      const id = requestId(args[0])
+      const text = page.capture.request(id)
+      if (text === undefined)
+        throw new WebError(`network: there is no request r${id}, run network to list them`)
+      return { text }
+    }
     return { text: page.capture.network({ failed: flags.failed === 'true', since }) }
   }
   if (command === 'console')
     return { text: page.capture.consoleLog({ errors: flags.errors === 'true' }) }
   if (command === 'screenshot') return { text: 'screenshot taken', data: await page.screenshot() }
-  const action = ++page.capture.action
+  const action = page.capture.startAction()
   if (command === 'back') {
     await page.back()
     return { text: await report(inst, page, `went back to ${page.url()}`, action) }
@@ -219,12 +267,14 @@ async function run(
   }
   if (command === 'click') {
     needArgs(command, args, 1, 'click <ref>')
+    await page.verifyRef(args[0])
     const target = refTarget(page, args[0])
     await click(page, target)
     return { text: await report(inst, page, `clicked ${target.label}`, action) }
   }
   if (command === 'type') {
     needArgs(command, args, 2, 'type <ref> <text> [--submit]')
+    await page.verifyRef(args[0])
     const target = refTarget(page, args[0])
     await type(page, target, args.slice(1).join(' '))
     if (flags.submit === 'true') await press(page, 'Enter')
@@ -232,9 +282,33 @@ async function run(
     return { text: await report(inst, page, `typed into ${target.label}${submitted}`, action) }
   }
   if (command === 'press') {
-    needArgs(command, args, 1, 'press <Enter|Tab|Escape>')
+    needArgs(command, args, 1, 'press <key>')
     await press(page, args[0])
     return { text: await report(inst, page, `pressed ${args[0]}`, action) }
+  }
+  if (command === 'upload') {
+    needArgs(command, args, 2, 'upload <ref> <file>...')
+    const files = args.slice(1)
+    for (const file of files) checkUploadFile(file)
+    const { backendNodeId } = await page.verifyRef(args[0])
+    const target = refTarget(page, args[0])
+    await upload(page, target, backendNodeId, files)
+    const names = files.map((f) => basename(f)).join(', ')
+    return { text: await report(inst, page, `uploaded ${names} to ${target.label}`, action) }
+  }
+  if (command === 'download') {
+    needArgs(command, args, 1, 'download <ref> --out <file-or-directory>')
+    await page.verifyRef(args[0])
+    const target = refTarget(page, args[0])
+    const downloads = inst.downloads.get(page)
+    if (!downloads) throw new WebError('download: this page cannot download')
+    const got = await downloads.catchDownload(() => click(page, target), target.label)
+    const label = `downloaded ${got.name} (${got.data.length} bytes) by clicking ${target.label}`
+    return {
+      text: await report(inst, page, label, action),
+      data: got.data.toString('base64'),
+      name: got.name
+    }
   }
   if (command === 'wait') {
     if (flags.text) await waitText(page, flags.text)
@@ -260,7 +334,11 @@ export async function execute(
   const scrub = (text: string): string => scrubText(text, inst.secrets, inst.hints)
   try {
     const result = await inst.run(() => run(inst, command, args, flags))
-    return { text: scrub(result.text), data: result.data }
+    return {
+      text: scrub(result.text),
+      data: result.data,
+      name: result.name === undefined ? undefined : scrub(result.name)
+    }
   } catch (err) {
     throw new WebError(scrub(err instanceof Error ? err.message : String(err)))
   }
@@ -277,7 +355,7 @@ interface WebRequest {
 // The app socket's `web` op. Any failure becomes the model-facing error text.
 export async function handleWebOp(
   request: WebRequest
-): Promise<{ ok: boolean; text?: string; data?: string; error?: string }> {
+): Promise<{ ok: boolean; text?: string; data?: string; name?: string; error?: string }> {
   try {
     const result = await execute(
       String(request.tab_id ?? ''),
@@ -286,7 +364,7 @@ export async function handleWebOp(
       (request.args ?? []).map(String),
       request.flags ?? {}
     )
-    return { ok: true, text: result.text, data: result.data }
+    return { ok: true, text: result.text, data: result.data, name: result.name }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

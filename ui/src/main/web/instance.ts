@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
+import { Downloads } from './download'
 import { Page } from './page'
 import type { RedactHints } from './types'
 import type { WebBounds, WebState } from '../../preload/types'
@@ -60,6 +61,7 @@ export function hostOf(tabId: string): Host | undefined {
 export class Instance {
   readonly hints: RedactHints = { tokenPlacement: null, tokenPath: '' }
   readonly pages = new Map<string, Page>()
+  readonly downloads = new WeakMap<Page, Downloads>()
   active: { user: string; page: Page } | undefined
   // Set when a switch to this user failed: nothing is active until a switch succeeds, so no action can run
   // as the user the page was on before.
@@ -105,6 +107,18 @@ export class Instance {
     page.onChange(() => {
       if (this.active?.page === page) this.emit()
     })
+    // Human input from the watch tab. before-input-event sees only real keyboard input, never keys sent over
+    // CDP, while input-event sees every mouse press, the engine's own included, which capture subtracts.
+    const wc = page.view.webContents
+    wc.on('before-input-event', (_event, input) => {
+      if (input.type === 'keyDown') page.capture.keyDown()
+    })
+    wc.on('input-event', (_event, input) => {
+      if (input.type === 'mouseDown') page.capture.mouseDown()
+    })
+    const downloads = new Downloads(page.capture)
+    this.downloads.set(page, downloads)
+    wc.session.on('will-download', (_event, item) => downloads.handle(item))
     return page
   }
 

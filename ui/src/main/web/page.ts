@@ -3,7 +3,16 @@ import { Capture } from './capture'
 import type { Cdp } from './cdp'
 import { findClickable } from './clickable'
 import { deriveNames } from './names'
-import { formatSnapshot, type AXNode, type SnapshotRef } from './snapshot'
+import { Baseline, findLine, printChanges, printFull, printWithin } from './print'
+import {
+  ACTIONABLE,
+  RefBook,
+  RefGoneError,
+  buildTree,
+  type AXNode,
+  type Line,
+  type SnapshotRef
+} from './snapshot'
 import { WebError, type RedactHints } from './types'
 
 const LOAD_TIMEOUT_MS = 20_000
@@ -50,9 +59,9 @@ export class Page {
   readonly capture: Capture
   readonly cdp: Cdp
   private readonly wc: WebContents
-  private refs = new Map<string, SnapshotRef>()
-  private firstLiveRef = 1
-  private nextRef = 1
+  private book = new RefBook()
+  // What the model has seen of the current document, so an action result prints only what changed.
+  private baseline = new Baseline()
   private listeners = new Set<() => void>()
 
   constructor(partition: string, hints: () => RedactHints) {
@@ -205,13 +214,15 @@ export class Page {
     }
   }
 
-  async snapshot(): Promise<string> {
+  private async tree(): Promise<Line> {
     await this.open()
     const { nodes } = await this.cdp.send<{ nodes: AXNode[] }>('Accessibility.getFullAXTree')
     const masked = new Set<number>()
+    const actionable = new Set<number>()
     for (const node of nodes) {
       const role = String((node.role?.value as string | undefined) ?? '')
       if (node.backendDOMNodeId === undefined) continue
+      if (!node.ignored && ACTIONABLE.has(role)) actionable.add(node.backendDOMNodeId)
       if (role !== 'textbox' && role !== 'searchbox' && role !== 'combobox') continue
       const described = await this.cdp
         .send<{ node: { attributes?: string[] } }>('DOM.describeNode', {
@@ -221,31 +232,50 @@ export class Page {
       const attrs = described?.node.attributes ?? []
       if (isSecretInput(attrs)) masked.add(node.backendDOMNodeId)
     }
-    const derived = await deriveNames(this.cdp, nodes)
-    const clickable = await findClickable(this.cdp)
-    const result = formatSnapshot(nodes, {
-      url: this.url(),
-      title: this.title(),
-      firstRef: this.nextRef,
-      masked,
-      derived,
-      clickable
-    })
-    this.firstLiveRef = this.nextRef
-    this.nextRef = result.nextRef
-    this.refs = new Map(result.refs.map((r) => [r.ref, r]))
-    return result.text
+    const clickable = await findClickable(this.cdp, actionable)
+    const derived = await deriveNames(this.cdp, nodes, clickable)
+    // The root is the document node: a new one means the page navigated and every node, so every ref, is new.
+    const root = nodes.find((node) => node.parentId === undefined)
+    if (this.book.enterDocument(root?.backendDOMNodeId)) this.baseline.clear()
+    return buildTree(nodes, { masked, derived, clickable }, this.book)
   }
 
+  private header(): { url: string; title: string } {
+    return { url: this.url(), title: this.title() }
+  }
+
+  // The whole page, or with `within` one subtree with every list item. The whole page is what later action
+  // results are compared against.
+  async snapshot(options: { within?: string } = {}): Promise<string> {
+    if (options.within === undefined)
+      return printFull(await this.tree(), this.header(), this.book, this.baseline)
+    const target = this.book.lookup(options.within)
+    const tree = await this.tree()
+    const line = findLine(tree, `b${target.backendNodeId}`)
+    if (!line) {
+      const what = target.name ? `${target.role} "${target.name}"` : target.role
+      throw new RefGoneError(`${options.within} (${what}) is no longer in the page; run snapshot`)
+    }
+    return printWithin(line, options.within, this.header(), this.book, this.baseline)
+  }
+
+  // What changed since the model last saw this page, for action results.
+  async actionSnapshot(): Promise<string> {
+    return printChanges(await this.tree(), this.header(), this.book, this.baseline)
+  }
+
+  // A ref from any earlier result stays valid while its node is in the page; the error says why one is not.
   refTarget(ref: string): SnapshotRef {
-    const match = /^e(\d+)$/.exec(ref)
-    if (!match)
-      throw new WebError(`${ref} is not a ref; refs look like e12 and come from a snapshot`)
-    const found = this.refs.get(ref)
-    if (found) return found
-    if (Number(match[1]) < this.firstLiveRef)
-      throw new WebError(`${ref} is from an older snapshot; run snapshot again and use its refs`)
-    throw new WebError(`${ref} is not in the latest snapshot; run snapshot again`)
+    return this.book.lookup(ref)
+  }
+
+  // Reads the page again before an action on a ref, and refuses when the ref's node is gone or now shows other
+  // content than the model last read for it.
+  async verifyRef(ref: string): Promise<SnapshotRef> {
+    this.book.lookup(ref)
+    await this.tree()
+    this.book.checkShown(ref)
+    return this.book.lookup(ref)
   }
 
   async screenshot(): Promise<string> {

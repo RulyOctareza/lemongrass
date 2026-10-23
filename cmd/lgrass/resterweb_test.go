@@ -39,9 +39,20 @@ func TestParseWebArgs(t *testing.T) {
 		{name: "back", args: []string{"abc", "back"}, want: webCommand{shortID: "abc", command: "back", args: []string{}, flags: map[string]string{}}},
 		{name: "open without target", args: []string{"abc", "open"}, wantErr: "open takes 1 argument"},
 		{name: "snapshot with argument", args: []string{"abc", "snapshot", "x"}, wantErr: "snapshot takes 0 argument"},
+		{name: "snapshot within", args: []string{"abc", "snapshot", "--within", "e7"}, want: webCommand{shortID: "abc", command: "snapshot", args: []string{}, flags: map[string]string{"within": "e7"}}},
+		{name: "snapshot within no ref", args: []string{"abc", "snapshot", "--within"}, wantErr: "--within needs a value"},
 		{name: "user flag on click", args: []string{"abc", "click", "e1", "--user", "bob"}, wantErr: "click does not take --user"},
 		{name: "type missing text", args: []string{"abc", "type", "e1"}, wantErr: "type takes 2 argument"},
-		{name: "press other key", args: []string{"abc", "press", "F5"}, wantErr: "press takes Enter, Tab or Escape"},
+		{name: "press other key", args: []string{"abc", "press", "F5"}, wantErr: "press takes Enter, Tab, Escape, Space"},
+		{name: "press arrow", args: []string{"abc", "press", "arrowdown"}, want: webCommand{shortID: "abc", command: "press", args: []string{"ArrowDown"}, flags: map[string]string{}}},
+		{name: "press page down", args: []string{"abc", "press", "PAGEDOWN"}, want: webCommand{shortID: "abc", command: "press", args: []string{"PageDown"}, flags: map[string]string{}}},
+		{name: "press space", args: []string{"abc", "press", "Space"}, want: webCommand{shortID: "abc", command: "press", args: []string{"Space"}, flags: map[string]string{}}},
+		{name: "network one request", args: []string{"abc", "network", "r12"}, want: webCommand{shortID: "abc", command: "network", args: []string{"r12"}, flags: map[string]string{}}},
+		{name: "network bare id", args: []string{"abc", "network", "12"}, want: webCommand{shortID: "abc", command: "network", args: []string{"12"}, flags: map[string]string{}}},
+		{name: "network quoted hash id", args: []string{"abc", "network", "#12"}, want: webCommand{shortID: "abc", command: "network", args: []string{"#12"}, flags: map[string]string{}}},
+		{name: "network bad id", args: []string{"abc", "network", "e12"}, wantErr: "network takes a request id such as r12"},
+		{name: "network id with flags", args: []string{"abc", "network", "r12", "--failed"}, wantErr: "network <request-id> takes no flags"},
+		{name: "network two ids", args: []string{"abc", "network", "r1", "r2"}, wantErr: "network takes 0 to 1 argument"},
 		{name: "wait nothing", args: []string{"abc", "wait"}, wantErr: "exactly one of --text"},
 		{name: "wait two", args: []string{"abc", "wait", "--text", "ok", "--gone", "e2"}, wantErr: "exactly one of --text"},
 		{name: "screenshot no out", args: []string{"abc", "screenshot"}, wantErr: "screenshot needs --out"},
@@ -231,5 +242,75 @@ func TestRefuseAPIOnWeb(t *testing.T) {
 	client, short, _ = webStack(t, "api", map[string]any{"ok": true})
 	if err := refuseAPIOnWeb(client, []string{short, "get", "/orders"}); err != nil {
 		t.Errorf("api channel: err = %v, want no refusal", err)
+	}
+}
+
+func TestParseWebUpload(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.csv")
+	b := filepath.Join(dir, "b.png")
+	os.WriteFile(a, []byte("x"), 0o644)
+	os.WriteFile(b, []byte("y"), 0o644)
+	t.Chdir(dir)
+
+	cmd, err := parseWebArgs([]string{"abc", "upload", "e4", "a.csv", b})
+	if err != nil {
+		t.Fatalf("parseWebArgs: %v", err)
+	}
+	if want := []string{"e4", a, b}; !reflect.DeepEqual(cmd.args, want) {
+		t.Errorf("args = %v, want the ref and absolute paths %v", cmd.args, want)
+	}
+	for _, tc := range []struct {
+		args    []string
+		wantErr string
+	}{
+		{[]string{"abc", "upload", "e4"}, "upload takes at least 2 argument"},
+		{[]string{"abc", "upload", "e4", "missing.csv"}, "does not exist"},
+		{[]string{"abc", "upload", "e4", dir}, "is not a regular file"},
+	} {
+		if _, err := parseWebArgs(tc.args); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+			t.Errorf("%v: err = %v, want %q", tc.args, err, tc.wantErr)
+		}
+	}
+}
+
+func TestExecWebDownload(t *testing.T) {
+	body := []byte("name,amount\nexample,1\n")
+	client, short, got := webStack(t, "web", map[string]any{"ok": true, "text": "as alice\naction 3: downloaded", "data": body, "name": "../template.csv"})
+	dir := t.TempDir()
+
+	if _, err := parseWebArgs([]string{short, "download", "e5"}); err == nil || !strings.Contains(err.Error(), "download needs --out") {
+		t.Errorf("download without --out: err = %v", err)
+	}
+
+	var out bytes.Buffer
+	cmd, _ := parseWebArgs([]string{short, "download", "e5", "--out", dir})
+	if err := execWeb(client, cmd, &out); err != nil {
+		t.Fatalf("execWeb: %v", err)
+	}
+	if req := <-got; req.Command != "download" || len(req.Flags) != 0 || req.Args[0] != "e5" {
+		t.Errorf("app got %+v, want download e5 with --out kept on the CLI", req)
+	}
+	saved := filepath.Join(dir, "template.csv")
+	if b, err := os.ReadFile(saved); err != nil || !bytes.Equal(b, body) {
+		t.Fatalf("file = %q, %v, want the body under the suggested name's last element", b, err)
+	}
+	text, last, _ := strings.Cut(strings.TrimRight(out.String(), "\n"), "\n{")
+	if text != "as alice\naction 3: downloaded" {
+		t.Errorf("printed %q first, want the action result", text)
+	}
+	var printed map[string]any
+	if err := json.Unmarshal([]byte("{"+last), &printed); err != nil || printed["saved_to"] != saved || printed["size"] != float64(len(body)) || printed["name"] != "../template.csv" {
+		t.Errorf("printed %s, want saved_to, size and name", out.String())
+	}
+
+	cmd, _ = parseWebArgs([]string{short, "download", "e5", "--out", saved})
+	if err := execWeb(client, cmd, &out); err == nil || !strings.Contains(err.Error(), "--confirm") {
+		t.Fatalf("download onto an existing file: err = %v, want it refused naming --confirm", err)
+	}
+	select {
+	case req := <-got:
+		t.Errorf("the app was called with %+v for an existing file, want the command stopped before clicking", req)
+	default:
 	}
 }
