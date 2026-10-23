@@ -3,6 +3,7 @@ package gatekeeper
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/faizalv/lemongrass/internal/channelaudit"
 	"github.com/faizalv/lemongrass/internal/dbgate"
@@ -27,6 +28,8 @@ func NewBackend(dir string) (*Backend, error) {
 	b := NewBackendFor(svc)
 	// A project removed from the registry while the daemon was down loses its policy here. A failed prune leaves the stale entries, which match no project and do no harm.
 	_ = b.pruneProjectPolicies()
+	// A failed expiry leaves a channel keyless and unusable, only labelled open, so it does not stop the daemon.
+	_ = svc.ExpireKeylessChannels(time.Now())
 
 	audit, err := channelaudit.Open(filepath.Join(dir, "audit.db"))
 	if err != nil {

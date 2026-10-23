@@ -13,7 +13,9 @@ import (
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
-var ErrNoSuchChannel = errors.New("agent: no such channel")
+// ErrNoSuchChannel is the same for a mistyped id and one lost to a daemon restart, since the agent
+// keeps no record of past ids, so its text covers both.
+var ErrNoSuchChannel = errors.New("agent: no such channel, or it has expired. Ask the human for a fresh channel id.")
 
 // Service holds a gatekeeper.Client and the short-id-to-real-channel-id mapping, never a root secret or credential material.
 type Service struct {
