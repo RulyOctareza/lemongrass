@@ -32,8 +32,13 @@ const ROWS = new Set(['LI', 'TR'])
 // `actionable` holds the elements that already get a ref from their role, such as links: a long sidebar would
 // otherwise use up the cap. Elements inside a fixed or absolute layer come first, because that is where an
 // open dialog or a dropdown appended to the end of body renders. An element a person cannot see, with no size,
-// hidden, or under a transparent ancestor such as a closed panel waiting to fade in, is no target.
-export function pointerOwners(snapshot: DomSnapshot, actionable = new Set<number>()): Set<number> {
+// hidden, or under a transparent ancestor such as a closed panel waiting to fade in, is no target, and neither is
+// one in `hidden`, which the page hides from people with aria-hidden or inert.
+export function pointerOwners(
+  snapshot: DomSnapshot,
+  actionable = new Set<number>(),
+  hidden = new Set<number>()
+): Set<number> {
   const floating: number[] = []
   const rest: number[] = []
   for (const doc of snapshot.documents) {
@@ -86,7 +91,7 @@ export function pointerOwners(snapshot: DomSnapshot, actionable = new Set<number
     }
     const add = (node: number): void => {
       const id = backendNodeId[node]
-      if (id === undefined || actionable.has(id) || !seen(node)) return
+      if (id === undefined || actionable.has(id) || hidden.has(id) || !seen(node)) return
       ;(inLayer(node) ? floating : rest).push(id)
     }
     for (const [node, value] of cursor) {
@@ -103,11 +108,16 @@ export function pointerOwners(snapshot: DomSnapshot, actionable = new Set<number
   return new Set([...floating, ...rest].slice(0, MAX_CLICKABLE))
 }
 
-export async function findClickable(cdp: Cdp, actionable: Set<number>): Promise<Set<number>> {
+export async function findClickable(
+  cdp: Cdp,
+  actionable: Set<number>,
+  hidden: Set<number>
+): Promise<Set<number>> {
   try {
     return pointerOwners(
       await cdp.send<DomSnapshot>('DOMSnapshot.captureSnapshot', { computedStyles: STYLES }),
-      actionable
+      actionable,
+      hidden
     )
   } catch {
     // A page that cannot be snapshotted just has no extra targets.

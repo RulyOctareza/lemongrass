@@ -9,6 +9,7 @@ import {
   RefBook,
   RefGoneError,
   buildTree,
+  hiddenByPage,
   type AXNode,
   type Line,
   type SnapshotRef
@@ -219,9 +220,11 @@ export class Page {
     const { nodes } = await this.cdp.send<{ nodes: AXNode[] }>('Accessibility.getFullAXTree')
     const masked = new Set<number>()
     const actionable = new Set<number>()
+    const hidden = new Set<number>()
     for (const node of nodes) {
       const role = String((node.role?.value as string | undefined) ?? '')
       if (node.backendDOMNodeId === undefined) continue
+      if (hiddenByPage(node)) hidden.add(node.backendDOMNodeId)
       if (!node.ignored && ACTIONABLE.has(role)) actionable.add(node.backendDOMNodeId)
       if (role !== 'textbox' && role !== 'searchbox' && role !== 'combobox') continue
       const described = await this.cdp
@@ -232,7 +235,7 @@ export class Page {
       const attrs = described?.node.attributes ?? []
       if (isSecretInput(attrs)) masked.add(node.backendDOMNodeId)
     }
-    const clickable = await findClickable(this.cdp, actionable)
+    const clickable = await findClickable(this.cdp, actionable, hidden)
     const derived = await deriveNames(this.cdp, nodes, clickable)
     // The root is the document node: a new one means the page navigated and every node, so every ref, is new.
     const root = nodes.find((node) => node.parentId === undefined)

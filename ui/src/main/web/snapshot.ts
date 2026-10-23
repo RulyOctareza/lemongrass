@@ -11,6 +11,7 @@ export interface AXValue {
 export interface AXNode {
   nodeId: string
   ignored?: boolean
+  ignoredReasons?: { name: string; value?: AXValue }[]
   role?: AXValue
   name?: AXValue
   value?: AXValue
@@ -137,6 +138,19 @@ function propertyTags(node: AXNode): string {
 
 function isModal(node: AXNode): boolean {
   return (node.properties ?? []).some((p) => p.name === 'modal' && p.value?.value === true)
+}
+
+// Most ignored nodes are plain wrappers; these reasons mean the page itself hides the node from people, as a
+// closed drawer kept mounted with aria-hidden does.
+const HIDDEN_REASONS = new Set([
+  'ariaHiddenElement',
+  'ariaHiddenSubtree',
+  'inertElement',
+  'inertSubtree'
+])
+
+export function hiddenByPage(node: AXNode): boolean {
+  return (node.ignoredReasons ?? []).some((reason) => HIDDEN_REASONS.has(reason.name))
 }
 
 // The text an element shows, from the text nodes inside it, for a clickable element that has no name of its own.

@@ -130,3 +130,8 @@ const unseen: DomSnapshot = {
 test('elements a person cannot see are not clickable', () => {
   assert.deepEqual([...pointerOwners(unseen)], [2])
 })
+
+test('elements the page hides with aria-hidden or inert are not clickable', () => {
+  const owners = pointerOwners(snapshot, new Set(), new Set([7]))
+  assert.deepEqual([...owners], [10])
+})
