@@ -2,7 +2,9 @@
 
 Lemongrass runs coding agents in real terminals and gives them what a raw terminal does not: credentials they can use but never see, teammates they can message, a safety guard that holds with permission prompts off, and project rules that arrive at the start of every session.
 
-It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. Claude Code and Codex are supported, and a pane can also open Cursor Agent or a plain shell.
+It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. Claude Code and Codex are supported, and a pane can also open Cursor Agent or a plain shell. Lemongrass is licensed under the GNU AGPL-3.0, see [LICENSE](LICENSE).
+
+![The Lemongrass app with a live workgroup and its thread, a web tab and the Vault](docs/images/overall-view.png)
 
 ## What it does
 
@@ -52,7 +54,7 @@ Panes are `xterm.js` in the renderer over `node-pty` in the main process, the st
 Built:
 
 - The vault, `lgrass db` reads and writes, `lgrass rester` for APIs and for web apps, and the Vault tab.
-- Workgroups with Claude Code members, the thread layer, the approval modal and the workgroup pane.
+- Workgroups with Claude Code and Codex members, the thread layer, the approval modal and the workgroup pane. Codex tabs receive nudges and thread notices through the hooks `lgrassconf` registers for Codex. Its limits are under Limits.
 - Several Claude accounts, picked per tab and per workgroup thinker.
 - The guard for Claude Code, unit tested and denying live in a tab. The sealed-policy round trip through the Safety pane has not been run live.
 - The bibliothek browser and editor, and the Git panel.
@@ -60,9 +62,8 @@ Built:
 
 In progress:
 
-- The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. Its transport has been checked over a live tunnel with curl. The app screen has not been checked by hand yet, and a real MCP client, live revoke and expiry have not been run yet. Search and an `lgrass node` client for Lemongrass users are planned.
+- The node: a read-only MCP endpoint over an ngrok tunnel, built and unit tested. Its transport and the Node screen have been checked by hand, and Claude Code has read listings, text and images through a live tunnel. Codex as a client, a live revoke and a live expiry have not been run yet. Search and an `lgrass node` client for Lemongrass users are planned.
 - A wire-protocol proxy so a whole app can point its own database driver at a local port. Port allocation and the MySQL handshake listener are done. Query execution and the Postgres listener are not.
-- Codex as a workgroup member. Its tabs cannot write the lgrass database under Codex's default sandbox yet.
 
 Planned:
 
@@ -74,6 +75,9 @@ Limits:
 
 - Linux is the primary platform. The macOS build exists and Windows packaging is not wired.
 - An HTTP channel's scope is declared and checked against the request. The database scope is checked against what the parsed statement touches, which is a stronger guarantee.
+- Codex tabs start with no bypass flag and run under Codex's own sandbox and approvals. A write by `lgrass` to its database, such as a thread post, asks for sandbox approval, so a Codex thinker cannot post unattended yet. Codex tabs also get no orientation in their system prompt, only the laws summary from the `SessionStart` hook, and Codex asks for review of the hook definitions through `/hooks`.
+- The guard is verified on Claude Code only. Its hook also runs on Codex events, but no rule has been checked against what Codex sends. A Codex tab gets the default and global policy but not the project's, and the deletion exemption for the launch project is off for it. Cursor tabs have no hooks, so no guard.
+- A web channel's scope is stored and validated but not enforced in the browser, and a browser shared by a workgroup is not built.
 - The guard does not inspect an interpreter one-liner such as `python -c` or `node -e`, and a path built from an unknown variable can pass.
 - The node's `~/.lemongrass/node.json` holds token hashes and the ngrok authtoken at mode 0600. The guard keeps agents' tools away from it, with the interpreter caveat above. A token is shown once and only its hash is stored.
 
@@ -118,7 +122,7 @@ Same cross-compile, then builds only the rpm (needs `rpmbuild`), for Fedora and 
 make build-mac
 ```
 
-Cross-compiles `lgrass` and `lgrassconf` for `darwin/amd64` and `darwin/arm64`, then packages a macOS `.app`, `.dmg` and `.zip` via electron-builder. On first launch the app copies the matching arch binaries into `~/.local/bin` and runs `lgrassconf install` (LaunchAgent). Notarization is off by default.
+Cross-compiles `lgrass`, `lgrassd` and `lgrassconf` for `darwin/amd64` and `darwin/arm64`, then packages a macOS `.app`, `.dmg` and `.zip` via electron-builder. On first launch the app copies the matching arch binaries into `~/.local/bin` and runs `lgrassconf install` (LaunchAgent). Notarization is off by default.
 
 Windows packaging is not wired up yet.
 
@@ -131,8 +135,8 @@ make dev       # builds the UI once and launches it
 
 `make install` builds `lgrass` into `~/.local/bin` and `lgrassd` into `~/.lemongrass/bin`, installs the `lgrassconf` keeper (systemd user unit on Linux, LaunchAgent on macOS) and moves the bibliothek pin to its latest commit, so Claude Code and Codex configuration are correct before a session starts. All three binaries are built first and only then moved into place, so a failed install leaves the previous set untouched and says so.
 
-`make dev` installs nothing. It builds the UI with no hot reload into a snapshot under `ui/.snapshot/` and launches Electron from that snapshot, so editing the source never reaches a running instance; run `make dev` again to pick changes up. If the UI build fails it launches the newest earlier snapshot with a warning, and it uses the binaries `make install` last installed. Codex hook definitions still require review and trust through `/hooks`. `lgrass` is not required for the Electron shell itself to run. The agent CLI running inside a terminal pane invokes it, not the app directly. New shell panes prompt for which CLI to spawn (Claude Code, Codex, Cursor Agent, or a plain shell). `cd ui && npm run dev` is still the hot-reloading way to work on the UI alone. For work on `lgrass` alone:
+`make dev` installs nothing. It builds the UI with no hot reload into a snapshot under `ui/.snapshot/` and launches Electron from that snapshot, so editing the source never reaches a running instance; run `make dev` again to pick changes up. If the UI build fails it launches the newest earlier snapshot with a warning, and it uses the binaries `make install` last installed. Codex hook definitions still require review and trust through `/hooks`. `lgrass` is not required for the Electron shell itself to run. The agent CLI running inside a terminal pane invokes it, not the app directly. New shell panes prompt for which CLI to spawn (Claude Code, Codex, Cursor Agent, or a plain shell). `cd ui && npm run dev` is still the hot-reloading way to work on the UI alone. For work on the Go code alone, run these from the repo root:
 
 ```
-cd lgrass && go build ./... && go test ./...
+go build -a ./... && go test ./...
 ```
