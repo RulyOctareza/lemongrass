@@ -47,6 +47,23 @@ func (g *Gate) TestConnectionSaved(rootSecret, dbName string) error {
 	})
 }
 
+// ConnectionSSHHosts returns the ssh host alias of every saved connection that names one, keyed
+// by connection name, for the Connections list.
+func (g *Gate) ConnectionSSHHosts(rootSecret string) (map[string]string, error) {
+	hosts := make(map[string]string)
+	err := g.vault.WithConnections(rootSecret, func(dbName string, connString []byte) error {
+		// A stored alias that fails validation is left out here; Test reports it on that connection.
+		if _, alias, err := splitSSHAlias(string(connString)); err == nil && alias != "" {
+			hosts[dbName] = alias
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return hosts, nil
+}
+
 // ListTables decrypts dbName's stored credential and lists the tables in its database, for
 // the Channels form's table picker.
 func (g *Gate) ListTables(rootSecret, dbName string) ([]string, error) {

@@ -186,7 +186,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   gap: 2px;
 }
 
+/* overflow: hidden lets a flex item shrink below its content, so without this a long list
+   squeezes its rows to fit max-height instead of scrolling. */
 .item-row {
+  flex-shrink: 0;
   text-align: left;
   padding: var(--space-2) var(--space-3);
   background: transparent;

@@ -9,6 +9,7 @@ import type {
   DeviceStartRequest,
   DeviceStartResult,
   PtySpawnOptions,
+  ResolvedSSHHost,
   PtyDataPayload,
   PtyExitPayload,
   Project,
@@ -237,6 +238,9 @@ interface Api {
     testConnection: (connectionString: string) => Promise<void>
     testSavedConnection: (passphrase: string, name: string) => Promise<void>
     listTables: (passphrase: string, name: string) => Promise<string[]>
+    connectionSSHHosts: (passphrase: string) => Promise<Record<string, string>>
+    listSSHHosts: () => Promise<string[]>
+    resolveSSHHost: (alias: string) => Promise<ResolvedSSHHost>
     hasPassphrase: () => Promise<boolean>
     setPassphrase: (passphrase: string) => Promise<void>
     verifyPassphrase: (passphrase: string) => Promise<void>

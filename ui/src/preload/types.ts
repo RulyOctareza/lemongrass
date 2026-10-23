@@ -58,6 +58,14 @@ export interface VaultScope {
   Operations: string[]
 }
 
+// One ssh config host as OpenSSH resolves it (`ssh -G`), shown read-only in the Connections form.
+export interface ResolvedSSHHost {
+  hostname: string
+  user: string
+  port: string
+  proxyJump: string
+}
+
 export interface VaultChannel {
   ID: string
   Name: string

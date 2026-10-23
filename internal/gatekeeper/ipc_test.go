@@ -148,6 +148,28 @@ func TestIPCListTablesRoundTrips(t *testing.T) {
 	}
 }
 
+func TestIPCConnectionSSHHostsRoundTrips(t *testing.T) {
+	client := startTestServer(t)
+	if err := client.PutCredential(testRootSecret, "direct", []byte(unreachableConnString)); err != nil {
+		t.Fatalf("PutCredential: %v", err)
+	}
+	if err := client.PutCredential(testRootSecret, "tunnelled", []byte("mysql://root:secret@db-internal:3306/appdb?lgrass_ssh=bastion-prod")); err != nil {
+		t.Fatalf("PutCredential: %v", err)
+	}
+
+	hosts, err := client.ConnectionSSHHosts(testRootSecret)
+	if err != nil {
+		t.Fatalf("ConnectionSSHHosts: %v", err)
+	}
+	if len(hosts) != 1 || hosts["tunnelled"] != "bastion-prod" {
+		t.Errorf("ConnectionSSHHosts = %v, want only tunnelled via bastion-prod", hosts)
+	}
+
+	if _, err := client.ConnectionSSHHosts("wrong passphrase"); err == nil {
+		t.Error("ConnectionSSHHosts with the wrong root secret returned nil error")
+	}
+}
+
 func writeScope() vault.Scope {
 	return vault.Scope{Tables: []string{"employees"}, Operations: []string{"delete"}}
 }

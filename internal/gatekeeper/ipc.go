@@ -27,6 +27,7 @@ const (
 	opTestConnection      = "test_connection"
 	opTestConnectionSaved = "test_connection_saved"
 	opListTables          = "list_tables"
+	opConnectionSSHHosts  = "connection_ssh_hosts"
 	opHasPassphrase       = "has_passphrase"
 	opSetPassphrase       = "set_passphrase"
 	opVerifyPassphrase    = "verify_passphrase"
@@ -148,6 +149,10 @@ type updateConnectionPayload struct {
 
 type rootSecretPayload struct {
 	RootSecret string `json:"root_secret"`
+}
+
+type sshHostsPayload struct {
+	Hosts map[string]string `json:"hosts"`
 }
 
 type tablesPayload struct {
@@ -470,6 +475,16 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 		return adminOp(adminLimiter, func() (response, error) {
 			tables, err := svc.DB.ListTables(p.RootSecret, p.DBName)
 			return payloadResponse(tablesPayload{Tables: tables}), err
+		})
+
+	case opConnectionSSHHosts:
+		var p rootSecretPayload
+		if err := json.Unmarshal(req.Payload, &p); err != nil {
+			return errResponse(err)
+		}
+		return adminOp(adminLimiter, func() (response, error) {
+			hosts, err := svc.DB.ConnectionSSHHosts(p.RootSecret)
+			return payloadResponse(sshHostsPayload{Hosts: hosts}), err
 		})
 
 	case opHasPassphrase:
@@ -859,6 +874,12 @@ func (c *Client) ListTables(rootSecret, dbName string) ([]string, error) {
 	var out tablesPayload
 	err := c.call(opListTables, testConnectionSavedPayload{RootSecret: rootSecret, DBName: dbName}, &out)
 	return out.Tables, err
+}
+
+func (c *Client) ConnectionSSHHosts(rootSecret string) (map[string]string, error) {
+	var out sshHostsPayload
+	err := c.call(opConnectionSSHHosts, rootSecretPayload{RootSecret: rootSecret}, &out)
+	return out.Hosts, err
 }
 
 func (c *Client) HasPassphrase() (bool, error) {

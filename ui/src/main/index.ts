@@ -9,7 +9,7 @@ import {
   registerPtyHandlers,
   stopCodexShells
 } from './pty'
-import { loadLoginPath } from './loginPath'
+import { loadLoginEnv } from './loginPath'
 import { registerTabSessionHandlers } from './tabSessions'
 import { registerAccountHandlers } from './accounts'
 import { registerProjectHandlers } from './projects'
@@ -90,7 +90,7 @@ app.whenReady().then(() => {
   })
 
   // Before anything spawns a child, so PTYs and tools see the login shell's PATH.
-  loadLoginPath()
+  loadLoginEnv()
 
   const lgrassPath = installLgrass()
   const lgrassdPath = installLgrassd()

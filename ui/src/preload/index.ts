@@ -10,6 +10,7 @@ import type {
   DeviceStartRequest,
   DeviceStartResult,
   PtySpawnOptions,
+  ResolvedSSHHost,
   PtyDataPayload,
   PtyExitPayload,
   Project,
@@ -281,6 +282,11 @@ const vault = {
     ipcRenderer.invoke('vault:testSavedConnection', passphrase, name),
   listTables: (passphrase: string, name: string): Promise<string[]> =>
     ipcRenderer.invoke('vault:listTables', passphrase, name),
+  connectionSSHHosts: (passphrase: string): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('vault:connectionSSHHosts', passphrase),
+  listSSHHosts: (): Promise<string[]> => ipcRenderer.invoke('vault:listSSHHosts'),
+  resolveSSHHost: (alias: string): Promise<ResolvedSSHHost> =>
+    ipcRenderer.invoke('vault:resolveSSHHost', alias),
   hasPassphrase: (): Promise<boolean> => ipcRenderer.invoke('vault:hasPassphrase'),
   setPassphrase: (passphrase: string): Promise<void> =>
     ipcRenderer.invoke('vault:setPassphrase', passphrase),

@@ -2,6 +2,14 @@
 import { computed, onMounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import AppButton from '../AppButton.vue'
+import AppCheckbox from '../AppCheckbox.vue'
+import AppSwitcher from '../AppSwitcher.vue'
+import type { ResolvedSSHHost } from '../../../../preload/types'
+import {
+  composeConnectionString as composeFields,
+  parseConnectionString,
+  type EngineChoice
+} from '../../connectionString'
 
 const props = defineProps<{
   visible: boolean
@@ -13,6 +21,8 @@ const sessionPassphrase = toRef(vaultSession, 'passphrase')
 const connections = ref<string[]>([])
 const connectionsLoading = ref(false)
 const connectionsError = ref('')
+const sshHostByConnection = ref<Record<string, string>>({})
+const sshHostByConnectionError = ref('')
 
 async function refreshConnections(): Promise<void> {
   connectionsLoading.value = true
@@ -23,6 +33,18 @@ async function refreshConnections(): Promise<void> {
     connectionsError.value = describeError(err)
   } finally {
     connectionsLoading.value = false
+  }
+  await refreshSSHHostByConnection()
+}
+
+// The alias lives inside each encrypted connection string, so reading it takes the passphrase.
+async function refreshSSHHostByConnection(): Promise<void> {
+  if (!vaultUnlocked.value) return
+  sshHostByConnectionError.value = ''
+  try {
+    sshHostByConnection.value = await window.api.vault.connectionSSHHosts(sessionPassphrase.value)
+  } catch (err) {
+    sshHostByConnectionError.value = describeError(err)
   }
 }
 
@@ -64,7 +86,6 @@ function capsuleLabel(status?: 'verifying' | 'ok' | 'error'): string {
   }
 }
 
-type EngineChoice = 'mysql' | 'mariadb' | 'postgres'
 type TestStatus = 'idle' | 'testing' | 'ok' | 'error'
 
 const defaultPorts: Record<EngineChoice, string> = {
@@ -84,6 +105,13 @@ const newConnectionPort = ref(defaultPorts.mysql)
 const newConnectionUser = ref('')
 const newConnectionPassword = ref('')
 const newConnectionDatabase = ref('')
+const useSSHTunnel = ref(false)
+const newConnectionSSHHost = ref('')
+const sshConfigHosts = ref<string[]>([])
+const sshConfigHostsError = ref('')
+const resolvedSSHHost = ref<ResolvedSSHHost | null>(null)
+const resolvedSSHHostError = ref('')
+const resolvingSSHHost = ref(false)
 const connectionFormError = ref('')
 const creatingConnection = ref(false)
 
@@ -98,7 +126,9 @@ watch(
     newConnectionPort,
     newConnectionUser,
     newConnectionPassword,
-    newConnectionDatabase
+    newConnectionDatabase,
+    useSSHTunnel,
+    newConnectionSSHHost
   ],
   () => {
     newConnectionTestStatus.value = 'idle'
@@ -107,44 +137,70 @@ watch(
 )
 
 function composeConnectionString(): string {
-  const user = newConnectionUser.value.trim()
-  const password = newConnectionPassword.value
-  const auth = user
-    ? `${encodeURIComponent(user)}${password ? ':' + encodeURIComponent(password) : ''}@`
-    : ''
-  const port = newConnectionPort.value.trim()
-  const host = newConnectionHost.value.trim()
-  const hostPort = port ? `${host}:${port}` : host
-  const database = newConnectionDatabase.value.trim()
-  return `${newConnectionEngine.value}://${auth}${hostPort}${database ? '/' + database : ''}${preservedConnectionQuery.value}`
+  return composeFields({
+    engine: newConnectionEngine.value,
+    host: newConnectionHost.value,
+    port: newConnectionPort.value,
+    user: newConnectionUser.value,
+    password: newConnectionPassword.value,
+    database: newConnectionDatabase.value,
+    sshHost: useSSHTunnel.value ? newConnectionSSHHost.value : '',
+    query: preservedConnectionQuery.value
+  })
 }
 
-interface ParsedConnection {
-  engine: EngineChoice
-  host: string
-  port: string
-  user: string
-  password: string
-  database: string
-  query: string
+async function loadSSHConfigHosts(): Promise<void> {
+  sshConfigHostsError.value = ''
+  try {
+    sshConfigHosts.value = await window.api.vault.listSSHHosts()
+  } catch (err) {
+    sshConfigHosts.value = []
+    sshConfigHostsError.value = describeError(err)
+  }
 }
 
-function parseConnectionString(connectionString: string): ParsedConnection {
-  const url = new URL(connectionString)
-  const scheme = url.protocol.replace(/:$/, '').toLowerCase()
-  const engine = scheme === 'postgresql' ? 'postgres' : scheme
-  if (engine !== 'mysql' && engine !== 'mariadb' && engine !== 'postgres') {
-    throw new Error(`Unsupported engine "${scheme}".`)
+// A stored alias that is no longer in the config stays pickable and is marked, never dropped.
+const sshHostItems = computed(() => {
+  const items = sshConfigHosts.value.map((host) => ({ id: host, label: host }))
+  const current = newConnectionSSHHost.value
+  if (current && !sshConfigHosts.value.includes(current)) {
+    items.unshift({ id: current, label: `${current} (not in ~/.ssh/config)` })
   }
-  return {
-    engine,
-    host: url.hostname,
-    port: url.port,
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database: url.pathname.replace(/^\//, ''),
-    query: url.search
+  return items
+})
+
+let resolveSeq = 0
+
+async function resolvePickedSSHHost(): Promise<void> {
+  const seq = ++resolveSeq
+  resolvedSSHHost.value = null
+  resolvedSSHHostError.value = ''
+  const alias = newConnectionSSHHost.value
+  if (!useSSHTunnel.value || !alias) {
+    resolvingSSHHost.value = false
+    return
   }
+  resolvingSSHHost.value = true
+  try {
+    const resolved = await window.api.vault.resolveSSHHost(alias)
+    if (seq === resolveSeq) resolvedSSHHost.value = resolved
+  } catch (err) {
+    if (seq === resolveSeq) resolvedSSHHostError.value = describeError(err)
+  } finally {
+    if (seq === resolveSeq) resolvingSSHHost.value = false
+  }
+}
+
+watch([useSSHTunnel, newConnectionSSHHost], resolvePickedSSHHost)
+
+function describeResolvedSSHHost(host: ResolvedSSHHost): string {
+  const target = `${host.user ? host.user + '@' : ''}${host.hostname}${host.port ? ':' + host.port : ''}`
+  return host.proxyJump ? `${target}, through ${host.proxyJump}` : target
+}
+
+function toggleSSHTunnel(): void {
+  useSSHTunnel.value = !useSSHTunnel.value
+  if (useSSHTunnel.value) void loadSSHConfigHosts()
 }
 
 function openConnectionForm(): void {
@@ -157,6 +213,8 @@ function openConnectionForm(): void {
   newConnectionUser.value = ''
   newConnectionPassword.value = ''
   newConnectionDatabase.value = ''
+  useSSHTunnel.value = false
+  newConnectionSSHHost.value = ''
   connectionFormError.value = ''
   newConnectionTestStatus.value = 'idle'
   newConnectionTestError.value = ''
@@ -183,6 +241,9 @@ async function openConnectionEdit(name: string): Promise<void> {
     newConnectionUser.value = parsed.user
     newConnectionPassword.value = parsed.password
     newConnectionDatabase.value = parsed.database
+    useSSHTunnel.value = parsed.sshHost !== ''
+    newConnectionSSHHost.value = parsed.sshHost
+    if (useSSHTunnel.value) void loadSSHConfigHosts()
     connectionFormError.value = ''
     newConnectionTestStatus.value = 'idle'
     newConnectionTestError.value = ''
@@ -202,7 +263,10 @@ function onEngineChange(): void {
 }
 
 const canTestNewConnection = computed(
-  () => newConnectionHost.value.trim().length > 0 && newConnectionTestStatus.value !== 'testing'
+  () =>
+    newConnectionHost.value.trim().length > 0 &&
+    (!useSSHTunnel.value || newConnectionSSHHost.value !== '') &&
+    newConnectionTestStatus.value !== 'testing'
 )
 
 async function testNewConnection(): Promise<void> {
@@ -311,6 +375,27 @@ watch(
         />
       </div>
 
+      <div class="ssh-tunnel">
+        <AppCheckbox :checked="useSSHTunnel" @click="toggleSSHTunnel">Use SSH tunnel</AppCheckbox>
+        <template v-if="useSSHTunnel">
+          <label class="field-label">SSH host</label>
+          <AppSwitcher
+            framed
+            :items="sshHostItems"
+            :active-id="newConnectionSSHHost || null"
+            placeholder="Pick a host from ~/.ssh/config"
+            empty-text="No Host entries in ~/.ssh/config."
+            @select="(host) => (newConnectionSSHHost = host)"
+          />
+          <p v-if="sshConfigHostsError" class="error-text">{{ sshConfigHostsError }}</p>
+          <p v-if="resolvingSSHHost" class="hint">Reading the host from your ssh config...</p>
+          <p v-else-if="resolvedSSHHostError" class="error-text">{{ resolvedSSHHostError }}</p>
+          <p v-else-if="resolvedSSHHost" class="hint">
+            Tunnel goes to {{ describeResolvedSSHHost(resolvedSSHHost) }}
+          </p>
+        </template>
+      </div>
+
       <div class="field-grid">
         <div>
           <label class="field-label" for="conn-engine">Engine</label>
@@ -326,7 +411,9 @@ watch(
           </select>
         </div>
         <div>
-          <label class="field-label" for="conn-host">Host</label>
+          <label class="field-label" for="conn-host">
+            {{ useSSHTunnel ? 'Database host, from the SSH host' : 'Host' }}
+          </label>
           <input id="conn-host" v-model="newConnectionHost" type="text" placeholder="localhost" />
         </div>
         <div>
@@ -405,6 +492,7 @@ watch(
       </div>
     </div>
 
+    <p v-if="sshHostByConnectionError" class="error-text">{{ sshHostByConnectionError }}</p>
     <p v-if="connectionsError" class="error-text">{{ connectionsError }}</p>
     <p v-else-if="connectionsLoading" class="empty">Loading...</p>
     <p v-else-if="connections.length === 0" class="empty">No connections yet.</p>
@@ -413,6 +501,9 @@ watch(
       <div v-for="name in connections" :key="name" class="channel-row">
         <div class="channel-info">
           <span class="channel-db">{{ name }}</span>
+          <span v-if="sshHostByConnection[name]" class="value-capsule">
+            via {{ sshHostByConnection[name] }}
+          </span>
           <span
             class="status-capsule"
             :class="'status-' + (rowStatus[name] ?? 'idle')"

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import * as net from 'net'
 import { homedir } from 'os'
 import { join } from 'path'
+import { listSSHHosts, resolveSSHHost } from './sshHosts'
 
 function vaultSocketPath(): string {
   return join(homedir(), '.lemongrass', 'vault.sock')
@@ -508,6 +509,15 @@ async function migratePolicy(passphrase: string): Promise<void> {
   await vaultCall<void>('migrate_policy', { root_secret: passphrase })
 }
 
+// Saved connections that go through an ssh host alias, keyed by connection name.
+async function connectionSSHHosts(passphrase: string): Promise<Record<string, string>> {
+  const { hosts } = await vaultCall<{ hosts: Record<string, string> | null }>(
+    'connection_ssh_hosts',
+    { root_secret: passphrase }
+  )
+  return hosts ?? {}
+}
+
 export function registerVaultHandlers(): void {
   ipcMain.handle('vault:list', () => listChannels())
   ipcMain.handle(
@@ -543,6 +553,11 @@ export function registerVaultHandlers(): void {
   ipcMain.handle('vault:listTables', (_event, passphrase: string, name: string) =>
     listTables(passphrase, name)
   )
+  ipcMain.handle('vault:connectionSSHHosts', (_event, passphrase: string) =>
+    connectionSSHHosts(passphrase)
+  )
+  ipcMain.handle('vault:listSSHHosts', () => listSSHHosts())
+  ipcMain.handle('vault:resolveSSHHost', (_event, alias: string) => resolveSSHHost(alias))
   ipcMain.handle('vault:hasPassphrase', () => hasPassphrase())
   ipcMain.handle('vault:setPassphrase', (_event, passphrase: string) => setPassphrase(passphrase))
   ipcMain.handle('vault:verifyPassphrase', (_event, passphrase: string) =>

@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // pingTimeout bounds how long a connection test can block the vault's single-request-per-
@@ -63,15 +64,43 @@ func openDB(connString string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	connString, sshAlias, err := splitSSHAlias(connString)
+	if err != nil {
+		return nil, err
+	}
 	switch engine {
 	case EngineMySQL:
 		dsn, err := mysqlDSN(connString)
 		if err != nil {
 			return nil, err
 		}
-		return sql.Open("mysql", dsn)
+		if sshAlias == "" {
+			return sql.Open("mysql", dsn)
+		}
+		cfg, err := mysql.ParseDSN(dsn)
+		if err != nil {
+			return nil, fmt.Errorf("dbgate: parsing connection string: %w", err)
+		}
+		cfg.DialFunc = sshDialFunc(sshAlias)
+		connector, err := mysql.NewConnector(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("dbgate: parsing connection string: %w", err)
+		}
+		return sql.OpenDB(sshConnector{connector}), nil
 	case EnginePostgres:
-		return sql.Open("pgx", connString)
+		if sshAlias == "" {
+			return sql.Open("pgx", connString)
+		}
+		cfg, err := pgx.ParseConfig(connString)
+		if err != nil {
+			return nil, errors.New("dbgate: parsing connection string failed")
+		}
+		cfg.DialFunc = sshDialFunc(sshAlias)
+		// The host name is resolved at the far end of the tunnel, where it may be the only place it exists.
+		cfg.LookupFunc = func(_ context.Context, host string) ([]string, error) {
+			return []string{host}, nil
+		}
+		return sql.OpenDB(sshConnector{stdlib.GetConnector(*cfg)}), nil
 	default:
 		return nil, fmt.Errorf("dbgate: unsupported engine %q", engine)
 	}

@@ -113,6 +113,33 @@ func (s *Service) WithConnection(rootSecret, dbName string, fn func(connString [
 	return fn(connString)
 }
 
+// WithConnections decrypts every stored connection string under rootSecret, deriving the root
+// key once, passes each to fn, and zeroes each after fn returns.
+func (s *Service) WithConnections(rootSecret string, fn func(dbName string, connString []byte) error) error {
+	names, err := s.ListConnections()
+	if err != nil {
+		return err
+	}
+	rootKey, err := DeriveKey(rootSecret, s.rootSalt)
+	if err != nil {
+		return err
+	}
+	defer Zero(rootKey)
+
+	for _, name := range names {
+		connString, err := s.creds.Get(name, rootKey)
+		if err != nil {
+			return fmt.Errorf("vault: reading credential for %s: %w", name, err)
+		}
+		err = fn(name, connString)
+		Zero(connString)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // OnInvalidate registers fn to run whenever a channel's cached state must be dropped: revocation, expiry, or a rewrap after an edit.
 func (s *Service) OnInvalidate(fn func(ChannelID)) {
 	s.mu.Lock()

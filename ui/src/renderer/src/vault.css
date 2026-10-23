@@ -328,6 +328,12 @@
   align-self: flex-start;
 }
 
+.vault-tab .ssh-tunnel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .vault-tab .inline-section {
   --input-bg: var(--color-surface-1);
   display: flex;
