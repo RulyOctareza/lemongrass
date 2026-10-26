@@ -75,9 +75,11 @@ deb:
   afterInstall: build/deb-after-install.sh
   afterRemove: build/deb-after-remove.sh
   fpm: ['--depends', 'git']
+# No custom scriptlets: setting afterInstall or afterRemove replaces electron-builder's defaults, which create
+# /usr/bin/lemongrass and set the chrome-sandbox mode. The keeper unit is per-user, written by `lgrassconf install`.
+# The in-app updater finds the release asset by this fixed name.
 rpm:
-  afterInstall: build/rpm-after-install.sh
-  afterRemove: build/rpm-after-remove.sh
+  artifactName: ${name}-${version}.x86_64.${ext}
   fpm: ['--depends', 'git']
 appImage:
   artifactName: ${name}-${version}.${ext}

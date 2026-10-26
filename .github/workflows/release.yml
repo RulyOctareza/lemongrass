@@ -1,0 +1,65 @@
+# Builds the x86_64 rpm for a pushed v<version> tag and publishes it with its SHA256SUMS as a GitHub Release.
+# The in-app updater reads the latest release and verifies the rpm against SHA256SUMS, so both asset names are fixed.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  rpm:
+    name: rpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      # The version stamped into the binaries and the rpm comes from ui/package.json, so a tag that disagrees would
+      # publish a release whose name lies about its contents.
+      - name: Check tag matches ui/package.json
+        run: |
+          want="v$(node -p "require('./ui/package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "tag $GITHUB_REF_NAME does not match ui/package.json version $want" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install rpm tooling
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install UI dependencies
+        run: npm --prefix ui ci
+
+      - name: Build Go binaries
+        run: make dist-linux
+
+      # --publish never stops electron-builder from publishing on its own when it sees a tag on CI.
+      - name: Build rpm
+        run: npm --prefix ui run build:rpm -- --x64 --publish never
+
+      - name: Write SHA256SUMS
+        working-directory: ui/dist
+        run: sha256sum lemongrass-*.x86_64.rpm > SHA256SUMS
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            ui/dist/lemongrass-*.x86_64.rpm ui/dist/SHA256SUMS
