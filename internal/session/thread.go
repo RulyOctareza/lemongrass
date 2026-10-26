@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -202,9 +203,9 @@ func insertMessage(tx *sql.Tx, projectID string, threadID string, tabID, body st
 			continue
 		}
 		if _, err := tx.Exec(`
-			INSERT INTO lg_notifications (project_id, thread_id, message_id, target_tab_id, kind, created_at)
+			INSERT INTO lg_notifications (project_id, source, ref, target_tab_id, kind, created_at)
 			VALUES (?, ?, ?, ?, ?, ?)
-		`, projectID, threadID, id, tab, notificationKind(tab, mentions), ts); err != nil {
+		`, projectID, SourceThread, strconv.FormatInt(id, 10), tab, notificationKind(tab, mentions), ts); err != nil {
 			return Message{}, err
 		}
 	}

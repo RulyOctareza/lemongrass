@@ -23,6 +23,7 @@ import type {
   GitStatus,
   GitDiff,
   GitActionResult,
+  GitMoveResult,
   GitBlame,
   GitBranches,
   GitCommitInfo,
@@ -149,7 +150,9 @@ interface Api {
     push: (projectPath: string) => Promise<GitActionResult>
     lastMessage: (projectPath: string) => Promise<string>
     branches: (projectPath: string) => Promise<GitBranches>
-    switchBranch: (projectPath: string, name: string, remote: boolean) => Promise<GitActionResult>
+    switchBranch: (projectPath: string, name: string, remote: boolean) => Promise<GitMoveResult>
+    createBranch: (projectPath: string, name: string, base: string) => Promise<GitMoveResult>
+    branchNameValid: (projectPath: string, name: string) => Promise<boolean>
     revFiles: (projectPath: string, rev: GitRevision) => Promise<GitRevFiles>
     revDiff: (
       projectPath: string,

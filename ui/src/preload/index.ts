@@ -24,6 +24,7 @@ import type {
   GitStatus,
   GitDiff,
   GitActionResult,
+  GitMoveResult,
   GitBlame,
   GitBranches,
   GitCommitInfo,
@@ -164,8 +165,12 @@ const git = {
     ipcRenderer.invoke('git:lastMessage', projectPath),
   branches: (projectPath: string): Promise<GitBranches> =>
     ipcRenderer.invoke('git:branches', projectPath),
-  switchBranch: (projectPath: string, name: string, remote: boolean): Promise<GitActionResult> =>
+  switchBranch: (projectPath: string, name: string, remote: boolean): Promise<GitMoveResult> =>
     ipcRenderer.invoke('git:switchBranch', projectPath, name, remote),
+  createBranch: (projectPath: string, name: string, base: string): Promise<GitMoveResult> =>
+    ipcRenderer.invoke('git:createBranch', projectPath, name, base),
+  branchNameValid: (projectPath: string, name: string): Promise<boolean> =>
+    ipcRenderer.invoke('git:branchNameValid', projectPath, name),
   revFiles: (projectPath: string, rev: GitRevision): Promise<GitRevFiles> =>
     ipcRenderer.invoke('git:revFiles', projectPath, rev),
   revDiff: (

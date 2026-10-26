@@ -18,22 +18,22 @@ func TestGroupMessageKindsFollowMentions(t *testing.T) {
 
 	store.PostMessage(tabA, g.ThreadID, "plain to all")
 	for _, tab := range []string{tabB, tabC} {
-		pending, _ := store.PendingForTab(tab)
+		pending, _ := threadsOf(store.PendingForTab(tab))
 		if len(pending) != 1 || pending[0].All.Count != 1 || pending[0].You.Count != 0 || pending[0].Other.Count != 0 {
 			t.Errorf("tab %s pending = %+v, want one all row", TabLabel(tab), pending)
 		}
 	}
 
 	store.PostMessage(tabA, g.ThreadID, "for one !>>"+tabB+"<<!")
-	pendingB, _ := store.PendingForTab(tabB)
+	pendingB, _ := threadsOf(store.PendingForTab(tabB))
 	if len(pendingB) != 1 || pendingB[0].You.Count != 1 || pendingB[0].All.Count != 1 {
 		t.Errorf("mentioned tab pending = %+v, want one you and one all row", pendingB)
 	}
-	surfaceC, _ := store.SurfaceableForTab(tabC)
+	surfaceC, _ := threadsOf(store.SurfaceableForTab(tabC))
 	if len(surfaceC) != 1 || surfaceC[0].Other.Count != 1 || len(surfaceC[0].Other.Tabs) != 1 || surfaceC[0].Other.Tabs[0] != tabB {
 		t.Errorf("other tab surfaceable = %+v, want one other row naming the mentioned tab", surfaceC)
 	}
-	if wake, _ := store.PendingForTab(tabC); len(wake) != 1 || wake[0].Count() != 1 {
+	if wake, _ := threadsOf(store.PendingForTab(tabC)); len(wake) != 1 || wake[0].Count() != 1 {
 		t.Errorf("other tab wake rows = %+v, want only the plain message", wake)
 	}
 }
@@ -50,7 +50,7 @@ func TestOtherRowsNeverWakeATab(t *testing.T) {
 	if due, _ := store.TabsDueForRetry(5, func(int) time.Duration { return 0 }, time.Now()); len(due) != 1 || due[0] != tabB {
 		t.Errorf("TabsDueForRetry = %v, want only the mentioned tab", due)
 	}
-	if wake, _ := store.PendingForTab(tabC); len(wake) != 0 {
+	if wake, _ := threadsOf(store.PendingForTab(tabC)); len(wake) != 0 {
 		t.Errorf("an unmentioned member would be woken: %+v", wake)
 	}
 }
@@ -64,7 +64,7 @@ func TestMarkOtherSentSettlesOnlyOtherRows(t *testing.T) {
 	if err := store.MarkOtherSent(tabC); err != nil {
 		t.Fatalf("MarkOtherSent: %v", err)
 	}
-	surfaced, _ := store.SurfaceableForTab(tabC)
+	surfaced, _ := threadsOf(store.SurfaceableForTab(tabC))
 	if len(surfaced) != 1 || surfaced[0].Other.Count != 0 || surfaced[0].All.Count != 1 {
 		t.Errorf("surfaceable after MarkOtherSent = %+v, want the all row only", surfaced)
 	}
@@ -110,7 +110,7 @@ func TestOpenAddsKindToAnOlderNotificationsTable(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 	defer store.Close()
-	pending, err := store.PendingForTab(tabB)
+	pending, err := threadsOf(store.PendingForTab(tabB))
 	if err != nil || len(pending) != 1 || pending[0].All.Count != 1 {
 		t.Errorf("pending after the migration = %+v, %v, want the old row as an all row", pending, err)
 	}

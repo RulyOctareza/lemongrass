@@ -38,6 +38,10 @@ func main() {
 		cmdTrust(os.Args[2:])
 	case "nudge":
 		cmdNudge(os.Args[2:])
+	case "migrate":
+		cmdMigrate(os.Args[2:])
+	case "branch":
+		cmdBranch(os.Args[2:])
 	case "hook":
 		hook.Run(os.Args[2:], os.Getenv(tabIDEnv))
 	default:
@@ -69,6 +73,10 @@ COMMANDS
   accounts remove <name>            Deletes ~/.claude-<name> and forgets the account
   trust <path> [--target <t>]       Marks a project trusted for Claude and Codex; t is primary, codex or an account name
   nudge <tab-id>                    Prints the tab's pending thread nudge and marks it sent
+  migrate                           Brings the session store up to its current schema version
+  branch changed <from> <to> <carry>
+                                    Tells the project's recently active agent tabs the git branch
+                                     moved; carry is none, carried or conflict
   hook <event>                      Invoked by Claude Code's and Codex's own hook systems, reads hook JSON off stdin
 
   version                           Print version

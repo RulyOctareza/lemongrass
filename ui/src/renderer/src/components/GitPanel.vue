@@ -2,7 +2,7 @@
 <!-- Copyright (C) 2026 Faizal Alviansyah -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   commitChanges,
   gitStateOf,
@@ -17,6 +17,7 @@ import type { GitFile, GitFileGroup, GitFileKind } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
 import GitIcon from './GitIcon.vue'
+import GitBranchCreateModal from './GitBranchCreateModal.vue'
 import GitBranchMenu from './GitBranchMenu.vue'
 import GitStashSection from './GitStashSection.vue'
 import GitSyncSection from './GitSyncSection.vue'
@@ -27,17 +28,22 @@ const props = defineProps<{
   project: ProjectRef
 }>()
 
+const creatingBranch = ref(false)
 const state = computed(() => gitStateOf(props.project.id))
 const status = computed(() => state.value.status)
 const files = computed(() => status.value?.files ?? [])
 const selectedPath = computed(() => activeDiffPath(props.project.id))
-const stagedCount = computed(() => files.value.filter((file) => file.staged).length)
+const hasConflicts = computed(() => files.value.some((file) => file.kind === 'conflicted'))
+// Uncommitted changes, staged ones included, are carried by main, so only states a stash cannot
+// carry block the switcher.
 const switchBlockedReason = computed((): string | null => {
   if (state.value.busy) return 'An operation is running'
-  if (stagedCount.value > 0) return 'Commit or unstage the staged changes before switching branches'
+  if (status.value?.operation) {
+    return `Continue or abort the ${status.value.operation} before switching branches`
+  }
+  if (hasConflicts.value) return 'Resolve the conflicts before switching branches'
   return null
 })
-const hasConflicts = computed(() => files.value.some((file) => file.kind === 'conflicted'))
 const checkedCount = computed(
   () => files.value.filter((file) => isChecked(props.project.id, file.path)).length
 )
@@ -187,15 +193,25 @@ watch(() => props.project.id, refresh)
     </button>
 
     <div v-if="!state.folded" class="git-body">
-      <GitBranchMenu
-        v-if="status?.isRepo"
-        :project="project"
-        :disabled="switchBlockedReason !== null"
-        :title="switchBlockedReason ?? 'Switch branch'"
-      >
-        <GitIcon class="row-icon" name="branch" />
-        <span class="row-name">{{ status.branch ?? 'detached HEAD' }}</span>
-      </GitBranchMenu>
+      <div v-if="status?.isRepo" class="branch-line">
+        <GitBranchMenu
+          :project="project"
+          :disabled="switchBlockedReason !== null"
+          :title="switchBlockedReason ?? 'Switch branch'"
+        >
+          <GitIcon class="row-icon" name="branch" />
+          <span class="row-name">{{ status.branch ?? 'detached HEAD' }}</span>
+        </GitBranchMenu>
+        <button
+          class="branch-new"
+          :disabled="switchBlockedReason !== null"
+          :title="switchBlockedReason ?? 'New branch'"
+          :aria-label="switchBlockedReason ?? 'New branch'"
+          @click="creatingBranch = true"
+        >
+          <GitIcon name="newBranch" />
+        </button>
+      </div>
       <button v-if="status?.isRepo" class="history-open" @click="openHistory(project)">
         <GitIcon class="row-icon" name="open" />
         <span>History</span>
@@ -298,6 +314,13 @@ watch(() => props.project.id, refresh)
         </div>
       </template>
     </div>
+
+    <GitBranchCreateModal
+      v-if="creatingBranch"
+      :project="project"
+      :has-changes="files.length > 0"
+      @close="creatingBranch = false"
+    />
   </div>
 </template>
 
@@ -380,6 +403,34 @@ watch(() => props.project.id, refresh)
   max-height: 55vh;
   overflow-y: auto;
   padding: var(--space-2) var(--space-1) 0;
+}
+
+.branch-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.branch-new {
+  display: flex;
+  flex-shrink: 0;
+  padding: 3px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+.branch-new:hover:not(:disabled),
+.branch-new:focus-visible:not(:disabled) {
+  color: var(--color-fg-accent);
+}
+
+.branch-new:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .history-open {

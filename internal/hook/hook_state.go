@@ -33,7 +33,7 @@ func recordTabState(store *session.Store, event string, payload hookEvent) {
 		}
 	case "Stop", "Interrupt":
 		store.SetTabState(tab, session.StateIdle)
-		if pending, err := store.PendingForTab(tab); err == nil && len(pending) > 0 {
+		if pending, err := store.PendingForTab(tab); err == nil && !pending.Empty() {
 			threadsvc.Wake(threadsvc.SocketPath())
 		}
 	}

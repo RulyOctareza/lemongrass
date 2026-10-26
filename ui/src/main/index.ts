@@ -26,6 +26,7 @@ import { registerNodeHandlers } from './node'
 import { registerWindowControlHandlers, wireMaximizeEvents } from './windowControls'
 import { installLgrass, installLgrassd, installLgrassconf } from './lgrassInstall'
 import { ensureDaemonsRunning, killDaemons } from './daemons'
+import { migrateStore } from './storeMigrate'
 import { startWorkgroupBridge, stopWorkgroupBridge } from './workgroupBridge'
 import { registerWorkgroupHandlers } from './workgroups'
 import { destroyAllInstances } from './web'
@@ -84,7 +85,7 @@ function createWindow(): void {
 
 registerBiblioImageScheme()
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.lemongrass.app')
 
   // Toggles DevTools with F12 in dev, blocks CommandOrControl+R in prod.
@@ -99,6 +100,8 @@ app.whenReady().then(() => {
   const lgrassdPath = installLgrassd()
   installLgrassconf()
   if (lgrassdPath) {
+    // Before the daemons and the window, so no daemon, hook or restored tab opens a store that still needs migrating.
+    await migrateStore(lgrassdPath)
     void ensureDaemonsRunning(lgrassdPath)
   }
 
@@ -109,7 +112,7 @@ app.whenReady().then(() => {
   registerWorkspaceLayoutHandlers()
   registerTabSessionHandlers(lgrassdPath)
   registerBiblioHandlers(() => mainWindow?.webContents)
-  registerGitHandlers()
+  registerGitHandlers(lgrassdPath)
   registerDeviceHandlers(() => mainWindow?.webContents)
   registerVaultHandlers()
   registerNodeHandlers()

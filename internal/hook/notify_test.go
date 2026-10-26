@@ -6,6 +6,7 @@ package hook
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/faizalv/lemongrass/internal/session"
 )
@@ -35,6 +36,27 @@ func TestNotificationContextSurfacesOnceThenMarksSent(t *testing.T) {
 	}
 	if again := notificationContext(store, notifyTabTarget); len(again) != 0 {
 		t.Errorf("second call repeated the nudge: %q", again)
+	}
+}
+
+// A tab mid-turn gets the branch line at its next tool call, after its thread line.
+func TestNotificationContextCarriesTheBranchLine(t *testing.T) {
+	store := storeWithPendingMention(t)
+	store.SetTabState(notifyTabTarget, session.StateWorking)
+	if _, err := store.InsertBranchChanged(session.BranchChange{From: "main", To: "fix-1", Carry: session.CarryConflict}, time.Now()); err != nil {
+		t.Fatalf("InsertBranchChanged: %v", err)
+	}
+
+	got := notificationContext(store, notifyTabTarget)
+	if len(got) != 1 {
+		t.Fatalf("context = %q, want one block", got)
+	}
+	lines := strings.Split(got[0], "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], ": 1 for you") || lines[1] != "[lg] branch changed from main to fix-1, the carried changes conflicted and the stash was kept. Check git status before you continue." {
+		t.Errorf("context = %q, want the thread line then the branch line", got[0])
+	}
+	if again := notificationContext(store, notifyTabTarget); len(again) != 0 {
+		t.Errorf("the next tool call repeated it: %q", again)
 	}
 }
 

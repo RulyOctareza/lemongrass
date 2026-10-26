@@ -73,31 +73,20 @@ CREATE TABLE IF NOT EXISTS lg_held_calls (
 );
 `
 
-// Open may run before config.Dir() exists, since a hook can fire before any other lgrass call in a project.
+// Open may run before config.Dir() exists, since a hook can fire before any other lgrass call in a project. The app migrates the store at boot through `lgrassd migrate`; migrating here is the fallback for a CLI used before the app ever ran.
 func Open(dbPath, projectID string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", filepath.Dir(dbPath), err)
 	}
-	db, err := sql.Open("sqlite", dbPath)
+	// Every hook in every live session opens this file concurrently; busy_timeout retries instead of erroring, WAL keeps readers from blocking on a writer.
+	// Set in the DSN so every pooled connection gets them, the migrator's own included.
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, err
 	}
-	// Every hook in every live session opens this file concurrently; busy_timeout retries instead of erroring, WAL keeps readers from blocking on a writer.
-	if _, err := db.Exec(`PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;`); err != nil {
+	if err := migrate(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("configuring %s: %w", dbPath, err)
-	}
-	if err := dropLegacyThreads(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("migrating schema: %w", err)
-	}
-	if _, err := db.Exec(schema + threadSchema + legacyThreadDrop); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("migrating schema: %w", err)
-	}
-	if err := addMissingColumns(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("migrating schema: %w", err)
+		return nil, err
 	}
 	return &Store{db: db, projectID: projectID}, nil
 }

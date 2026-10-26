@@ -23,7 +23,7 @@ func TestMentionCreatesPendingRowForTargetOnly(t *testing.T) {
 		t.Fatalf("CreateThread: %v", err)
 	}
 
-	pending, err := store.PendingForTab(tabB)
+	pending, err := threadsOf(store.PendingForTab(tabB))
 	if err != nil || len(pending) != 1 {
 		t.Fatalf("PendingForTab(B) = %+v, %v, want one thread", pending, err)
 	}
@@ -31,7 +31,7 @@ func TestMentionCreatesPendingRowForTargetOnly(t *testing.T) {
 	if p.ThreadID != id || p.Title != "Review" || p.Count() != 1 || p.You.Count != 1 || len(p.You.Tabs) != 1 || p.You.Tabs[0] != tabA {
 		t.Errorf("pending = %+v, want thread %s, one row, sender tabA", p, id)
 	}
-	if own, _ := store.PendingForTab(tabA); len(own) != 0 {
+	if own, _ := threadsOf(store.PendingForTab(tabA)); len(own) != 0 {
 		t.Errorf("the author was notified of their own mention: %+v", own)
 	}
 }
@@ -46,7 +46,7 @@ func TestPendingCoalescesPerThreadWithDistinctSenders(t *testing.T) {
 	store.PostMessage(tabC, id, "three !>>"+tabB+"<<!")
 	other, _ := store.CreateThread(tabA, "Other", "x !>>"+tabB+"<<!")
 
-	pending, _ := store.PendingForTab(tabB)
+	pending, _ := threadsOf(store.PendingForTab(tabB))
 	if len(pending) != 2 || pending[0].ThreadID != id || pending[1].ThreadID != other {
 		t.Fatalf("pending = %+v, want threads %s then %s", pending, id, other)
 	}
@@ -60,11 +60,11 @@ func TestMarkSentRemovesRowsFromPending(t *testing.T) {
 	seedTabs(store)
 	store.CreateThread(tabA, "Review", "x !>>"+tabB+"<<!")
 
-	pending, _ := store.PendingForTab(tabB)
+	pending, _ := threadsOf(store.PendingForTab(tabB))
 	if err := store.MarkNotificationsSent(pending[0].RowIDs); err != nil {
 		t.Fatalf("MarkNotificationsSent: %v", err)
 	}
-	if again, _ := store.PendingForTab(tabB); len(again) != 0 {
+	if again, _ := threadsOf(store.PendingForTab(tabB)); len(again) != 0 {
 		t.Errorf("sent rows still pending: %+v", again)
 	}
 	var state string
@@ -89,7 +89,7 @@ func TestReadingMessagesSettlesOnlyThoseRowsAndKeepsThem(t *testing.T) {
 		t.Fatalf("MarkMessagesRead: %v", err)
 	}
 
-	pending, _ := store.PendingForTab(tabB)
+	pending, _ := threadsOf(store.PendingForTab(tabB))
 	if len(pending) != 1 || pending[0].Count() != 1 {
 		t.Errorf("pending = %+v, want the one unread row", pending)
 	}
@@ -109,7 +109,7 @@ func TestTabsDueForRetryHonorsAttemptsAndBackoff(t *testing.T) {
 	if due, _ := store.TabsDueForRetry(3, backoff, time.Now()); len(due) != 1 {
 		t.Fatalf("untried row not due: %v", due)
 	}
-	pending, _ := store.PendingForTab(tabB)
+	pending, _ := threadsOf(store.PendingForTab(tabB))
 	store.RecordNotificationAttempt(pending[0].RowIDs)
 	if due, _ := store.TabsDueForRetry(3, backoff, time.Now()); len(due) != 0 {
 		t.Errorf("row due right after an attempt: %v", due)
@@ -172,4 +172,9 @@ func TestFormatNotificationCoalescesAndCarriesNoContent(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
 	}
+}
+
+// The thread part of a pending read, for tests that post only to threads.
+func threadsOf(p Pending, err error) ([]PendingThread, error) {
+	return p.Threads, err
 }

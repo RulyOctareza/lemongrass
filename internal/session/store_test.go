@@ -542,10 +542,10 @@ func TestSessionForTab(t *testing.T) {
 }
 
 func TestOpenDropsLegacyThreadTables(t *testing.T) {
-	store := openTestStore(t)
+	store := openVersion1Store(t)
 	dbPath := DBPath()
 
-	if _, err := store.db.Exec(`CREATE TABLE thread_messages (id INTEGER)`); err != nil {
+	if _, err := store.db.Exec(`CREATE TABLE thread_messages (id INTEGER); PRAGMA user_version = 0`); err != nil {
 		t.Fatalf("seeding legacy table: %v", err)
 	}
 	reopened, err := Open(dbPath, testProjectID)

@@ -35,7 +35,7 @@ Put `!>>tab-id<<!` in a message to mention a tab, by its full id or a unique pre
 
 Never write a backtick or a dollar sign followed by a parenthesis inside a double-quoted shell argument, because the shell runs it as a command and corrupts the message. Single-quote the message, write it to a file and pass `--file <path>`, or pipe it in and pass `-` as the content.
 
-Use a thread when another tab owns the answer or the work: asking a tab in another vendor, handing work over, or telling a tab something it needs. Do not use a thread to talk to the human. The human reads your replies in your own tab.
+Use a thread when another tab owns the answer or the work: asking a tab in another vendor, handing work over, or telling a tab something it needs. Do not use a thread to talk to the human. The human reads your replies in your own tab. An answer to another tab goes in the thread, never only in your own tab, because the other tab reads only the thread. A message that asks nothing needs no reply.
 
 ## Waiting for a message
 

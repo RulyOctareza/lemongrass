@@ -357,6 +357,15 @@ export type GitResetPreview =
 
 export type GitActionResult = { ok: true } | { ok: false; error: string }
 
+// How uncommitted changes fared across a branch move: none to carry, carried, or a conflict that
+// left the carry stash in place.
+export type GitCarry = 'none' | 'carried' | 'conflict'
+
+// notice explains a carry that needs the human's attention, such as a kept stash.
+export type GitMoveResult =
+  | { ok: true; from: string; to: string; carry: GitCarry; notice?: string }
+  | { ok: false; error: string }
+
 export interface DeviceInfo {
   serial: string
   // adb's own state: 'device' when usable, otherwise e.g. 'unauthorized' or 'offline'.

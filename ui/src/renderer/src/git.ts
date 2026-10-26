@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Faizal Alviansyah
 
 import { reactive } from 'vue'
-import type { GitFile, GitFileGroup, GitStash, GitStatus } from '../../preload/types'
+import type { GitFile, GitFileGroup, GitMoveResult, GitStash, GitStatus } from '../../preload/types'
 import type { ProjectRef } from './workspace'
 
 export interface GitState {
@@ -16,7 +16,7 @@ export interface GitState {
   foldedGroups: GitFileGroup[]
   // The branch merge and rebase use; null means the current branch's upstream.
   syncTarget: string | null
-  busy: 'commit' | 'push' | 'stash' | 'sync' | null
+  busy: 'commit' | 'push' | 'stash' | 'sync' | 'branch' | null
   error: string | null
 }
 
@@ -123,15 +123,37 @@ export async function commitChanges(project: ProjectRef, andPush: boolean): Prom
   await refreshGit(project)
 }
 
-// Returns git's error text, or null once the branch is checked out.
-export async function switchBranch(
+// Main carries uncommitted changes across the move. Returns git's error text, or null once the
+// branch is checked out, and a carry that needs the human, such as a kept stash, shows as the
+// panel's error.
+async function moveBranch(
+  project: ProjectRef,
+  call: () => Promise<GitMoveResult>
+): Promise<string | null> {
+  const state = gitStateOf(project.id)
+  if (state.busy) return 'Another git operation is running.'
+  state.busy = 'branch'
+  const moved = await call()
+  state.busy = null
+  if (moved.ok) state.error = moved.notice ?? null
+  await refreshGit(project)
+  return moved.ok ? null : moved.error
+}
+
+export function switchBranch(
   project: ProjectRef,
   name: string,
   remote: boolean
 ): Promise<string | null> {
-  const switched = await window.api.git.switchBranch(project.path, name, remote)
-  await refreshGit(project)
-  return switched.ok ? null : switched.error
+  return moveBranch(project, () => window.api.git.switchBranch(project.path, name, remote))
+}
+
+export function createBranch(
+  project: ProjectRef,
+  name: string,
+  base: string
+): Promise<string | null> {
+  return moveBranch(project, () => window.api.git.createBranch(project.path, name, base))
 }
 
 // Runs one stash action and refreshes. Returns git's error text, or null on success.

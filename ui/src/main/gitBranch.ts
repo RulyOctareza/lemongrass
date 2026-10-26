@@ -2,15 +2,13 @@
 // Copyright (C) 2026 Faizal Alviansyah
 
 import { ipcMain } from 'electron'
-import { WRITE_TIMEOUT_MS, errorText, readEnv, repoRoot, run } from './gitRun'
-import type { GitActionResult, GitBranches } from '../preload/types'
+import { execFile } from 'child_process'
+import { WRITE_TIMEOUT_MS, errorText, readEnv, repoRoot, run, stoppedOperation } from './gitRun'
+import { isValidNewBranch, moveBranch, type BranchMove, type GitRunner } from './gitMove'
+import type { GitBranches, GitMoveResult } from '../preload/types'
 
 const notARepo = 'This project is not a git repository.'
-
-// A name that starts with a dash would be read by git as an option.
-function isBranchName(name: string): boolean {
-  return name.length > 0 && !name.startsWith('-') && !name.includes('\0')
-}
+const LGRASSD_TIMEOUT_MS = 5_000
 
 async function branches(projectPath: string): Promise<GitBranches> {
   const root = await repoRoot(projectPath)
@@ -34,34 +32,65 @@ async function branches(projectPath: string): Promise<GitBranches> {
   return result
 }
 
-async function switchBranch(
-  projectPath: string,
-  name: string,
-  remote: boolean
-): Promise<GitActionResult> {
-  const root = await repoRoot(projectPath)
-  if (!root) return { ok: false, error: notARepo }
-  if (!isBranchName(name)) return { ok: false, error: 'That is not a valid branch name.' }
-
-  // The panel greys the switcher out too, but the index can change between a poll and the click.
-  const staged = await run(root, ['diff', '--cached', '--quiet'], { env: readEnv })
-  if (staged.code === 1) {
-    return {
-      ok: false,
-      error: 'There are staged changes. Commit or unstage them before switching.'
-    }
+function runner(root: string): GitRunner {
+  return {
+    read: (args) => run(root, args, { env: readEnv }),
+    write: (args) => run(root, args, { timeout: WRITE_TIMEOUT_MS })
   }
-  if (staged.code !== 0) return { ok: false, error: errorText(staged) }
-
-  const args = remote ? ['switch', '--track', name] : ['switch', name]
-  const result = await run(root, args, { timeout: WRITE_TIMEOUT_MS })
-  if (result.code !== 0) return { ok: false, error: errorText(result) }
-  return { ok: true }
 }
 
-export function registerGitBranchHandlers(): void {
+// The panel greys the switcher out too, but the tree can change between a poll and the click.
+async function blockedReason(root: string): Promise<string | null> {
+  const operation = await stoppedOperation(root)
+  if (operation) return `A ${operation} is stopped. Continue or abort it before switching branches.`
+  const conflicts = await run(root, ['diff', '--name-only', '--diff-filter=U'], { env: readEnv })
+  if (conflicts.code !== 0) return errorText(conflicts)
+  if (conflicts.stdout.trim()) return 'Resolve the conflicts before switching branches.'
+  return null
+}
+
+// Tells the project's recently active agent tabs that the branch moved. The move has already
+// happened, so a failure here is only logged.
+function notifyTabs(lgrassdPath: string | null, projectPath: string, moved: GitMoveResult): void {
+  if (!lgrassdPath || !moved.ok) return
+  execFile(
+    lgrassdPath,
+    ['branch', 'changed', moved.from, moved.to, moved.carry],
+    { cwd: projectPath, encoding: 'utf8', timeout: LGRASSD_TIMEOUT_MS },
+    (failure, _stdout, stderr) => {
+      if (failure) console.error('lgrassd branch changed failed:', stderr.trim() || failure)
+    }
+  )
+}
+
+async function move(
+  lgrassdPath: string | null,
+  projectPath: string,
+  branchMove: BranchMove
+): Promise<GitMoveResult> {
+  const root = await repoRoot(projectPath)
+  if (!root) return { ok: false, error: notARepo }
+  const blocked = await blockedReason(root)
+  if (blocked) return { ok: false, error: blocked }
+  const moved = await moveBranch(runner(root), branchMove)
+  notifyTabs(lgrassdPath, projectPath, moved)
+  return moved
+}
+
+async function branchNameValid(projectPath: string, name: string): Promise<boolean> {
+  const root = await repoRoot(projectPath)
+  return !!root && isValidNewBranch(runner(root), name)
+}
+
+export function registerGitBranchHandlers(lgrassdPath: string | null): void {
   ipcMain.handle('git:branches', (_event, projectPath: string) => branches(projectPath))
   ipcMain.handle('git:switchBranch', (_event, projectPath: string, name: string, remote: boolean) =>
-    switchBranch(projectPath, name, remote)
+    move(lgrassdPath, projectPath, { kind: 'switch', name, remote: remote === true })
+  )
+  ipcMain.handle('git:createBranch', (_event, projectPath: string, name: string, base: string) =>
+    move(lgrassdPath, projectPath, { kind: 'create', name, base })
+  )
+  ipcMain.handle('git:branchNameValid', (_event, projectPath: string, name: string) =>
+    branchNameValid(projectPath, name)
   )
 }

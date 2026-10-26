@@ -55,14 +55,10 @@ func (r *recorder) nudge(tab string) (bool, string, error) {
 		return false, "typing", nil
 	}
 	pending, _ := r.store.PendingForTab(tab)
-	if len(pending) == 0 {
+	if pending.Empty() {
 		return false, "nothing pending", nil
 	}
-	var ids []int64
-	for _, p := range pending {
-		ids = append(ids, p.RowIDs...)
-	}
-	r.store.MarkNotificationsSent(ids)
+	r.store.MarkNotificationsSent(pending.RowIDs())
 	r.texts = append(r.texts, r.store.NotificationText(pending))
 	return true, "", nil
 }
@@ -108,13 +104,33 @@ func TestDeliverTabTypesOneCoalescedNudgeAndMarksSent(t *testing.T) {
 			if rec.count() != 1 || !strings.Contains(rec.texts[0], ": 2 for you") || strings.Contains(rec.texts[0], "a !>>") {
 				t.Errorf("typed %q, want one coalesced nudge without content", rec.texts)
 			}
-			if pending, _ := store.PendingForTab(tab); len(pending) != 0 {
+			if pending, _ := store.PendingForTab(tab); !pending.Empty() {
 				t.Errorf("rows still pending after a nudge: %+v", pending)
 			}
 			if typed, _ := d.DeliverTab(tab); typed || rec.count() != 1 {
 				t.Error("a second delivery typed again")
 			}
 		})
+	}
+}
+
+// A branch row alone wakes an idle tab, and the typed line is the branch line.
+func TestDeliverTabTypesABranchNotice(t *testing.T) {
+	store := openStore(t)
+	store.SetTabState(tabCodex, session.StateIdle)
+	if _, err := store.InsertBranchChanged(session.BranchChange{From: "main", To: "fix-1", Carry: session.CarryCarried}, time.Now()); err != nil {
+		t.Fatalf("InsertBranchChanged: %v", err)
+	}
+	rec := &recorder{store: store}
+	d := &Deliverer{Store: store, Nudge: rec.nudge}
+	if typed, err := d.DeliverTab(tabCodex); err != nil || !typed {
+		t.Fatalf("DeliverTab = %v, %v, want a typed nudge", typed, err)
+	}
+	if rec.count() != 1 || !strings.HasPrefix(rec.texts[0], "[lg] branch changed from main to fix-1, uncommitted changes carried over.") {
+		t.Errorf("typed %q, want the branch line", rec.texts)
+	}
+	if typed, _ := d.DeliverTab(tabClaude); typed {
+		t.Error("a tab with no recent hook activity was nudged")
 	}
 }
 
@@ -129,7 +145,7 @@ func TestDeliverTabFailureCountsAnAttemptAndStaysPending(t *testing.T) {
 			if typed, _ := d.DeliverTab(tab); typed {
 				t.Error("reported a nudge that failed")
 			}
-			if pending, _ := store.PendingForTab(tab); len(pending) != 1 {
+			if pending, _ := store.PendingForTab(tab); len(pending.Threads) != 1 {
 				t.Fatalf("pending = %+v, want the row kept", pending)
 			}
 			if due, _ := store.TabsDueForRetry(MaxAttempts, Backoff, time.Now().Add(time.Hour)); len(due) != 1 {
@@ -149,7 +165,7 @@ func TestDeliverTabLeavesUnsupportedTabsPending(t *testing.T) {
 	if typed, err := d.DeliverTab(tabCodex); typed || err != nil || rec.count() != 0 {
 		t.Errorf("unsupported tab: typed %v, err %v, nudges %d, want none", typed, err, rec.count())
 	}
-	if pending, _ := store.PendingForTab(tabCodex); len(pending) != 1 {
+	if pending, _ := store.PendingForTab(tabCodex); len(pending.Threads) != 1 {
 		t.Error("unsupported row not left pending")
 	}
 }
@@ -166,7 +182,7 @@ func TestDeliverPendingNudgesBothSupportedVendors(t *testing.T) {
 		t.Fatalf("nudges = %d, want both supported tabs", rec.count())
 	}
 	for _, tab := range []string{tabClaude, tabCodex} {
-		if pending, err := store.PendingForTab(tab); err != nil || len(pending) != 0 {
+		if pending, err := store.PendingForTab(tab); err != nil || !pending.Empty() {
 			t.Errorf("tab %s pending = %+v, err = %v", tab, pending, err)
 		}
 	}
@@ -247,7 +263,7 @@ func TestRunScansAtStartAndRetriesDueRows(t *testing.T) {
 			if !ok || rec.count() != 1 {
 				t.Errorf("nudges after retry = %d, want 1", rec.count())
 			}
-			if pending, _ := store.PendingForTab(tab); len(pending) != 0 {
+			if pending, _ := store.PendingForTab(tab); !pending.Empty() {
 				t.Error("row still pending after a successful retry")
 			}
 		})

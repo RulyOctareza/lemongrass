@@ -183,8 +183,8 @@ async function lastMessage(projectPath: string): Promise<string> {
   return result.code === 0 ? result.stdout.trim() : ''
 }
 
-export function registerGitHandlers(): void {
-  registerGitBranchHandlers()
+export function registerGitHandlers(lgrassdPath: string | null): void {
+  registerGitBranchHandlers(lgrassdPath)
   registerGitRevisionHandlers()
   registerGitStashHandlers()
   registerGitSyncHandlers()
