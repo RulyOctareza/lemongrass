@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 export const GROUP_COLORS = ['coral', 'jade', 'sapphire', 'violet', 'fuchsia', 'teal'] as const
 
 export type GroupColor = (typeof GROUP_COLORS)[number]

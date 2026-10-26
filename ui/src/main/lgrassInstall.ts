@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { app } from 'electron'
 import { existsSync, copyFileSync, chmodSync, mkdirSync, renameSync, unlinkSync } from 'fs'
 import { join } from 'path'

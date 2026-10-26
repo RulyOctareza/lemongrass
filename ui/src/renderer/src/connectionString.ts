@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 export type EngineChoice = 'mysql' | 'mariadb' | 'postgres'
 
 // The vault reads this query parameter as a host alias from the human's own ssh config and dials

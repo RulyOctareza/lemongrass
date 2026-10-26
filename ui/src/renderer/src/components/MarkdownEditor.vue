@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { Editor, EditorContent, Node, mergeAttributes } from '@tiptap/vue-3'

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { execFile } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'

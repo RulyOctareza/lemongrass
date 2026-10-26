@@ -4,6 +4,7 @@
   "description": "Lemongrass -- agent orchestrator",
   "main": "./out/main/index.js",
   "author": "Faizal Alviansyah",
+  "license": "AGPL-3.0-only",
   "homepage": "https://github.com/faizalv/lemongrass",
   "scripts": {
     "format": "prettier --write .",

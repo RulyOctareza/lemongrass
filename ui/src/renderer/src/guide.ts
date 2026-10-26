@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Copy for the Guide dialog. Each card is one feature the user can find in
 // the app. Keep the copy plain, with no em dashes and no "--" anywhere, since
 // the app's UI text is held to that rule.

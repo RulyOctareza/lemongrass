@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // A request still in flight after this long is background traffic, such as a notification poll or a long
 // poll, and no longer holds an action back.
 export const BACKGROUND_AFTER_MS = 2_000

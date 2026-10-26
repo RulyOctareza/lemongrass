@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import type { Cdp } from './cdp'
 import { ACTIONABLE, axText, textOf, type AXNode, type DerivedName } from './snapshot'
 

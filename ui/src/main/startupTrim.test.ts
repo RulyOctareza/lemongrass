@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // @ts-ignore
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync } from 'node:fs'

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { execFile, type ExecFileException } from 'child_process'
 import { existsSync } from 'fs'
 import { join, resolve, sep } from 'path'

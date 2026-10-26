@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import * as net from 'net'

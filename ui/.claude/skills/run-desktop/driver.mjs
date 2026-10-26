@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // REPL driver for the lemongrass Electron shell. Run on a machine with a
 // real DISPLAY (this repo's dev sandbox has one -- no xvfb needed).
 // Designed for agents: wrap in tmux, send-keys commands, capture-pane output.

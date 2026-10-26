@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 export const MAX_REASON_CHARS = 500
 
 // A decline reason is human text the leader reads: whitespace is collapsed, the length is capped and an empty result is dropped.

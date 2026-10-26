@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package main
 
 // Set by the Electron app on each agent tab it spawns, so the id is inherited by everything the tab runs.

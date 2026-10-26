@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package threadsvc delivers thread notifications: the ledger-driven delivery routines and the socket service the agent process hosts.
 package threadsvc
 

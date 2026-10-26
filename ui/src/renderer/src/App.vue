@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import ProjectSidebar from './components/ProjectSidebar.vue'

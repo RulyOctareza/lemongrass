@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import { onMounted, ref, toRef } from 'vue'
 import { vaultSession, describeError } from '../../../vaultSession'

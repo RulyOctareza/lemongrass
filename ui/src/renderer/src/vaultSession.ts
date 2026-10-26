@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { reactive } from 'vue'
 
 const AUTO_LOCK_MS = 5 * 60 * 1000

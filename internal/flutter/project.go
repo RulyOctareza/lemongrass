@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package flutter runs a Flutter project's app and tests for lgrass flutter.
 package flutter
 

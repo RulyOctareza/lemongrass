@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package claudeaccount manages the Claude Code accounts that live beside the primary ~/.claude.
 package claudeaccount
 

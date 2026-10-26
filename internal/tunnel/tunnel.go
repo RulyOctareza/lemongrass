@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package tunnel opens the listener the node serves on, either through ngrok or on a loopback port.
 package tunnel
 

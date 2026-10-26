@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { click, selectorTarget, settle, type, waitSelector, waitUrl } from './actions'
 import type { Page } from './page'
 import { WebError, type WebLoginFields } from './types'

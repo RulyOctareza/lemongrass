@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { WebContentsView, session, type WebContents } from 'electron'
 import { Capture } from './capture'
 import type { Cdp } from './cdp'

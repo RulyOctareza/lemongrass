@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package how serves the step-by-step instructions behind `lgrass how <domain> <action>`, printing only the branch that applies.
 package how
 

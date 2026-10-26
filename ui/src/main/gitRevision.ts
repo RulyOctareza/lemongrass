@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { ipcMain } from 'electron'
 import { parseDiff, parseNameStatus } from './gitParse'
 import { errorText, isInside, readEnv, repoRoot, run } from './gitRun'

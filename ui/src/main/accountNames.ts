@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 export const ACCOUNT_NAME = /^[a-z0-9-]{1,32}$/
 
 // One entry per thinker, '' for primary; undefined means no choice was made and null means the list is unusable.

@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Faizal Alviansyah
+
 set -e
 case "$(uname -m)" in
   aarch64) arch=arm64 ;;
