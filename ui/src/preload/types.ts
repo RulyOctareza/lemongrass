@@ -48,6 +48,12 @@ export type ScratchpadImageResult =
 export type ImageFileResult =
   { bytes: Uint8Array; mime: string } | { error: 'too-large' | 'unsupported' | 'failed' }
 
+export type BiblioFileResult =
+  | { kind: 'text'; text: string }
+  | { kind: 'image'; modifiedMs: number }
+  | { kind: 'binary' }
+  | { kind: 'tooLarge' }
+
 export interface BiblioTree {
   toc: BiblioNode | null
   children: BiblioNode[]

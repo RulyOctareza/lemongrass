@@ -14,6 +14,20 @@ const props = defineProps<{
 
 const doc = computed(() => workspaceOf(props.project.id)?.docs[props.tab.path])
 
+const lineNumbers = computed(() => {
+  const count = doc.value?.kind === 'text' ? doc.value.content.split('\n').length : 0
+  return Array.from({ length: count }, (_, i) => i + 1).join('\n')
+})
+
+const imageSrc = computed(() => {
+  const query = new URLSearchParams({
+    p: props.project.path,
+    f: props.tab.path,
+    v: String(doc.value?.imageVersion ?? 0)
+  })
+  return `biblio-image://project/?${query}`
+})
+
 function edit(value: string): void {
   editDoc(props.project, props.tab.path, value)
 }
@@ -35,6 +49,17 @@ function edit(value: string): void {
       />
     </div>
     <TocViewer v-else-if="tab.path === 'books/toc.md'" :project="project" />
+    <div v-else-if="doc.kind === 'text'" class="file-text">
+      <pre class="gutter" aria-hidden="true">{{ lineNumbers }}</pre>
+      <pre class="code">{{ doc.content }}</pre>
+    </div>
+    <div v-else-if="doc.kind === 'image'" class="file-image">
+      <img :src="imageSrc" :alt="tab.path" />
+    </div>
+    <p v-else-if="doc.kind === 'binary'" class="empty">This file is binary and has no preview.</p>
+    <p v-else-if="doc.kind === 'tooLarge'" class="empty">
+      This file is over 2 MB and is not shown here.
+    </p>
     <div v-else class="reader">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="markdown-body" v-html="doc.html" />
@@ -67,6 +92,55 @@ function edit(value: string): void {
 .editor-wrap :deep(.markdown-editor) {
   flex: 1;
   max-width: none;
+}
+
+.file-text {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.file-text pre {
+  margin: 0;
+  padding: var(--space-4) var(--space-3);
+  font: inherit;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.gutter {
+  position: sticky;
+  left: 0;
+  flex: none;
+  text-align: right;
+  user-select: none;
+  color: var(--color-fg-muted);
+  background: var(--color-surface-1);
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.code {
+  flex: 1;
+  color: var(--color-fg-primary);
+}
+
+.file-image {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.file-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .reader {

@@ -15,6 +15,7 @@ import type {
   PtyExitPayload,
   Project,
   BiblioTree,
+  BiblioFileResult,
   ScratchpadImageResult,
   ImageFileResult,
   GitStatus,
@@ -115,6 +116,8 @@ const biblio = {
     ipcRenderer.invoke('biblio:tree', projectPath),
   read: (projectPath: string, relativePath: string): Promise<string | null> =>
     ipcRenderer.invoke('biblio:read', projectPath, relativePath),
+  readFile: (projectPath: string, relativePath: string): Promise<BiblioFileResult | null> =>
+    ipcRenderer.invoke('biblio:readFile', projectPath, relativePath),
   write: (projectPath: string, relativePath: string, content: string): Promise<boolean> =>
     ipcRenderer.invoke('biblio:write', projectPath, relativePath, content),
   createScratchpad: (projectPath: string, title: string, content: string): Promise<string | null> =>

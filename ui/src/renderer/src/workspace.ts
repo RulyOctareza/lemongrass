@@ -34,10 +34,17 @@ export interface ProjectRef {
   path: string
 }
 
+// Only markdown is rendered or edited; other scratchpad files open in a read-only viewer chosen by kind.
+export type DocKind = 'markdown' | 'text' | 'image' | 'binary' | 'tooLarge'
+
 export interface DocEntry {
+  kind: DocKind
   editable: boolean
+  // Raw markdown for editable docs, raw text for a text file.
   content: string
   html: string
+  // The image's mtime, appended to its URL so a rewritten image is not served from cache.
+  imageVersion: number
   status: 'loading' | 'ready' | 'missing'
   // Last content known to match disk, for editable docs -- lets flushDoc
   // tell an external write (another pane, a model) apart from its own echo.
@@ -88,8 +95,16 @@ export function workspaceOf(projectId: string): Workspace | undefined {
   return workspaces[projectId]
 }
 
+export function isMarkdownPath(path: string): boolean {
+  return path.endsWith('.md')
+}
+
 export function isEditablePath(path: string): boolean {
-  return path.startsWith('scratchpad/') && !path.startsWith('scratchpad/archive/')
+  return (
+    isMarkdownPath(path) &&
+    path.startsWith('scratchpad/') &&
+    !path.startsWith('scratchpad/archive/')
+  )
 }
 
 export function projectRelativePath(path: string): string {
@@ -255,7 +270,19 @@ async function loadDoc(project: ProjectRef, path: string, force = false): Promis
 
   const editable = isEditablePath(path)
   if (!existing) {
-    workspace.docs[path] = { editable, content: '', html: '', status: 'loading', baseline: '' }
+    workspace.docs[path] = {
+      kind: 'markdown',
+      editable,
+      content: '',
+      html: '',
+      imageVersion: 0,
+      status: 'loading',
+      baseline: ''
+    }
+  }
+  if (!isMarkdownPath(path)) {
+    await loadFile(project, path)
+    return
   }
   const raw = await window.api.biblio.read(project.path, path)
   const entry = workspaces[project.id]?.docs[path]
@@ -268,6 +295,20 @@ async function loadDoc(project: ProjectRef, path: string, force = false): Promis
     entry.content = raw
     entry.baseline = raw
   } else entry.html = await marked.parse(raw)
+  entry.status = 'ready'
+}
+
+async function loadFile(project: ProjectRef, path: string): Promise<void> {
+  const result = await window.api.biblio.readFile(project.path, path)
+  const entry = workspaces[project.id]?.docs[path]
+  if (!entry) return
+  if (result === null) {
+    entry.status = 'missing'
+    return
+  }
+  entry.kind = result.kind
+  entry.content = result.kind === 'text' ? result.text : ''
+  entry.imageVersion = result.kind === 'image' ? result.modifiedMs : 0
   entry.status = 'ready'
 }
 

@@ -1,10 +1,13 @@
 import { ipcMain, net, protocol, WebContents } from 'electron'
 import { pathToFileURL } from 'url'
 import {
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  readSync,
   realpathSync,
   renameSync,
   statSync,
@@ -17,6 +20,8 @@ import { dirname, extname, join, posix, relative, resolve, sep } from 'path'
 const IMAGES_DIR = 'images'
 const IMAGE_SCHEME = 'biblio-image'
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_TEXT_BYTES = 2 * 1024 * 1024
+const BINARY_SNIFF_BYTES = 8 * 1024
 const IMAGE_EXTENSIONS: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -33,6 +38,12 @@ export interface BiblioNode {
   modifiedMs?: number
   children?: BiblioNode[]
 }
+
+export type BiblioFileResult =
+  | { kind: 'text'; text: string }
+  | { kind: 'image'; modifiedMs: number }
+  | { kind: 'binary' }
+  | { kind: 'tooLarge' }
 
 export interface BiblioTree {
   // books/toc.md, pulled out of the normal books/ listing so it can be
@@ -84,8 +95,10 @@ function walk(dir: string, relativeTo: string): BiblioNode[] {
   const parent = relative(relativeTo, dir)
   const inBooks = parent.split(sep)[0] === 'books'
   const newestFirst = parent === 'scratchpad' || parent === join('scratchpad', ARCHIVE_DIR)
+  // A task folder holds whatever files the work needs; the other tiers are markdown-only by convention.
+  const anyFile = parent.split(sep)[0] === 'scratchpad'
   const entries = readdirSync(dir, { withFileTypes: true })
-    .filter((e) => (e.isDirectory() && e.name !== IMAGES_DIR) || e.name.endsWith('.md'))
+    .filter((e) => (e.isDirectory() ? e.name !== IMAGES_DIR : anyFile || e.name.endsWith('.md')))
     .sort((a, b) => {
       if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1
       if (a.isDirectory() && newestFirst) {
@@ -128,14 +141,13 @@ export function registerBiblioImageScheme(): void {
   ])
 }
 
+function isImageFile(target: string): boolean {
+  const extension = extname(target).toLowerCase()
+  return extension === '.jpeg' || Object.values(IMAGE_EXTENSIONS).includes(extension)
+}
+
 function isScratchpadImage(root: string, target: string): boolean {
-  const relativeParts = relative(root, target).split(sep)
-  return (
-    relativeParts[0] === 'scratchpad' &&
-    relativeParts.length >= 4 &&
-    relativeParts[2] === IMAGES_DIR &&
-    Object.values(IMAGE_EXTENSIONS).includes(extname(target).toLowerCase())
-  )
+  return relative(root, target).split(sep)[0] === 'scratchpad' && isImageFile(target)
 }
 
 function handleImageRequest(request: Request): Response | Promise<Response> {
@@ -279,6 +291,38 @@ export function registerBiblioHandlers(getSender: () => WebContents | undefined)
         const target = resolveInBiblio(root, relativePath)
         if (!target || !target.endsWith('.md')) return null
         return readFileSync(target, 'utf-8')
+      } catch {
+        return null
+      }
+    }
+  )
+
+  // Reads any scratchpad file for the read-only viewer. Text is told apart from binary by a NUL byte or invalid UTF-8 in the first 8 KB.
+  ipcMain.handle(
+    'biblio:readFile',
+    (_event, projectPath: string, relativePath: string): BiblioFileResult | null => {
+      try {
+        const root = realpathSync(join(projectPath, 'biblio'))
+        const target = resolveInBiblio(root, relativePath)
+        if (!target || relative(root, target).split(sep)[0] !== 'scratchpad') return null
+        const stats = statSync(target)
+        if (!stats.isFile()) return null
+        if (isImageFile(target)) return { kind: 'image', modifiedMs: stats.mtimeMs }
+        const head = Buffer.alloc(Math.min(stats.size, BINARY_SNIFF_BYTES))
+        const fd = openSync(target, 'r')
+        try {
+          readSync(fd, head, 0, head.length, 0)
+        } finally {
+          closeSync(fd)
+        }
+        if (head.includes(0)) return { kind: 'binary' }
+        try {
+          new TextDecoder('utf-8', { fatal: true }).decode(head, { stream: true })
+        } catch {
+          return { kind: 'binary' }
+        }
+        if (stats.size > MAX_TEXT_BYTES) return { kind: 'tooLarge' }
+        return { kind: 'text', text: readFileSync(target, 'utf-8') }
       } catch {
         return null
       }

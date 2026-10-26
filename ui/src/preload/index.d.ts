@@ -14,6 +14,7 @@ import type {
   PtyExitPayload,
   Project,
   BiblioTree,
+  BiblioFileResult,
   ScratchpadImageResult,
   ImageFileResult,
   GitStatus,
@@ -115,6 +116,7 @@ interface Api {
   biblio: {
     tree: (projectPath: string) => Promise<BiblioTree | null>
     read: (projectPath: string, relativePath: string) => Promise<string | null>
+    readFile: (projectPath: string, relativePath: string) => Promise<BiblioFileResult | null>
     write: (projectPath: string, relativePath: string, content: string) => Promise<boolean>
     createScratchpad: (
       projectPath: string,

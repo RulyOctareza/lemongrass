@@ -59,6 +59,13 @@ const isArchivableScratchpadTask = computed((): boolean => {
   const segments = props.node.path.split('/')
   return segments.length === 2 && segments[0] === 'scratchpad' && segments[1] !== 'archive'
 })
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp)$/i
+
+const fileIcon = computed((): string => {
+  if (props.node.type !== 'file' || props.node.name.endsWith('.md')) return 'page'
+  return IMAGE_FILE.test(props.node.name) ? 'image' : 'code'
+})
 </script>
 
 <template>
@@ -81,8 +88,16 @@ const isArchivableScratchpadTask = computed((): boolean => {
       stroke-linecap="round"
       stroke-linejoin="round"
     >
-      <path d="M3 1.5h5l3 3v8H3z" />
-      <path d="M8 1.5v3h3" />
+      <template v-if="fileIcon === 'image'">
+        <rect x="1.5" y="2.5" width="11" height="9" rx="1" />
+        <circle cx="5" cy="5.5" r="1" />
+        <path d="M1.5 10l3.5-3 2.5 2 2-1.5 3 2.5" />
+      </template>
+      <template v-else>
+        <path d="M3 1.5h5l3 3v8H3z" />
+        <path d="M8 1.5v3h3" />
+        <path v-if="fileIcon === 'code'" d="M6 7.5 4.75 9 6 10.5M8 7.5 9.25 9 8 10.5" />
+      </template>
     </svg>
     <span class="label">{{ node.name.replace(/\.md$/, '') }}</span>
   </button>
