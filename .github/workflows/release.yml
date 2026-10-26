@@ -52,16 +52,14 @@ jobs:
         working-directory: ui/dist
         run: sha256sum lemongrass-*.x86_64.rpm > SHA256SUMS
 
+      # Uploads into the tag's release when one already exists and creates it otherwise, so a re-run or a release
+      # GitHub made for the tag does not fail the job. A tag with a prerelease part, such as v0.2.0-rc.1, is published
+      # as a prerelease, which GitHub's latest release endpoint skips, so installed apps are never offered one.
       - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        # A tag with a prerelease part, such as v0.2.0-rc.1, is published as a prerelease, which GitHub's latest
-        # release endpoint skips, so installed apps are never offered a release candidate.
-        run: |
-          prerelease=
-          case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            $prerelease \
-            ui/dist/lemongrass-*.x86_64.rpm ui/dist/SHA256SUMS
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            ui/dist/lemongrass-*.x86_64.rpm
+            ui/dist/SHA256SUMS
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
