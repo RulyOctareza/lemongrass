@@ -1,0 +1,20 @@
+# Fails a pull request, or a push to main, when a tracked source file has no license header.
+# The main branch ruleset requires this job, so a pull request cannot merge until it passes.
+name: License
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  license-check:
+    name: license-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check license headers
+        run: sh scripts/license-headers.sh --check
