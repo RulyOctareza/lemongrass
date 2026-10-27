@@ -49,8 +49,6 @@ func TestClassifyQueryMySQLIntrospect(t *testing.T) {
 		{"DESCRIBE employees", []string{"employees"}},
 		{"DESC employees", []string{"employees"}},
 		{"EXPLAIN employees", nil},
-		{"EXPLAIN WITH x AS (SELECT 1) SELECT * FROM x", nil},
-		{"EXPLAIN (SELECT * FROM employees)", nil},
 	}
 	for _, tt := range tests {
 		got, err := ClassifyQuery(EngineMySQL, tt.sql)
@@ -389,6 +387,64 @@ func TestClassifyQueryPostgresDeleteRejectsMissingWhere(t *testing.T) {
 func TestClassifyQueryPostgresRejectsMultipleStatements(t *testing.T) {
 	if _, err := ClassifyQuery(EnginePostgres, "SELECT 1; DROP TABLE employees"); err == nil {
 		t.Error("expected stacked statements to be rejected")
+	}
+}
+
+func TestClassifyQueryPostgresReadRejectsWrite(t *testing.T) {
+	for _, sql := range []string{
+		"WITH d AS (DELETE FROM employees WHERE id = 1 RETURNING *) SELECT * FROM d",
+		"WITH u AS (UPDATE salaries SET amount = 0 WHERE id = 1 RETURNING *) SELECT 1",
+		"WITH i AS (INSERT INTO salaries (amount) VALUES (1) RETURNING *) SELECT * FROM employees",
+		"SELECT * FROM employees WHERE id IN (WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING emp_id) SELECT emp_id FROM d)",
+		"SELECT * INTO copy FROM employees",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errPostgresReadWrites) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errPostgresReadWrites", sql, err)
+		}
+	}
+}
+
+func TestClassifyQueryPostgresReadRejectsRowLocks(t *testing.T) {
+	for _, sql := range []string{
+		"SELECT * FROM employees FOR UPDATE",
+		"SELECT * FROM employees FOR SHARE",
+		"SELECT * FROM employees FOR NO KEY UPDATE SKIP LOCKED",
+		"SELECT * FROM employees WHERE id IN (SELECT emp_id FROM salaries FOR KEY SHARE)",
+		"EXPLAIN ANALYZE SELECT * FROM employees FOR UPDATE",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errPostgresReadLocks) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errPostgresReadLocks", sql, err)
+		}
+	}
+}
+
+func TestClassifyQueryPostgresWriteRejectsNestedWrite(t *testing.T) {
+	for _, sql := range []string{
+		"WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING *) INSERT INTO employees SELECT * FROM d",
+		"WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING emp_id) UPDATE employees SET name = 'a' WHERE id IN (SELECT emp_id FROM d)",
+		"WITH u AS (UPDATE salaries SET amount = 0 WHERE id = 1 RETURNING emp_id) DELETE FROM employees WHERE id IN (SELECT emp_id FROM u)",
+		"WITH i AS (INSERT INTO salaries (amount) VALUES (1) RETURNING id) INSERT INTO employees (id) SELECT id FROM i",
+		"INSERT INTO employees (id) SELECT emp_id FROM salaries WHERE emp_id IN (WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING emp_id) SELECT emp_id FROM d)",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errPostgresNestedWrite) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errPostgresNestedWrite", sql, err)
+		}
+	}
+}
+
+func TestClassifyQueryPostgresRejectsUnsupportedStatements(t *testing.T) {
+	for _, sql := range []string{
+		"CREATE TABLE copy AS SELECT * FROM employees",
+		"MERGE INTO employees e USING salaries s ON e.id = s.id WHEN MATCHED THEN DELETE",
+		"CALL do_something()",
+		"DO $$ BEGIN DELETE FROM salaries; END $$",
+		"COPY employees TO STDOUT",
+		"SET search_path = public, pg_catalog",
+		"LOCK TABLE employees",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); err == nil {
+			t.Errorf("ClassifyQuery(%q): expected rejection, got nil error", sql)
+		}
 	}
 }
 

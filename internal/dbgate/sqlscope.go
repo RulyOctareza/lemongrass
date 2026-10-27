@@ -40,6 +40,15 @@ type Statement struct {
 	WriteTables []string
 	// ListsTables marks a SHOW TABLES-shaped statement, whose result rows name every table in the database rather than one this Statement itself references.
 	ListsTables bool
+	// Catalog holds the names whose resolution depends on objects in the database, looked up in the same transaction before the statement runs.
+	Catalog CatalogNames
+}
+
+// CatalogNames lists what a statement could resolve to a user object the parser cannot see: called functions on both engines, plus attribute-notation names and operator symbols on Postgres.
+type CatalogNames struct {
+	Functions  []string
+	Attributes []string
+	Operators  []string
 }
 
 // ClassifyQuery accepts exactly one statement of a supported read-only kind, rejecting stacked statements outright rather than truncating to the first.
@@ -59,6 +68,9 @@ func ClassifyQuery(engine Engine, sqlText string) (Statement, error) {
 }
 
 func classifyMySQL(sqlText string) (Statement, error) {
+	if err := checkMySQLComments(sqlText); err != nil {
+		return Statement{}, err
+	}
 	pieces, err := sqlparser.SplitStatementToPieces(sqlText)
 	if err != nil {
 		return Statement{}, fmt.Errorf("dbgate: splitting SQL: %w", err)
@@ -84,12 +96,15 @@ func classifyMySQL(sqlText string) (Statement, error) {
 
 	switch st := stmt.(type) {
 	case *sqlparser.Select, *sqlparser.Union, *sqlparser.ParenSelect:
-		tables := mysqlTables(stmt)
-		if err := checkRestrictedColumns(EngineMySQL, tables, mysqlColumnRefs(stmt)); err != nil {
+		return classifyMySQLRead(KindSelect, stmts[0], stmt)
+	case *sqlparser.Show:
+		if filter := mysqlShowTablesFilter(st); filter != nil {
+			return classifyMySQLShowTablesFilter(stmts[0], filter)
+		}
+		// Show.walkSubtree visits nothing, and most SHOW forms keep their tail only as text.
+		if err := checkMySQLOpaque(stmts[0]); err != nil {
 			return Statement{}, err
 		}
-		return Statement{Kind: KindSelect, Tables: tables}, nil
-	case *sqlparser.Show:
 		if st.HasOnTable() {
 			return Statement{Kind: KindIntrospect, Tables: []string{st.OnTable.Name.String()}}, nil
 		}
@@ -98,32 +113,83 @@ func classifyMySQL(sqlText string) (Statement, error) {
 		}
 		return Statement{Kind: KindIntrospect, Tables: introspectTableFromText(stmts[0])}, nil
 	case *sqlparser.OtherRead:
+		if err := checkMySQLOpaque(stmts[0]); err != nil {
+			return Statement{}, err
+		}
 		return Statement{Kind: KindIntrospect, Tables: introspectTableFromText(stmts[0])}, nil
 	case *sqlparser.Insert:
-		return classifyMySQLInsert(st)
+		return classifyMySQLInsert(stmts[0], st)
 	case *sqlparser.Update:
-		return classifyMySQLUpdate(st)
+		return classifyMySQLUpdate(stmts[0], st)
 	case *sqlparser.Delete:
-		return classifyMySQLDelete(st)
+		return classifyMySQLDelete(stmts[0], st)
 	default:
 		return Statement{}, fmt.Errorf("dbgate: %T is not a supported statement", stmt)
 	}
 }
 
+// classifyMySQLRead checks a SELECT-shaped read, top-level or wrapped by EXPLAIN, and returns it as kind.
+func classifyMySQLRead(kind Kind, sqlText string, stmt sqlparser.SQLNode) (Statement, error) {
+	if err := checkMySQLReadLocks(stmt); err != nil {
+		return Statement{}, err
+	}
+	calls, err := mysqlCalls(sqlText, stmt)
+	if err != nil {
+		return Statement{}, err
+	}
+	tables := mysqlTables(stmt)
+	if err := checkRestrictedColumns(EngineMySQL, tables, mysqlColumnRefs(stmt)); err != nil {
+		return Statement{}, err
+	}
+	return Statement{Kind: kind, Tables: tables, Catalog: CatalogNames{Functions: calls}}, nil
+}
+
+// mysqlShowTablesFilter returns the parsed WHERE expression of SHOW TABLES, the one SHOW form whose filter the parser keeps as a tree.
+func mysqlShowTablesFilter(st *sqlparser.Show) sqlparser.Expr {
+	if st.ShowTablesOpt == nil || st.ShowTablesOpt.Filter == nil {
+		return nil
+	}
+	return st.ShowTablesOpt.Filter.Filter
+}
+
+// classifyMySQLShowTablesFilter checks a SHOW TABLES WHERE filter like a read, so a table its subquery names needs a grant and its calls the allowlist.
+func classifyMySQLShowTablesFilter(sqlText string, filter sqlparser.Expr) (Statement, error) {
+	if err := checkMySQLReadLocks(filter); err != nil {
+		return Statement{}, err
+	}
+	calls, err := mysqlCalls(sqlText, filter)
+	if err != nil {
+		return Statement{}, err
+	}
+	tables := mysqlTables(filter)
+	if err := checkRestrictedColumns(EngineMySQL, tables, mysqlColumnRefs(filter)); err != nil {
+		return Statement{}, err
+	}
+	return Statement{Kind: KindIntrospect, Tables: tables, ListsTables: true, Catalog: CatalogNames{Functions: calls}}, nil
+}
+
 // classifyMySQLInsert always writes exactly one table, the parser's own dedicated Table field rather than an AliasedTableExpr, so it isn't picked up by mysqlTables and is added to Tables separately.
-func classifyMySQLInsert(stmt *sqlparser.Insert) (Statement, error) {
+func classifyMySQLInsert(sqlText string, stmt *sqlparser.Insert) (Statement, error) {
+	calls, err := mysqlCalls(sqlText, stmt)
+	if err != nil {
+		return Statement{}, err
+	}
 	target := qualifiedTable(EngineMySQL, stmt.Table.Qualifier.String(), stmt.Table.Name.String())
 	tables := toSet(mysqlTables(stmt))
 	tables[target] = true
-	return Statement{Kind: KindInsert, Tables: sortedKeys(tables), WriteTables: []string{target}}, nil
+	return Statement{Kind: KindInsert, Tables: sortedKeys(tables), WriteTables: []string{target}, Catalog: CatalogNames{Functions: calls}}, nil
 }
 
-func classifyMySQLUpdate(stmt *sqlparser.Update) (Statement, error) {
+func classifyMySQLUpdate(sqlText string, stmt *sqlparser.Update) (Statement, error) {
 	if stmt.Where == nil {
 		return Statement{}, fmt.Errorf("dbgate: UPDATE without a WHERE clause is not allowed")
 	}
+	calls, err := mysqlCalls(sqlText, stmt)
+	if err != nil {
+		return Statement{}, err
+	}
 	tables := mysqlTables(stmt)
-	return Statement{Kind: KindUpdate, Tables: tables, WriteTables: mysqlUpdateWriteTables(stmt, tables)}, nil
+	return Statement{Kind: KindUpdate, Tables: tables, WriteTables: mysqlUpdateWriteTables(stmt, tables), Catalog: CatalogNames{Functions: calls}}, nil
 }
 
 // mysqlUpdateWriteTables resolves which of the update's tables are actually written to. A single-table update is unambiguous; a multi-table one (UPDATE a, b SET a.x = b.x ...) is resolved by tracing each SET column's table qualifier, alias or real name, back to a real table via mysqlTableAliases.
@@ -149,19 +215,24 @@ func mysqlUpdateWriteTables(stmt *sqlparser.Update, tables []string) []string {
 	return sortedKeys(seen)
 }
 
-func classifyMySQLDelete(stmt *sqlparser.Delete) (Statement, error) {
+func classifyMySQLDelete(sqlText string, stmt *sqlparser.Delete) (Statement, error) {
 	if stmt.Where == nil {
 		return Statement{}, fmt.Errorf("dbgate: DELETE without a WHERE clause is not allowed")
 	}
+	calls, err := mysqlCalls(sqlText, stmt)
+	if err != nil {
+		return Statement{}, err
+	}
+	catalog := CatalogNames{Functions: calls}
 	tables := mysqlTables(stmt)
 	if len(stmt.Targets) == 0 {
-		return Statement{Kind: KindDelete, Tables: tables, WriteTables: tables}, nil
+		return Statement{Kind: KindDelete, Tables: tables, WriteTables: tables, Catalog: catalog}, nil
 	}
 	seen := make(map[string]bool)
 	for _, tn := range stmt.Targets {
 		seen[qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String())] = true
 	}
-	return Statement{Kind: KindDelete, Tables: tables, WriteTables: sortedKeys(seen)}, nil
+	return Statement{Kind: KindDelete, Tables: tables, WriteTables: sortedKeys(seen), Catalog: catalog}, nil
 }
 
 // mysqlTableAliases maps each table's alias, and its real name, to its qualified table name, for resolving a SET column's qualifier in a multi-table UPDATE back to a real table.
@@ -192,7 +263,7 @@ var (
 	mysqlSelectLeadRegex = regexp.MustCompile(`(?i)^(?:SELECT\b|\()`)
 )
 
-// classifyMySQLExplain parses the SELECT an EXPLAIN wraps so it is checked as explain on that SELECT's own tables. ok is false for any form it doesn't recognize, or a wrapped query this parser can't read, leaving it to the table-less introspect path.
+// classifyMySQLExplain parses the SELECT an EXPLAIN wraps so it is checked as explain on that SELECT's own tables. ok is false for any form it doesn't recognize, or a wrapped query this parser can't read, leaving it to the table-less introspect path, where checkMySQLOpaque refuses any such query that holds an expression.
 func classifyMySQLExplain(sqlText string) (Statement, bool, error) {
 	m := mysqlExplainRegex.FindStringSubmatch(sqlText)
 	if m == nil {
@@ -214,11 +285,11 @@ func classifyMySQLExplain(sqlText string) (Statement, bool, error) {
 	default:
 		return Statement{}, false, nil
 	}
-	tables := mysqlTables(stmt)
-	if err := checkRestrictedColumns(EngineMySQL, tables, mysqlColumnRefs(stmt)); err != nil {
+	read, err := classifyMySQLRead(KindExplain, inner, stmt)
+	if err != nil {
 		return Statement{}, false, err
 	}
-	return Statement{Kind: KindExplain, Tables: tables}, true, nil
+	return read, true, nil
 }
 
 // introspectTableRegex recovers the table this parser force_eofs out of DESCRIBE/DESC and SHOW CREATE TABLE/COLUMNS/FIELDS/INDEX/INDEXES/KEYS.
@@ -316,8 +387,24 @@ func classifyPostgres(sqlText string) (Statement, error) {
 	if err != nil {
 		return Statement{}, err
 	}
-	if kind == KindExplain && postgresWrites(parsed) {
-		return Statement{}, errExplainNotReadOnly
+	writes := postgresWriteCount(parsed)
+	if writeRelation == nil {
+		if writes > 0 && kind == KindExplain {
+			return Statement{}, errExplainNotReadOnly
+		}
+		if writes > 0 {
+			return Statement{}, errPostgresReadWrites
+		}
+		if postgresLocks(parsed) {
+			return Statement{}, errPostgresReadLocks
+		}
+	} else if writes != 1 {
+		// Only the top-level statement's own relation reaches WriteTables, so a nested write would change a table no scope check sees.
+		return Statement{}, errPostgresNestedWrite
+	}
+	catalog, err := checkPostgresCalls(parsed)
+	if err != nil {
+		return Statement{}, err
 	}
 	tables := postgresTables(parsed)
 
@@ -326,13 +413,13 @@ func classifyPostgres(sqlText string) (Statement, error) {
 		write := qualifiedTable(EnginePostgres, writeRelation.Schemaname, writeRelation.Relname)
 		all := toSet(tables)
 		all[write] = true
-		return Statement{Kind: kind, Tables: sortedKeys(all), WriteTables: []string{write}}, nil
+		return Statement{Kind: kind, Tables: sortedKeys(all), WriteTables: []string{write}, Catalog: catalog}, nil
 	}
 
 	if err := checkRestrictedColumns(EnginePostgres, tables, postgresColumnRefs(parsed)); err != nil {
 		return Statement{}, err
 	}
-	return Statement{Kind: kind, Tables: tables}, nil
+	return Statement{Kind: kind, Tables: tables, Catalog: catalog}, nil
 }
 
 func postgresJSON(sqlText string) (any, error) {
@@ -347,12 +434,29 @@ func postgresJSON(sqlText string) (any, error) {
 	return tree, nil
 }
 
-// postgresWrites reports whether a SELECT's tree writes anywhere, through a data-modifying CTE or SELECT INTO, neither of which postgresTables sees as a table.
-func postgresWrites(tree any) bool {
-	found := false
+var (
+	errPostgresReadWrites  = errors.New("dbgate: a read may not write, through a data-modifying WITH or SELECT INTO")
+	errPostgresReadLocks   = errors.New("dbgate: a read may not lock rows with FOR UPDATE or FOR SHARE")
+	errPostgresNestedWrite = errors.New("dbgate: a write statement may not hold another write, such as a data-modifying WITH")
+)
+
+// postgresWriteCount counts every write in the tree, the top-level statement included, since a data-modifying CTE or SELECT INTO writes through a relation postgresTables never sees.
+func postgresWriteCount(tree any) int {
+	n := 0
 	walkJSON(tree, func(key string, _ any) {
 		switch key {
 		case "InsertStmt", "UpdateStmt", "DeleteStmt", "MergeStmt", "intoClause":
+			n++
+		}
+	})
+	return n
+}
+
+// postgresLocks reports whether any SELECT in the tree takes row locks with FOR UPDATE/SHARE.
+func postgresLocks(tree any) bool {
+	found := false
+	walkJSON(tree, func(key string, _ any) {
+		if key == "lockingClause" || key == "LockingClause" {
 			found = true
 		}
 	})

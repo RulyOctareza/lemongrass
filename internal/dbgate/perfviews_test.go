@@ -13,16 +13,17 @@ import (
 
 const digestTable = "performance_schema.events_statements_summary_by_digest"
 
-func TestClassifyQueryStripsNonSystemQualifier(t *testing.T) {
+func TestClassifyQueryKeepsNonSystemQualifier(t *testing.T) {
 	cases := []struct {
 		engine Engine
 		sql    string
 		tables []string
 	}{
-		{EngineMySQL, "SELECT * FROM otherdb.orders", []string{"orders"}},
-		{EngineMySQL, "SELECT * FROM `otherdb`.`orders` o JOIN salaries s ON o.id = s.oid", []string{"orders", "salaries"}},
-		{EnginePostgres, "SELECT * FROM public.orders", []string{"orders"}},
-		{EnginePostgres, "SELECT * FROM otherschema.orders", []string{"orders"}},
+		{EngineMySQL, "SELECT * FROM otherdb.orders", []string{"otherdb.orders"}},
+		{EngineMySQL, "SELECT * FROM `otherdb`.`orders` o JOIN salaries s ON o.id = s.oid", []string{"otherdb.orders", "salaries"}},
+		{EnginePostgres, "SELECT * FROM public.orders", []string{"public.orders"}},
+		{EnginePostgres, "SELECT * FROM otherschema.orders", []string{"otherschema.orders"}},
+		{EnginePostgres, "INSERT INTO otherschema.orders (id) VALUES (1)", []string{"otherschema.orders"}},
 	}
 	for _, c := range cases {
 		got, err := ClassifyQuery(c.engine, c.sql)
@@ -151,7 +152,8 @@ func TestAllowStatementPerformanceGrant(t *testing.T) {
 		{"mysql user table", withGrant, EngineMySQL, "SELECT * FROM mysql.user", false},
 		{"information_schema", withGrant, EngineMySQL, "SELECT * FROM information_schema.tables", false},
 		{"bare name of a view is not the view", withGrant, EngineMySQL, "SELECT * FROM statement_analysis", false},
-		{"other db qualifier falls back to bare grant", withGrant, EngineMySQL, "SELECT * FROM otherdb.orders", true},
+		{"other db qualifier needs its own grant", withGrant, EngineMySQL, "SELECT * FROM otherdb.orders", false},
+		{"postgres other schema needs its own grant", withGrant, EnginePostgres, "SELECT * FROM otherschema.orders", false},
 		{"postgres bare view with grant", withGrant, EnginePostgres, "SELECT * FROM pg_stat_statements", true},
 		{"postgres bare view without grant", withoutGrant, EnginePostgres, "SELECT * FROM pg_stat_statements", false},
 		{"postgres pg_catalog view with grant", withGrant, EnginePostgres, "SELECT * FROM pg_catalog.pg_locks", true},

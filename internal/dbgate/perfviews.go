@@ -114,11 +114,14 @@ func perfViewRestricted(engine Engine, table string) ([]string, bool) {
 	return restricted, ok
 }
 
-// qualifiedTable builds a Statement table name, keeping the schema only for a system schema and stripping it from any other.
+// qualifiedTable builds a Statement table name. Any qualifier is kept, since stripping it would let a grant on a bare table reach a same-named table in another schema or database; a system schema is lowercased so it matches the perf-view allowlist, and any other qualifier needs a grant naming it exactly.
 func qualifiedTable(engine Engine, qualifier, name string) string {
 	q := strings.ToLower(qualifier)
 	if q != "" && systemSchemas[engine][q] {
 		return q + "." + strings.ToLower(name)
+	}
+	if qualifier != "" {
+		return qualifier + "." + name
 	}
 	return name
 }
