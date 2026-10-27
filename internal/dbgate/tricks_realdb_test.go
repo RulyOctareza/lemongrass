@@ -129,6 +129,47 @@ func runTrickSuite(t *testing.T, engine Engine, dsn string, tricks []trick) {
 		}
 	})
 
+	t.Run("statement time limit", func(t *testing.T) {
+		old := statementLimit
+		statementLimit = 2 * time.Second
+		t.Cleanup(func() { statementLimit = old })
+		id := channels.get(controlWrite)
+
+		cases := []struct {
+			name string
+			run  func(db *sql.DB) error
+		}{
+			{"long read", func(db *sql.DB) error {
+				_, err := runQuery(db, Statement{Engine: engine}, longSleepRead(engine))
+				return err
+			}},
+			{"long write", func(db *sql.DB) error {
+				_, err := svc.Gate.runWrite(id, "red-team", Statement{Engine: engine}, db, longSleepWrite(engine), false)
+				return err
+			}},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				// A fresh single-connection pool, from openDB so the MySQL killer is registered.
+				db := openSingleConn(t, dsn)
+				start := time.Now()
+				err := c.run(db)
+				elapsed := time.Since(start)
+				if err == nil || !strings.Contains(err.Error(), "dbgate: the statement ran past the") {
+					t.Fatalf("%s: got %v, want the statement-limit error", c.name, err)
+				}
+				// The server-side stop fires near statementLimit; running to the client backstop means it did not.
+				if elapsed > statementLimit+6*time.Second {
+					t.Errorf("%s ran %v, the server-side stop did not fire before the client backstop", c.name, elapsed)
+				}
+				// A killed connection is left so the next pooled query runs normally.
+				if _, err := runQuery(db, Statement{Engine: engine}, "SELECT 1"); err != nil {
+					t.Errorf("next query after %s failed: %v", c.name, err)
+				}
+			})
+		}
+	})
+
 	for _, db := range channels.pools() {
 		sessionUnchanged(t, db, engine, baseline)
 	}
@@ -389,6 +430,22 @@ func queryRow(t *testing.T, db *sql.DB, q string, n int) []string {
 		out[i] = v.String
 	}
 	return out
+}
+
+// longSleepRead is a read that runs well past the lowered statementLimit, run through runQuery with the classifier skipped since the allowlist bars the sleep functions.
+func longSleepRead(engine Engine) string {
+	if engine == EngineMySQL {
+		return "SELECT SLEEP(60)"
+	}
+	return "SELECT pg_sleep(60)"
+}
+
+// longSleepWrite is a write that runs past the limit, to prove the bound covers writes too and not only MySQL's SELECT-only max_execution_time.
+func longSleepWrite(engine Engine) string {
+	if engine == EngineMySQL {
+		return "UPDATE employees SET name = name WHERE id = 1 AND SLEEP(60) = 0"
+	}
+	return "UPDATE employees e SET name = name FROM pg_sleep(60) s WHERE e.id = 1"
 }
 
 // trickControl is an ordinary statement the vault must still run, so the suite proves it refuses tricks rather than everything.
