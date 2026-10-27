@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import type { VaultAppStep } from '../../../../../preload/types'
 
 export type AppStepAction = VaultAppStep['Action']
