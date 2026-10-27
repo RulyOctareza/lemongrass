@@ -155,6 +155,8 @@ var postgresTricks = []trick{
 	pgRead("functional notation of attribute", "SELECT leak(e) FROM employees e"),
 	pgRead("builtin overload on int", "SELECT lower(id) FROM employees").real(),
 	pgRead("user equality operator", "SELECT * FROM employees WHERE name = 1").real(),
+	pgRead("pg_catalog lower cannot reach the int overload", "SELECT pg_catalog.lower(id) FROM employees").real(),
+	pgRead("pg_catalog equality cannot reach the user operator", "SELECT * FROM employees WHERE name OPERATOR(pg_catalog.=) 1").real(),
 
 	// Quoting, case and unicode.
 	pgRead("quoted ungranted", `SELECT * FROM "secrets"`),
