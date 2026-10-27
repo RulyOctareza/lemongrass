@@ -127,9 +127,11 @@ func (c catalogFakeConnector) Driver() driver.Driver { return nil }
 
 type catalogFakeConn struct{ fake *catalogFake }
 
-func (c catalogFakeConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("not supported") }
-func (c catalogFakeConn) Close() error                        { return nil }
-func (c catalogFakeConn) Begin() (driver.Tx, error)           { return nil, errors.New("not supported") }
+func (c catalogFakeConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("not supported")
+}
+func (c catalogFakeConn) Close() error              { return nil }
+func (c catalogFakeConn) Begin() (driver.Tx, error) { return nil, errors.New("not supported") }
 
 func (c catalogFakeConn) QueryContext(_ context.Context, _ string, args []driver.NamedValue) (driver.Rows, error) {
 	c.fake.queries.Add(1)

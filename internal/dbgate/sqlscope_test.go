@@ -448,6 +448,12 @@ func TestClassifyQueryPostgresRejectsUnsupportedStatements(t *testing.T) {
 	}
 }
 
+func TestClassifyQueryPostgresRejectsNulByte(t *testing.T) {
+	if _, err := ClassifyQuery(EnginePostgres, "SELECT 1\x00; DELETE FROM employees WHERE id = 1"); err == nil {
+		t.Error("expected a NUL byte to be refused")
+	}
+}
+
 func TestClassifyQueryPostgresAllowsTrailingSemicolon(t *testing.T) {
 	got, err := ClassifyQuery(EnginePostgres, "SELECT * FROM employees;")
 	if err != nil {
