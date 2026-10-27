@@ -73,30 +73,28 @@ func openDB(connString string) (*sql.DB, error) {
 	}
 	switch engine {
 	case EngineMySQL:
-		dsn, err := mysqlDSN(connString)
+		cfg, err := mysqlConfig(connString)
 		if err != nil {
 			return nil, err
 		}
-		if sshAlias == "" {
-			return sql.Open("mysql", dsn)
+		if sshAlias != "" {
+			cfg.DialFunc = sshDialFunc(sshAlias)
 		}
-		cfg, err := mysql.ParseDSN(dsn)
-		if err != nil {
-			return nil, fmt.Errorf("dbgate: parsing connection string: %w", err)
-		}
-		cfg.DialFunc = sshDialFunc(sshAlias)
 		connector, err := mysql.NewConnector(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("dbgate: parsing connection string: %w", err)
 		}
+		if sshAlias == "" {
+			return sql.OpenDB(connector), nil
+		}
 		return sql.OpenDB(sshConnector{connector}), nil
 	case EnginePostgres:
-		if sshAlias == "" {
-			return sql.Open("pgx", connString)
-		}
-		cfg, err := pgx.ParseConfig(connString)
+		cfg, err := postgresConfig(connString)
 		if err != nil {
-			return nil, errors.New("dbgate: parsing connection string failed")
+			return nil, err
+		}
+		if sshAlias == "" {
+			return sql.OpenDB(stdlib.GetConnector(*cfg)), nil
 		}
 		cfg.DialFunc = sshDialFunc(sshAlias)
 		// The host name is resolved at the far end of the tunnel, where it may be the only place it exists.
@@ -107,6 +105,53 @@ func openDB(connString string) (*sql.DB, error) {
 	default:
 		return nil, fmt.Errorf("dbgate: unsupported engine %q", engine)
 	}
+}
+
+// mysqlLexModes are the sql_mode values that make MySQL tokenize strings or double quotes differently from the parser the classifier uses, ANSI and MariaDB's combination modes included because each implies ANSI_QUOTES and would bring it back.
+var mysqlLexModes = []string{"NO_BACKSLASH_ESCAPES", "ANSI_QUOTES", "ANSI", "ORACLE", "MSSQL", "DB2", "MAXDB", "POSTGRESQL"}
+
+// mysqlConfig parses connString and forces the settings the classifier relies on, whatever the stored string says: one statement per call, no client-side file reads, and a charset and sql_mode under which MySQL lexes text the way the parser does. The driver's own options (tls, timeouts, parseTime, loc and the like) are typed fields and are kept. Every other parameter would be sent as a raw SET of a session variable, so all of them are dropped.
+func mysqlConfig(connString string) (*mysql.Config, error) {
+	dsn, err := mysqlDSN(connString)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("dbgate: parsing connection string: %w", err)
+	}
+	cfg.MultiStatements = false
+	cfg.AllowAllFiles = false
+	// A multi-byte client charset such as gbk, big5 or sjis can swallow the backslash of an escaped quote into one character, ending the string where the parser doesn't.
+	if err := cfg.Apply(mysql.Charset("utf8mb4", "")); err != nil {
+		return nil, fmt.Errorf("dbgate: parsing connection string: %w", err)
+	}
+	cfg.Params = map[string]string{"sql_mode": mysqlSQLModeExpr()}
+	return cfg, nil
+}
+
+// mysqlSQLModeExpr keeps the session's own sql_mode, from the server, role or connection, minus mysqlLexModes. The driver sends it verbatim as SET sql_mode = <expr> on each new connection.
+func mysqlSQLModeExpr() string {
+	expr := "CONCAT(',', @@SESSION.sql_mode, ',')"
+	for _, mode := range mysqlLexModes {
+		expr = "REPLACE(" + expr + ", '," + mode + ",', ',')"
+	}
+	return "(SELECT TRIM(BOTH ',' FROM " + expr + "))"
+}
+
+// postgresConfig parses connString, never lets it pick the simple protocol, the only pgx mode that sends several statements in one call, and forces a UTF8 client encoding. The other exec modes are kept, since a pooler may need exec or describe_exec.
+func postgresConfig(connString string) (*pgx.ConnConfig, error) {
+	cfg, err := pgx.ParseConfig(connString)
+	if err != nil {
+		// pgx's parse error can quote the connection string, password included.
+		return nil, errors.New("dbgate: parsing connection string failed")
+	}
+	if cfg.DefaultQueryExecMode == pgx.QueryExecModeSimpleProtocol {
+		cfg.DefaultQueryExecMode = pgx.QueryExecModeCacheStatement
+	}
+	// A client encoding such as SJIS, BIG5 or GBK lets the server split bytes differently from the parser, so a quote it sees as escaped can end a string. A startup parameter also overrides a role or database default.
+	cfg.RuntimeParams["client_encoding"] = "UTF8"
+	return cfg, nil
 }
 
 // mysqlDSN translates a mysql://user:pass@host:port/db URL into go-sql-driver/mysql's own
@@ -185,10 +230,51 @@ type QueryResult struct {
 	Rows    [][]interface{} `json:"rows"`
 }
 
+// postgresTxGuard runs before the caller's SQL in every transaction. It puts pg_catalog first on search_path, so a role or database default can't resolve an allowlisted name like lower() to a user function, and turns standard_conforming_strings on, the setting the parser assumes, so backslashes in strings mean the same to both. Both are transaction-local and end with it.
+const postgresTxGuard = `SELECT set_config('search_path', concat_ws(', ', 'pg_catalog', NULLIF(current_setting('search_path'), '')), true), set_config('standard_conforming_strings', 'on', true)`
+
+// guardTx prepares tx for the caller's SQL on engine.
+func guardTx(tx *sql.Tx, engine Engine) error {
+	if engine != EnginePostgres {
+		return nil
+	}
+	if _, err := tx.Exec(postgresTxGuard); err != nil {
+		return fmt.Errorf("dbgate: preparing transaction: %s", describeDBError(err))
+	}
+	return nil
+}
+
+// prepareTx runs, inside tx and before the caller's SQL, the session pins and then the catalog check for the functions stmt calls.
+func prepareTx(tx *sql.Tx, stmt Statement) error {
+	if err := guardTx(tx, stmt.Engine); err != nil {
+		return err
+	}
+	switch stmt.Engine {
+	case EngineMySQL:
+		return checkMySQLCatalog(tx, stmt)
+	case EnginePostgres:
+		return checkPostgresCatalog(tx, stmt)
+	default:
+		return fmt.Errorf("dbgate: unsupported engine %q", stmt.Engine)
+	}
+}
+
 // runQuery executes sqlText against db and shapes the result. sqlText has already been
-// classified as a single read-only statement by ClassifyQuery before this is ever called.
-func runQuery(db *sql.DB, sqlText string) (QueryResult, error) {
-	rows, err := db.Query(sqlText)
+// classified by ClassifyQuery into stmt, a single read-only statement. It runs in a read-only
+// transaction that is always rolled back, so the database itself refuses a write the classifier
+// missed and nothing the statement did outlives the call.
+func runQuery(db *sql.DB, stmt Statement, sqlText string) (QueryResult, error) {
+	// BEGIN is the first round trip, so its failure is reported the same way a failed statement is.
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("dbgate: executing query: %s", describeDBError(err))
+	}
+	defer tx.Rollback()
+	if err := prepareTx(tx, stmt); err != nil {
+		return QueryResult{}, err
+	}
+
+	rows, err := tx.Query(sqlText)
 	if err != nil {
 		return QueryResult{}, fmt.Errorf("dbgate: executing query: %s", describeDBError(err))
 	}

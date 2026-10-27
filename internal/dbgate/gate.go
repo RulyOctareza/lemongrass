@@ -146,7 +146,7 @@ func (g *Gate) Query(id vault.ChannelID, sqlText string) (QueryResult, error) {
 	if err != nil {
 		return QueryResult{}, errors.New("dbgate: the stored connection could not be opened")
 	}
-	result, err := runQuery(db, sqlText)
+	result, err := runQuery(db, stmt, sqlText)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -203,6 +203,11 @@ func (g *Gate) runWrite(id vault.ChannelID, actor string, stmt Statement, db *sq
 	tx, err := db.Begin()
 	if err != nil {
 		return WriteResult{}, fmt.Errorf("dbgate: beginning transaction: %s", describeDBError(err))
+	}
+	// A refusal here writes no audit row, since the statement itself never ran.
+	if err := prepareTx(tx, stmt); err != nil {
+		tx.Rollback()
+		return WriteResult{}, err
 	}
 
 	res, execErr := tx.Exec(sqlText)
