@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { reactive } from 'vue'
 import type { WorkgroupInfo, WorkgroupPending, WorkspaceTab } from '../../preload/types'
 import type { ProjectRef } from './workspace'

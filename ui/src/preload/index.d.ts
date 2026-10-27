@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   AccountAddResult,
@@ -14,18 +17,22 @@ import type {
   PtyExitPayload,
   Project,
   BiblioTree,
+  BiblioFileResult,
   ScratchpadImageResult,
   ImageFileResult,
   GitStatus,
   GitDiff,
   GitActionResult,
+  GitMoveResult,
   GitBlame,
   GitBranches,
   GitCommitInfo,
   GitLogResult,
   GitLogSearchMode,
   GitResetPreview,
-  GitIncomingCommit,
+  GitDeleteResult,
+  GitPushResult,
+  GitUpdateResult,
   GitRevFiles,
   GitRevision,
   GitStash,
@@ -115,6 +122,7 @@ interface Api {
   biblio: {
     tree: (projectPath: string) => Promise<BiblioTree | null>
     read: (projectPath: string, relativePath: string) => Promise<string | null>
+    readFile: (projectPath: string, relativePath: string) => Promise<BiblioFileResult | null>
     write: (projectPath: string, relativePath: string, content: string) => Promise<boolean>
     createScratchpad: (
       projectPath: string,
@@ -141,10 +149,16 @@ interface Api {
     status: (projectPath: string) => Promise<GitStatus>
     diff: (projectPath: string, path: string, origPath?: string) => Promise<GitDiff>
     commit: (projectPath: string, message: string, paths?: string[]) => Promise<GitActionResult>
-    push: (projectPath: string) => Promise<GitActionResult>
+    push: (projectPath: string) => Promise<GitPushResult>
     lastMessage: (projectPath: string) => Promise<string>
     branches: (projectPath: string) => Promise<GitBranches>
-    switchBranch: (projectPath: string, name: string, remote: boolean) => Promise<GitActionResult>
+    switchBranch: (projectPath: string, name: string, remote: boolean) => Promise<GitMoveResult>
+    createBranch: (projectPath: string, name: string, base: string) => Promise<GitMoveResult>
+    branchNameValid: (projectPath: string, name: string) => Promise<boolean>
+    updateBranch: (projectPath: string, name: string, remote: boolean) => Promise<GitUpdateResult>
+    rebaseOntoUpstream: (projectPath: string, name: string) => Promise<GitActionResult>
+    deleteBranch: (projectPath: string, name: string) => Promise<GitDeleteResult>
+    commitsOnlyOn: (projectPath: string, name: string) => Promise<number | null>
     revFiles: (projectPath: string, rev: GitRevision) => Promise<GitRevFiles>
     revDiff: (
       projectPath: string,
@@ -164,12 +178,8 @@ interface Api {
       action: 'apply' | 'pop' | 'drop'
     ) => Promise<GitActionResult>
     fetch: (projectPath: string) => Promise<GitActionResult>
-    incoming: (projectPath: string, target: string) => Promise<GitIncomingCommit[]>
-    integrate: (
-      projectPath: string,
-      target: string,
-      mode: 'merge' | 'rebase'
-    ) => Promise<GitActionResult>
+    mergeCount: (projectPath: string, source: string) => Promise<number>
+    merge: (projectPath: string, source: string) => Promise<GitActionResult>
     finish: (projectPath: string, action: 'continue' | 'abort') => Promise<GitActionResult>
     log: (
       projectPath: string,

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 export type InputKind = 'reply' | 'enter' | 'typing'
 
 // Sequences xterm.js writes on the terminal's own behalf: focus in and out, cursor position and

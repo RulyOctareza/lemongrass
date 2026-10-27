@@ -1,11 +1,17 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import AppConfirmButton from './AppConfirmButton.vue'
 
 export interface MenuItem {
   key: string
   label: string
   disabled?: boolean
   title?: string
+  // A destructive item is an AppConfirmButton, selected only on its armed click.
+  confirm?: boolean
 }
 
 const props = defineProps<{
@@ -49,17 +55,30 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="context-menu" role="menu" :style="{ left: `${left}px`, top: `${top}px` }">
-    <button
-      v-for="item in items"
-      :key="item.key"
-      class="menu-item"
-      role="menuitem"
-      :disabled="item.disabled"
-      :title="item.title"
-      @click="emit('select', item.key)"
-    >
-      {{ item.label }}
-    </button>
+    <template v-for="item in items" :key="item.key">
+      <AppConfirmButton
+        v-if="item.confirm"
+        v-slot="{ armed }"
+        class="menu-item"
+        role="menuitem"
+        :disabled="item.disabled"
+        :title="item.title"
+        @confirm="emit('select', item.key)"
+      >
+        {{ item.label }}
+        <span class="menu-confirm-hint" :class="{ shown: armed }">Click again</span>
+      </AppConfirmButton>
+      <button
+        v-else
+        class="menu-item"
+        role="menuitem"
+        :disabled="item.disabled"
+        :title="item.title"
+        @click="emit('select', item.key)"
+      >
+        {{ item.label }}
+      </button>
+    </template>
   </div>
 </template>
 
@@ -90,8 +109,21 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.menu-item:hover:not(:disabled) {
-  background: var(--color-surface-2);
+/* The menu sits on --color-bg-elevated, which equals --color-surface-2 in the dark theme. */
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible:not(:disabled) {
+  background: var(--color-surface-3);
+}
+
+.menu-confirm-hint {
+  margin-left: auto;
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+  visibility: hidden;
+}
+
+.menu-confirm-hint.shown {
+  visibility: visible;
 }
 
 .menu-item:disabled {

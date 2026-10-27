@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 const SHAPES = {
   branch: [
@@ -5,6 +8,11 @@ const SHAPES = {
     'M4 9.5a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3',
     'M10.5 4a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3',
     'M4 4.5v5M10.5 7c0 2.2-2.2 2.9-6 3.2'
+  ],
+  newBranch: [
+    'M4 9.5a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3',
+    'M4 2v7.5M4 7.5c0-2.2 1.6-3.5 4-3.5',
+    'M11 2v4M9 4h4'
   ],
   switch: ['M2 4.5h9.5M9 2l2.5 2.5L9 7', 'M12 9.5H2.5M5 7L2.5 9.5 5 12'],
   open: [

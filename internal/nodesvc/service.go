@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package nodesvc runs the node daemon: it keeps the tunnel matching node.json and answers the app's reload and status calls on node.sock.
 package nodesvc
 

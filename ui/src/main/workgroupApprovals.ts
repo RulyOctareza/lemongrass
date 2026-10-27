@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { WorkgroupPending, WorkgroupPendingMember } from '../preload/types'

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 export function userHandle(name: string): string {
   return name.toLowerCase().split(/\s+/).filter(Boolean).join('_')
 }

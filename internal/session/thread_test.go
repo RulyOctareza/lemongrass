@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package session
 
 import (
@@ -259,10 +262,10 @@ func TestAdHocReplyReachesParticipantsWithoutAMention(t *testing.T) {
 	if _, err := store.PostMessage(tabB, id, "reply"); err != nil {
 		t.Fatalf("PostMessage: %v", err)
 	}
-	if pending, _ := store.PendingForTab(tabA); len(pending) != 1 || pending[0].Count() != 1 {
+	if pending, _ := threadsOf(store.PendingForTab(tabA)); len(pending) != 1 || pending[0].Count() != 1 {
 		t.Errorf("tabA pending = %+v, want the reply", pending)
 	}
-	if pending, _ := store.PendingForTab(tabC); len(pending) != 0 {
+	if pending, _ := threadsOf(store.PendingForTab(tabC)); len(pending) != 0 {
 		t.Errorf("tabC pending = %+v, want none, it never joined", pending)
 	}
 
@@ -272,7 +275,7 @@ func TestAdHocReplyReachesParticipantsWithoutAMention(t *testing.T) {
 	if _, err := store.PostMessage(tabB, id, "both of you"); err != nil {
 		t.Fatalf("PostMessage: %v", err)
 	}
-	if pending, _ := store.PendingForTab(tabC); len(pending) != 1 || pending[0].Count() != 2 {
+	if pending, _ := threadsOf(store.PendingForTab(tabC)); len(pending) != 1 || pending[0].Count() != 2 {
 		t.Errorf("tabC pending = %+v, want the mention and the later message", pending)
 	}
 }
@@ -287,7 +290,7 @@ func TestAdHocThreadSkipsClosedTabs(t *testing.T) {
 	if _, err := store.PostMessage(tabA, id, "anyone"); err != nil {
 		t.Fatalf("PostMessage: %v", err)
 	}
-	if pending, _ := store.PendingForTab(tabB); len(pending) != 1 || pending[0].Count() != 1 {
+	if pending, _ := threadsOf(store.PendingForTab(tabB)); len(pending) != 1 || pending[0].Count() != 1 {
 		t.Errorf("closed tab pending = %+v, want only the notification from before it closed", pending)
 	}
 }

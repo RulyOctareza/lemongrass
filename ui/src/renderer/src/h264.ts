@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 const SPS_NAL_TYPE = 7
 
 function hex(byte: number): string {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -17,12 +20,14 @@ import { setTrustBinary } from './projectTrust'
 import { registerWorkspaceLayoutHandlers } from './workspaceLayouts'
 import { registerBiblioHandlers, registerBiblioImageScheme, closeBiblioWatchers } from './biblio'
 import { registerGitHandlers } from './git'
+import { flushBranchNotices } from './gitBranch'
 import { registerDeviceHandlers, stopAllDevices } from './device'
 import { registerVaultHandlers } from './vault'
 import { registerNodeHandlers } from './node'
 import { registerWindowControlHandlers, wireMaximizeEvents } from './windowControls'
 import { installLgrass, installLgrassd, installLgrassconf } from './lgrassInstall'
 import { ensureDaemonsRunning, killDaemons } from './daemons'
+import { migrateStore } from './storeMigrate'
 import { startWorkgroupBridge, stopWorkgroupBridge } from './workgroupBridge'
 import { registerWorkgroupHandlers } from './workgroups'
 import { destroyAllInstances } from './web'
@@ -81,7 +86,7 @@ function createWindow(): void {
 
 registerBiblioImageScheme()
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.lemongrass.app')
 
   // Toggles DevTools with F12 in dev, blocks CommandOrControl+R in prod.
@@ -96,6 +101,8 @@ app.whenReady().then(() => {
   const lgrassdPath = installLgrassd()
   installLgrassconf()
   if (lgrassdPath) {
+    // Before the daemons and the window, so no daemon, hook or restored tab opens a store that still needs migrating.
+    await migrateStore(lgrassdPath)
     void ensureDaemonsRunning(lgrassdPath)
   }
 
@@ -106,7 +113,7 @@ app.whenReady().then(() => {
   registerWorkspaceLayoutHandlers()
   registerTabSessionHandlers(lgrassdPath)
   registerBiblioHandlers(() => mainWindow?.webContents)
-  registerGitHandlers()
+  registerGitHandlers(lgrassdPath)
   registerDeviceHandlers(() => mainWindow?.webContents)
   registerVaultHandlers()
   registerNodeHandlers()
@@ -123,7 +130,10 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => stopWorkgroupBridge())
+app.on('before-quit', () => {
+  stopWorkgroupBridge()
+  flushBranchNotices()
+})
 
 // macOS apps conventionally stay alive with no windows open until Cmd+Q.
 app.on('window-all-closed', () => {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package session
 
 import (
@@ -82,11 +85,12 @@ func TestMemberKeepsItsAssignmentAndSkills(t *testing.T) {
 }
 
 func TestMigrationAddsMemberColumnsToAnOlderTable(t *testing.T) {
-	store := openTestStore(t)
+	store := openVersion1Store(t)
 	dbPath := DBPath()
 	store.db.Exec(`DROP TABLE lg_group_members`)
 	store.db.Exec(`CREATE TABLE lg_group_members (group_id INTEGER NOT NULL, tab_id TEXT NOT NULL, role TEXT NOT NULL, label TEXT NOT NULL, vendor TEXT NOT NULL, PRIMARY KEY (group_id, tab_id))`)
 	store.db.Exec(`INSERT INTO lg_group_members VALUES (1, 'old-tab', 'thinker', 'x', 'claude')`)
+	store.db.Exec(`PRAGMA user_version = 0`)
 
 	reopened, err := Open(dbPath, testProjectID)
 	if err != nil {

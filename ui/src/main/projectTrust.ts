@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { execFile } from 'child_process'
 
 const TRUST_TIMEOUT_MS = 5_000

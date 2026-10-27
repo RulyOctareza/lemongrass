@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { ipcMain } from 'electron'
 import { registerGitBranchHandlers } from './gitBranch'
 import { registerGitHistoryHandlers } from './gitHistory'
@@ -17,7 +20,7 @@ import {
   topLevelCache,
   type RunResult
 } from './gitRun'
-import type { GitActionResult, GitDiff, GitStatus } from '../preload/types'
+import type { GitActionResult, GitDiff, GitPushResult, GitStatus } from '../preload/types'
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 const PUSH_TIMEOUT_MS = 60_000
@@ -145,7 +148,7 @@ async function commit(
   return { ok: true }
 }
 
-async function push(projectPath: string): Promise<GitActionResult> {
+async function push(projectPath: string): Promise<GitPushResult> {
   const root = await repoRoot(projectPath)
   if (!root) return { ok: false, error: 'This project is not a git repository.' }
 
@@ -169,7 +172,11 @@ async function push(projectPath: string): Promise<GitActionResult> {
     args = ['push', '-u', remote, 'HEAD']
   }
   const result = await run(root, args, { timeout: PUSH_TIMEOUT_MS, env: pushEnv })
-  if (result.code !== 0) return { ok: false, error: errorText(result) }
+  if (result.code !== 0) {
+    // git names a refusal for remote commits the branch lacks "non-fast-forward" or "fetch first".
+    const diverged = /\[rejected\].*\((non-fast-forward|fetch first)\)/.test(result.stderr)
+    return { ok: false, error: errorText(result), diverged }
+  }
   return { ok: true }
 }
 
@@ -180,8 +187,8 @@ async function lastMessage(projectPath: string): Promise<string> {
   return result.code === 0 ? result.stdout.trim() : ''
 }
 
-export function registerGitHandlers(): void {
-  registerGitBranchHandlers()
+export function registerGitHandlers(lgrassdPath: string | null): void {
+  registerGitBranchHandlers(lgrassdPath)
   registerGitRevisionHandlers()
   registerGitStashHandlers()
   registerGitSyncHandlers()

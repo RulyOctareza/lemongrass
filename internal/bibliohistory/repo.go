@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package bibliohistory keeps a private git history of a project's biblio folder, outside the project's own repository.
 package bibliohistory
 

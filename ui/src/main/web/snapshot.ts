@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Turns a CDP Accessibility.getFullAXTree result into a tree of the lines the model reads, and gives the
 // actionable elements refs so a later command can name one. Pure: no CDP, so it is testable on its own.
 // Printing the tree, in full or as changes, is in print.ts.

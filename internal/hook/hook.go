@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package hook
 
 import (
@@ -304,20 +307,16 @@ func hasBiblio(projectPath string) bool {
 	return err == nil && info.IsDir()
 }
 
-// Surfaces the tab's pending thread notifications once, other kinds included since the tab is already working, then marks them sent so the next tool call does not repeat them.
+// Surfaces the tab's pending notifications once, other kinds included since the tab is already working, then marks them sent so the next tool call does not repeat them.
 func notificationContext(store *session.Store, tab string) []string {
 	if tab == "" {
 		return nil
 	}
 	pending, err := store.SurfaceableForTab(tab)
-	if err != nil || len(pending) == 0 {
+	if err != nil || pending.Empty() {
 		return nil
 	}
-	var rowIDs []int64
-	for _, p := range pending {
-		rowIDs = append(rowIDs, p.RowIDs...)
-	}
-	store.MarkNotificationsSent(rowIDs)
+	store.MarkNotificationsSent(pending.RowIDs())
 	return []string{store.NotificationText(pending)}
 }
 

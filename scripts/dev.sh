@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Faizal Alviansyah
+
 # Builds the UI once into a snapshot directory and launches Electron from it, with no file watching.
 # A snapshot is never touched after it is created, so editing ui/src, or running this again, cannot
 # change an instance that is already running from an earlier one.

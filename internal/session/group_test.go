@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package session
 
 import (
@@ -63,7 +66,7 @@ func TestGroupThreadBroadcastsToEveryMemberExceptTheAuthor(t *testing.T) {
 		t.Fatalf("PostMessage: %v", err)
 	}
 	for tab, want := range map[string]int{tabA: 1, tabB: 0, tabC: 1} {
-		pending, _ := store.PendingForTab(tab)
+		pending, _ := threadsOf(store.PendingForTab(tab))
 		if len(pending) != want {
 			t.Errorf("tab %s pending threads = %d, want %d", TabLabel(tab), len(pending), want)
 		}
@@ -79,13 +82,13 @@ func TestGroupThreadAddsMentionedOutsidersToTheBroadcast(t *testing.T) {
 	if _, err := store.PostMessage(tabA, g.ThreadID, "fyi !>>eeeeeeee<<!"); err != nil {
 		t.Fatalf("PostMessage: %v", err)
 	}
-	if pending, _ := store.PendingForTab(outsider); len(pending) != 1 {
+	if pending, _ := threadsOf(store.PendingForTab(outsider)); len(pending) != 1 {
 		t.Errorf("mentioned outsider pending = %d, want 1", len(pending))
 	}
-	if pending, _ := store.PendingForTab(tabB); len(pending) != 0 {
+	if pending, _ := threadsOf(store.PendingForTab(tabB)); len(pending) != 0 {
 		t.Errorf("a member the message is not for would be woken: %+v", pending)
 	}
-	if pending, _ := store.SurfaceableForTab(tabB); len(pending) != 1 || pending[0].Other.Count != 1 {
+	if pending, _ := threadsOf(store.SurfaceableForTab(tabB)); len(pending) != 1 || pending[0].Other.Count != 1 {
 		t.Errorf("member surfaceable = %+v, want one other row", pending)
 	}
 }
@@ -160,8 +163,8 @@ func TestNotificationAndReadOutputShowGroupLabels(t *testing.T) {
 	g := newTestGroup(t, store)
 	store.PostMessage(tabB, g.ThreadID, "hello team")
 
-	pending, _ := store.PendingForTab(tabA)
-	if text := store.NotificationText(pending); !strings.Contains(text, "from reviewer") {
+	pending, _ := threadsOf(store.PendingForTab(tabA))
+	if text := store.NotificationText(Pending{Threads: pending}); !strings.Contains(text, "from reviewer") {
 		t.Errorf("notification = %q, want the sender's group label", text)
 	}
 	msgs, _, _ := store.ReadThread(g.ThreadID, 0, 10)

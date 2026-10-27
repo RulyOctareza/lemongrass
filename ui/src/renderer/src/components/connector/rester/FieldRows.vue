@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import AppButton from '../../AppButton.vue'
 import AppSegmented from '../../AppSegmented.vue'

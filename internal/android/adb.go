@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package android drives an Android device over adb for lgrass device and lgrass flutter.
 package android
 

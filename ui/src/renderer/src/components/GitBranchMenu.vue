@@ -1,25 +1,39 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
-import { switchBranch } from '../git'
+import { deleteBranch, gitStateOf, switchBranch, updateBranch } from '../git'
 import type { ProjectRef } from '../workspace'
-import type { GitBranches } from '../../../preload/types'
+import type { GitBranches, GitLocalBranch } from '../../../preload/types'
+import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
+import GitCounts from './GitCounts.vue'
 
-// With pickOnly the menu names a branch for the caller instead of checking it out.
+// blockedReason names why the current branch cannot be left now, such as a stopped rebase, which
+// blocks merge, checkout and deleting the checked-out branch. Update only fetches or fast-forwards,
+// so it stays available.
 const props = defineProps<{
   project: ProjectRef
-  pickOnly?: boolean
-  disabled?: boolean
-  title?: string
+  blockedReason: string | null
 }>()
 
-const emit = defineEmits<{
-  pick: [name: string]
-}>()
+// Main deletes the checked-out branch by moving to this one first, so it cannot be deleted while
+// it is checked out.
+const FALLBACK_BRANCH = 'main'
 
 const MENU_MIN_WIDTH = 220
 const MENU_MAX_HEIGHT = 320
 const GAP = 4
 
+interface Selected {
+  name: string
+  remote: boolean
+  local: GitLocalBranch | null
+  x: number
+  y: number
+}
+
+const state = computed(() => gitStateOf(props.project.id))
 const open = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
@@ -28,20 +42,99 @@ const position = ref({ left: 0, top: 0, width: MENU_MIN_WIDTH, maxHeight: MENU_M
 const branches = ref<GitBranches | null>(null)
 const filter = ref('')
 const error = ref<string | null>(null)
-const switching = ref(false)
+const notice = ref<string | null>(null)
+const selected = ref<Selected | null>(null)
+// Commits of the selected local branch that no other branch or remote has: undefined while
+// loading, null when git could not tell, in which case the delete itself reports why.
+const onlyHere = ref<number | null | undefined>(undefined)
+let onlyHereRequest = 0
 
 function matches(name: string): boolean {
   return name.toLowerCase().includes(filter.value.trim().toLowerCase())
 }
 
-const local = computed(() => (branches.value?.local ?? []).filter(matches))
+const local = computed(() => (branches.value?.local ?? []).filter((branch) => matches(branch.name)))
 
 // A remote branch that already has a local twin is reached through the local one.
 const remote = computed(() => {
-  const owned = new Set(props.pickOnly ? [] : (branches.value?.local ?? []))
+  const owned = new Set((branches.value?.local ?? []).map((branch) => branch.name))
   return (branches.value?.remote ?? []).filter(
     (name) => !owned.has(name.slice(name.indexOf('/') + 1)) && matches(name)
   )
+})
+
+const current = computed(() => branches.value?.current ?? null)
+
+function deleteBlockedReason(target: Selected): string | null {
+  const operation = state.value.status?.operation
+  if (operation) return `Continue or abort the ${operation} first`
+  if (target.name === current.value) {
+    if (target.name === FALLBACK_BRANCH) {
+      return `Deleting falls back to ${FALLBACK_BRANCH}. Check out another branch to delete it`
+    }
+    if (props.blockedReason) return props.blockedReason
+    if (!branches.value?.local.some((branch) => branch.name === FALLBACK_BRANCH)) {
+      return `There is no ${FALLBACK_BRANCH} branch to fall back to`
+    }
+  }
+  if (onlyHere.value === undefined) return 'Checking for commits found only on this branch'
+  if (onlyHere.value) {
+    const commits = onlyHere.value === 1 ? '1 commit exists' : `${onlyHere.value} commits exist`
+    return `${commits} only on ${target.name}. Merge or push them first`
+  }
+  return null
+}
+
+const actions = computed((): MenuItem[] => {
+  const target = selected.value
+  if (!target) return []
+  const busy = state.value.busy ? 'An operation is running' : null
+  const items: MenuItem[] = []
+  const noUpstream = !target.remote && !target.local?.upstream ? 'No upstream' : null
+  items.push({
+    key: 'update',
+    label: 'Update',
+    disabled: !!(busy ?? noUpstream),
+    title:
+      busy ??
+      noUpstream ??
+      (target.remote
+        ? `Fetch ${target.name}`
+        : `Fetch ${target.local?.upstream} and fast-forward ${target.name}`)
+  })
+  if (target.remote || target.name !== current.value) {
+    const mergeBlocked = busy ?? props.blockedReason ?? (current.value ? null : 'HEAD is detached')
+    items.push({
+      key: 'merge',
+      label: current.value ? `Merge into ${current.value}` : 'Merge',
+      disabled: !!mergeBlocked,
+      title: mergeBlocked ?? `Merge ${target.name} into ${current.value}`
+    })
+    const checkoutBlocked = busy ?? props.blockedReason
+    items.push({
+      key: 'checkout',
+      label: 'Checkout',
+      disabled: !!checkoutBlocked,
+      title:
+        checkoutBlocked ??
+        (target.remote ? 'Creates a local branch that tracks it' : `Check out ${target.name}`)
+    })
+  }
+  if (!target.remote) {
+    const deleteBlocked = busy ?? deleteBlockedReason(target)
+    items.push({
+      key: 'delete',
+      label: 'Delete',
+      confirm: true,
+      disabled: !!deleteBlocked,
+      title:
+        deleteBlocked ??
+        (target.name === current.value
+          ? `Switch to ${FALLBACK_BRANCH} with any uncommitted changes, then delete ${target.name}`
+          : `Delete ${target.name}`)
+    })
+  }
+  return items
 })
 
 // The git body scrolls and clips, so the menu is fixed to the window and opens upward when the
@@ -66,20 +159,27 @@ function place(): void {
   }
 }
 
+async function loadBranches(): Promise<void> {
+  branches.value = await window.api.git.branches(props.project.path)
+}
+
 async function show(): Promise<void> {
   filter.value = ''
   error.value = null
+  notice.value = null
   branches.value = null
+  closeActions()
   place()
   open.value = true
   addListeners()
   await nextTick()
   filterRef.value?.focus()
-  branches.value = await window.api.git.branches(props.project.path)
+  await loadBranches()
 }
 
 function hide(): void {
   open.value = false
+  closeActions()
   removeListeners()
 }
 
@@ -88,24 +188,59 @@ function toggle(): void {
   else void show()
 }
 
-async function pick(name: string, isRemote: boolean): Promise<void> {
-  if (switching.value) return
-  if (props.pickOnly) {
-    emit('pick', name)
-    hide()
-    return
+// The action menu opens beside the row, inside the branch menu so its clicks count as inside.
+function openActions(row: HTMLElement, name: string, isRemote: boolean): void {
+  const rect = row.getBoundingClientRect()
+  onlyHere.value = undefined
+  if (!isRemote) void loadOnlyHere(name)
+  selected.value = {
+    name,
+    remote: isRemote,
+    local: isRemote ? null : (branches.value?.local.find((branch) => branch.name === name) ?? null),
+    x: rect.right + GAP,
+    y: rect.top
   }
-  error.value = null
-  switching.value = true
-  error.value = await switchBranch(props.project, name, isRemote)
-  switching.value = false
-  if (!error.value) hide()
 }
 
-function pickFirst(): void {
-  const first = local.value.find((name) => name !== branches.value?.current)
-  if (first) void pick(first, false)
-  else if (remote.value[0]) void pick(remote.value[0], true)
+async function loadOnlyHere(name: string): Promise<void> {
+  const request = ++onlyHereRequest
+  const count = await window.api.git.commitsOnlyOn(props.project.path, name)
+  if (request === onlyHereRequest) onlyHere.value = count
+}
+
+function closeActions(): void {
+  selected.value = null
+}
+
+async function act(key: string): Promise<void> {
+  const target = selected.value
+  if (!target) return
+  error.value = null
+  notice.value = null
+  if (key === 'merge') {
+    state.value.mergeSource = target.name
+    hide()
+  } else if (key === 'checkout') {
+    closeActions()
+    error.value = await switchBranch(props.project, target.name, target.remote)
+    if (!error.value) hide()
+  } else if (key === 'update') {
+    closeActions()
+    const updated = await updateBranch(props.project, target.name, target.remote)
+    error.value = updated.error
+    notice.value = updated.notice
+    if (state.value.diverged) hide()
+    else await loadBranches()
+  } else if (key === 'delete') {
+    closeActions()
+    error.value = await deleteBranch(props.project, target.name)
+    await loadBranches()
+  }
+}
+
+function openFirst(): void {
+  const row = menuRef.value?.querySelector<HTMLElement>('.branch-row')
+  row?.click()
 }
 
 function isInside(target: EventTarget | null): boolean {
@@ -117,8 +252,11 @@ function onPointerDown(event: PointerEvent): void {
   if (!isInside(event.target)) hide()
 }
 
+// Esc closes the action menu first, then the branch menu.
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') hide()
+  if (event.key !== 'Escape') return
+  if (selected.value) closeActions()
+  else hide()
 }
 
 // A fixed menu would drift away from its trigger, so any scroll outside it closes it.
@@ -149,8 +287,8 @@ onBeforeUnmount(removeListeners)
     type="button"
     class="branch-trigger"
     :class="{ open }"
-    :disabled="disabled"
-    :title="title"
+    :disabled="state.busy !== null"
+    title="Branches"
     :aria-expanded="open"
     aria-haspopup="listbox"
     @click="toggle"
@@ -190,24 +328,28 @@ onBeforeUnmount(removeListeners)
         class="branch-filter"
         placeholder="Filter branches"
         aria-label="Filter branches"
-        @keydown.enter="pickFirst"
+        @keydown.enter="openFirst"
       />
       <p v-if="error" class="branch-error">{{ error }}</p>
+      <p v-if="notice" class="branch-notice">{{ notice }}</p>
       <p v-if="!branches" class="branch-empty">Loading...</p>
       <div v-else class="branch-lists" role="listbox">
         <template v-if="local.length > 0">
           <p class="branch-heading">Local</p>
           <button
-            v-for="name in local"
-            :key="`local-${name}`"
+            v-for="branch in local"
+            :key="`local-${branch.name}`"
             type="button"
             class="branch-row"
-            :class="{ current: name === branches.current }"
-            :disabled="name === branches.current || switching"
-            @click="pick(name, false)"
+            :class="{
+              current: branch.name === branches.current,
+              selected: !selected?.remote && selected?.name === branch.name
+            }"
+            @click="openActions($event.currentTarget as HTMLElement, branch.name, false)"
           >
-            <span class="branch-row-name">{{ name }}</span>
-            <span v-if="name === branches.current" class="branch-tag">current</span>
+            <span class="branch-row-name">{{ branch.name }}</span>
+            <span v-if="branch.name === branches.current" class="branch-tag">current</span>
+            <GitCounts :ahead="branch.ahead" :behind="branch.behind" />
           </button>
         </template>
         <template v-if="remote.length > 0">
@@ -217,9 +359,8 @@ onBeforeUnmount(removeListeners)
             :key="`remote-${name}`"
             type="button"
             class="branch-row"
-            :disabled="switching"
-            :title="pickOnly ? undefined : 'Creates a local branch that tracks it'"
-            @click="pick(name, true)"
+            :class="{ selected: selected?.remote && selected.name === name }"
+            @click="openActions($event.currentTarget as HTMLElement, name, true)"
           >
             <span class="branch-row-name">{{ name }}</span>
           </button>
@@ -228,6 +369,14 @@ onBeforeUnmount(removeListeners)
           No branches match.
         </p>
       </div>
+      <AppContextMenu
+        v-if="selected"
+        :x="selected.x"
+        :y="selected.y"
+        :items="actions"
+        @select="act"
+        @close="closeActions"
+      />
     </div>
   </Teleport>
 </template>
@@ -346,16 +495,29 @@ onBeforeUnmount(removeListeners)
   color: var(--color-fg-accent);
 }
 
+.branch-row.selected {
+  background: var(--color-surface-2);
+}
+
 .branch-row-name {
   min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .branch-tag {
-  margin-left: auto;
   color: var(--color-fg-muted);
+}
+
+.branch-notice {
+  flex-shrink: 0;
+  padding: var(--space-2);
+  background: var(--color-surface-2);
+  border-radius: var(--radius-md);
+  color: var(--color-fg-secondary);
+  font-size: var(--text-xs);
 }
 
 .branch-empty {

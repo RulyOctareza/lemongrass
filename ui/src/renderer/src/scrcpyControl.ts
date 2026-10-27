@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Control messages for the scrcpy 3.3 server, laid out as its client's control_msg.c writes them.
 // Positions carry the video frame size; the server drops an event whose size no longer matches
 // the frame it is sending, such as one sent across a rotation.

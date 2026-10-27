@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package gatekeeper serves the vault and its gates over the daemon's unix socket and dials that socket as a client.
 package gatekeeper
 

@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package session
 
-import "database/sql"
+import "context"
 
 const threadSchema = `
 CREATE TABLE IF NOT EXISTS lg_tabs (
@@ -86,7 +89,7 @@ CREATE TABLE IF NOT EXISTS lg_tab_state (
 );
 `
 
-// Columns added after their table first shipped, since CREATE TABLE IF NOT EXISTS does not alter an existing table.
+// Columns added after their table first shipped and before the store was versioned, part of version 1. A later column is a new migration step.
 var addedColumns = []struct{ table, column, definition string }{
 	{"lg_group_members", "prompt", "TEXT NOT NULL DEFAULT ''"},
 	{"lg_group_members", "skills", "TEXT NOT NULL DEFAULT ''"},
@@ -94,9 +97,10 @@ var addedColumns = []struct{ table, column, definition string }{
 	{"lg_tabs", "title", "TEXT NOT NULL DEFAULT ''"},
 }
 
-func addMissingColumns(db *sql.DB) error {
+func addMissingColumns(db execer) error {
+	ctx := context.Background()
 	for _, c := range addedColumns {
-		rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, c.table)
+		rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info(?)`, c.table)
 		if err != nil {
 			return err
 		}
@@ -115,7 +119,7 @@ func addMissingColumns(db *sql.DB) error {
 		if found {
 			continue
 		}
-		if _, err := db.Exec(`ALTER TABLE ` + c.table + ` ADD COLUMN ` + c.column + ` ` + c.definition); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE `+c.table+` ADD COLUMN `+c.column+` `+c.definition); err != nil {
 			return err
 		}
 	}
@@ -129,14 +133,15 @@ DROP TABLE IF EXISTS lg_listener_heartbeats;
 `
 
 // Threads keyed by number and groups with pilot columns come from before the 6 character thread ids and the leader and thinker names; their tables are dropped rather than migrated.
-func dropLegacyThreads(db *sql.DB) error {
+func dropLegacyThreads(db execer) error {
+	ctx := context.Background()
 	var n int
-	err := db.QueryRow(`SELECT (SELECT COUNT(*) FROM pragma_table_info('lg_groups') WHERE name = 'pilot_tab_id')
+	err := db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM pragma_table_info('lg_groups') WHERE name = 'pilot_tab_id')
 		+ (SELECT COUNT(*) FROM pragma_table_info('lg_threads') WHERE name = 'id' AND type = 'INTEGER')`).Scan(&n)
 	if err != nil || n == 0 {
 		return err
 	}
-	_, err = db.Exec(`DROP TABLE IF EXISTS lg_groups; DROP TABLE IF EXISTS lg_group_members; DROP TABLE IF EXISTS lg_threads; DROP TABLE IF EXISTS lg_messages;
+	_, err = db.ExecContext(ctx, `DROP TABLE IF EXISTS lg_groups; DROP TABLE IF EXISTS lg_group_members; DROP TABLE IF EXISTS lg_threads; DROP TABLE IF EXISTS lg_messages;
 		DROP TABLE IF EXISTS lg_message_mentions; DROP TABLE IF EXISTS lg_notifications; DROP TABLE IF EXISTS lg_thread_reads;`)
 	return err
 }

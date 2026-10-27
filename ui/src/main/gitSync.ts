@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { ipcMain } from 'electron'
 import {
   WRITE_TIMEOUT_MS,
@@ -8,11 +11,10 @@ import {
   run,
   stoppedOperation
 } from './gitRun'
-import type { GitActionResult, GitIncomingCommit } from '../preload/types'
+import type { GitActionResult } from '../preload/types'
 
 const notARepo = 'This project is not a git repository.'
 const FETCH_TIMEOUT_MS = 60_000
-const MAX_INCOMING = 100
 // An unset editor makes git wait on a terminal that is not there.
 const noEditor = { GIT_EDITOR: 'true' }
 
@@ -31,44 +33,38 @@ async function isBranch(root: string, name: string): Promise<boolean> {
 async function fetchAll(projectPath: string): Promise<GitActionResult> {
   const root = await repoRoot(projectPath)
   if (!root) return { ok: false, error: notARepo }
-  const result = await run(root, ['fetch', '--all'], { timeout: FETCH_TIMEOUT_MS, env: pushEnv })
+  // --prune drops remote branches deleted on the remote. git never moves a tag it already has, so
+  // a tag deleted and recreated on the remote needs --tags --force to follow it. --prune-tags is
+  // left out because it would also delete local tags that were never pushed.
+  const result = await run(root, ['fetch', '--all', '--prune', '--tags', '--force'], {
+    timeout: FETCH_TIMEOUT_MS,
+    env: pushEnv
+  })
   if (result.code !== 0) return { ok: false, error: errorText(result) }
   return { ok: true }
 }
 
-// The commits the target has that the checked-out branch does not.
-async function incoming(projectPath: string, target: string): Promise<GitIncomingCommit[]> {
+// How many commits merging the source would bring in.
+async function mergeCount(projectPath: string, source: string): Promise<number> {
   const root = await repoRoot(projectPath)
-  if (!root || !(await isBranch(root, target))) return []
-  const result = await run(
-    root,
-    ['log', `HEAD..${target}`, `-n${MAX_INCOMING}`, '--format=%H%x1f%an%x1f%ct%x1f%s'],
-    { env: readEnv }
-  )
-  if (result.code !== 0) return []
-  return result.stdout
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const [hash, author, time, subject] = line.split('\x1f')
-      return { hash, author, time: Number(time), subject }
-    })
+  if (!root || !(await isBranch(root, source))) return 0
+  const result = await run(root, ['rev-list', '--count', `HEAD..${source}`], { env: readEnv })
+  return result.code === 0 ? Number(result.stdout.trim()) : 0
 }
 
-async function integrate(
-  projectPath: string,
-  target: string,
-  mode: 'merge' | 'rebase'
-): Promise<GitActionResult> {
+// A conflict stops the merge for the human, and the panel then offers Continue and Abort. There is
+// no rebase here, since rebasing a pushed branch would need the force push this app never does.
+async function merge(projectPath: string, source: string): Promise<GitActionResult> {
   const root = await repoRoot(projectPath)
   if (!root) return { ok: false, error: notARepo }
-  if (!(await isBranch(root, target))) return { ok: false, error: 'That is not a branch.' }
+  if (!(await isBranch(root, source))) return { ok: false, error: 'That is not a branch.' }
   if (await stoppedOperation(root)) {
     return { ok: false, error: 'A merge or rebase is already in progress.' }
   }
-  const args = mode === 'merge' ? ['merge', '--no-edit', target] : ['rebase', target]
-  const result = await run(root, args, { timeout: WRITE_TIMEOUT_MS, env: noEditor })
-  // A stop on conflicts exits non-zero too, and the panel then offers Continue and Abort.
+  const result = await run(root, ['merge', '--no-edit', source], {
+    timeout: WRITE_TIMEOUT_MS,
+    env: noEditor
+  })
   if (result.code !== 0) return { ok: false, error: errorText(result) }
   return { ok: true }
 }
@@ -88,15 +84,11 @@ async function finish(projectPath: string, action: 'continue' | 'abort'): Promis
 
 export function registerGitSyncHandlers(): void {
   ipcMain.handle('git:fetch', (_event, projectPath: string) => fetchAll(projectPath))
-  ipcMain.handle('git:incoming', (_event, projectPath: string, target: string) =>
-    incoming(projectPath, target)
+  ipcMain.handle('git:mergeCount', (_event, projectPath: string, source: string) =>
+    mergeCount(projectPath, source)
   )
-  ipcMain.handle(
-    'git:integrate',
-    (_event, projectPath: string, target: string, mode: 'merge' | 'rebase') => {
-      if (mode !== 'merge' && mode !== 'rebase') return { ok: false, error: 'Unknown mode.' }
-      return integrate(projectPath, target, mode)
-    }
+  ipcMain.handle('git:merge', (_event, projectPath: string, source: string) =>
+    merge(projectPath, source)
   )
   ipcMain.handle('git:finish', (_event, projectPath: string, action: 'continue' | 'abort') => {
     if (action !== 'continue' && action !== 'abort') return { ok: false, error: 'Unknown action.' }

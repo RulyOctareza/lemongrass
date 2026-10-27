@@ -1,6 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { reactive } from 'vue'
-import type { GitFile, GitFileGroup, GitStash, GitStatus } from '../../preload/types'
+import type {
+  GitFile,
+  GitFileGroup,
+  GitMoveResult,
+  GitStash,
+  GitStatus,
+  GitUpdateResult
+} from '../../preload/types'
 import type { ProjectRef } from './workspace'
+
+export type GitDiverged = Extract<GitUpdateResult, { status: 'diverged' }>
 
 export interface GitState {
   status: GitStatus | null
@@ -11,9 +23,11 @@ export interface GitState {
   messageSeeded: boolean
   unchecked: string[]
   foldedGroups: GitFileGroup[]
-  // The branch merge and rebase use; null means the current branch's upstream.
-  syncTarget: string | null
-  busy: 'commit' | 'push' | 'stash' | 'sync' | null
+  busy: 'commit' | 'push' | 'stash' | 'fetch' | 'branch' | null
+  // The branch the merge confirm is open for.
+  mergeSource: string | null
+  // A branch and its upstream that both moved, for the dialog that offers the rebase.
+  diverged: GitDiverged | null
   error: string | null
 }
 
@@ -31,8 +45,9 @@ export function gitStateOf(projectId: string): GitState {
       messageSeeded: false,
       unchecked: [],
       foldedGroups: [],
-      syncTarget: null,
       busy: null,
+      mergeSource: null,
+      diverged: null,
       error: null
     }
   }
@@ -114,21 +129,45 @@ export async function commitChanges(project: ProjectRef, andPush: boolean): Prom
   if (andPush) {
     state.busy = 'push'
     const pushed = await window.api.git.push(project.path)
-    if (!pushed.ok) state.error = `The commit was created, but the push failed. ${pushed.error}`
+    if (!pushed.ok && !(pushed.diverged && (await offerRebase(project)))) {
+      state.error = `The commit was created, but the push failed. ${pushed.error}`
+    }
   }
   state.busy = null
   await refreshGit(project)
 }
 
-// Returns git's error text, or null once the branch is checked out.
-export async function switchBranch(
+// Main carries uncommitted changes across the move. Returns git's error text, or null once the
+// branch is checked out, and a carry that needs the human, such as a kept stash, shows as the
+// panel's error.
+async function moveBranch(
+  project: ProjectRef,
+  call: () => Promise<GitMoveResult>
+): Promise<string | null> {
+  const state = gitStateOf(project.id)
+  if (state.busy) return 'Another git operation is running.'
+  state.busy = 'branch'
+  const moved = await call()
+  state.busy = null
+  if (moved.ok) state.error = moved.notice ?? null
+  await refreshGit(project)
+  return moved.ok ? null : moved.error
+}
+
+export function switchBranch(
   project: ProjectRef,
   name: string,
   remote: boolean
 ): Promise<string | null> {
-  const switched = await window.api.git.switchBranch(project.path, name, remote)
-  await refreshGit(project)
-  return switched.ok ? null : switched.error
+  return moveBranch(project, () => window.api.git.switchBranch(project.path, name, remote))
+}
+
+export function createBranch(
+  project: ProjectRef,
+  name: string,
+  base: string
+): Promise<string | null> {
+  return moveBranch(project, () => window.api.git.createBranch(project.path, name, base))
 }
 
 // Runs one stash action and refreshes. Returns git's error text, or null on success.
@@ -149,39 +188,91 @@ export async function runStash(
   return done.ok ? null : done.error
 }
 
-export function syncTargetOf(projectId: string): string | null {
-  const state = gitStateOf(projectId)
-  return state.syncTarget ?? state.status?.upstream ?? null
+// The origin refused the push because it has commits the branch lacks. Updating fetches them and
+// opens the diverged dialog, whose rebase is the way to push again. Returns whether it opened.
+async function offerRebase(project: ProjectRef): Promise<boolean> {
+  const state = gitStateOf(project.id)
+  const branch = state.status?.branch
+  if (!branch) return false
+  const updated = await window.api.git.updateBranch(project.path, branch, false)
+  if (updated.status !== 'diverged') return false
+  state.diverged = updated
+  return true
 }
 
-// Runs one sync action and refreshes. Returns git's error text, or null on success.
-export async function runSync(
+// Runs one action that may move or rewrite branches and refreshes. Returns git's error text, or
+// null on success.
+async function runBranchAction(
   project: ProjectRef,
-  action: 'fetch' | 'merge' | 'rebase' | 'continue' | 'abort'
+  busy: 'fetch' | 'branch',
+  call: () => Promise<{ ok: true } | { ok: false; error: string }>
 ): Promise<string | null> {
   const state = gitStateOf(project.id)
   if (state.busy) return 'Another git operation is running.'
-  const target = syncTargetOf(project.id)
-  state.busy = 'sync'
-  let done
-  if (action === 'fetch') done = await window.api.git.fetch(project.path)
-  else if (action === 'continue' || action === 'abort') {
-    done = await window.api.git.finish(project.path, action)
-  } else if (target) done = await window.api.git.integrate(project.path, target, action)
-  else done = { ok: false as const, error: 'There is no branch to bring in.' }
+  state.busy = busy
+  const done = await call()
   state.busy = null
   await refreshGit(project)
   return done.ok ? null : done.error
 }
 
+export function fetchAll(project: ProjectRef): Promise<string | null> {
+  return runBranchAction(project, 'fetch', () => window.api.git.fetch(project.path))
+}
+
+export function finishOperation(
+  project: ProjectRef,
+  action: 'continue' | 'abort'
+): Promise<string | null> {
+  return runBranchAction(project, 'branch', () => window.api.git.finish(project.path, action))
+}
+
+export function mergeInto(project: ProjectRef, source: string): Promise<string | null> {
+  return runBranchAction(project, 'branch', () => window.api.git.merge(project.path, source))
+}
+
+export function rebaseOntoUpstream(project: ProjectRef, name: string): Promise<string | null> {
+  return runBranchAction(project, 'branch', () =>
+    window.api.git.rebaseOntoUpstream(project.path, name)
+  )
+}
+
+// Deleting the checked-out branch carries uncommitted changes to main, and a carry that needs the
+// human, such as a kept stash, shows as the panel's error.
+export function deleteBranch(project: ProjectRef, name: string): Promise<string | null> {
+  return runBranchAction(project, 'branch', async () => {
+    const deleted = await window.api.git.deleteBranch(project.path, name)
+    if (deleted.moved?.notice) gitStateOf(project.id).error = deleted.moved.notice
+    return deleted
+  })
+}
+
+// A diverged branch opens the dialog that offers the rebase instead of reporting an error. A
+// branch the remote deleted is not an error either, so its message comes back as a notice.
+export async function updateBranch(
+  project: ProjectRef,
+  name: string,
+  remote: boolean
+): Promise<{ error: string | null; notice: string | null }> {
+  let notice: string | null = null
+  const error = await runBranchAction(project, 'branch', async () => {
+    const updated = await window.api.git.updateBranch(project.path, name, remote)
+    if (updated.status === 'diverged') gitStateOf(project.id).diverged = updated
+    if (updated.status === 'gone') notice = updated.message
+    return updated.status === 'error' ? { ok: false, error: updated.error } : { ok: true }
+  })
+  return { error, notice }
+}
+
 // Pushes the checked-out branch on its own, for commits made earlier. Returns git's error text, or
-// null on success.
+// null on success or when the diverged dialog took over.
 export async function pushBranch(project: ProjectRef): Promise<string | null> {
   const state = gitStateOf(project.id)
   if (state.busy) return 'Another git operation is running.'
   state.busy = 'push'
   const pushed = await window.api.git.push(project.path)
+  const error = pushed.ok || (pushed.diverged && (await offerRebase(project))) ? null : pushed.error
   state.busy = null
   await refreshGit(project)
-  return pushed.ok ? null : pushed.error
+  return error
 }

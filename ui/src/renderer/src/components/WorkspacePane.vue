@@ -1,5 +1,9 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppConfirmButton from './AppConfirmButton.vue'
 import TabIcon from './TabIcon.vue'
 import { accountLabel, accountStore } from '../accounts'
 import {
@@ -210,10 +214,6 @@ const closeActions = computed(() => {
   ]
 })
 
-const confirmingKey = ref<string | null>(null)
-
-watch(menu, () => (confirmingKey.value = null))
-
 function runCloseAction(key: string): void {
   if (key === 'other') {
     if (props.leaf.activeTabId) closeOtherTabs(props.project, props.leaf.id, props.leaf.activeTabId)
@@ -225,10 +225,6 @@ function runCloseAction(key: string): void {
 
 function menuCloseAction(key: string): void {
   if (!menu.value) return
-  if (confirmingKey.value !== key) {
-    confirmingKey.value = key
-    return
-  }
   menu.value = null
   runCloseAction(key)
 }
@@ -665,13 +661,13 @@ onBeforeUnmount(() => {
         <button v-if="!menuJoinGroups.length" class="menu-item" disabled>No live workgroup</button>
       </template>
       <div class="menu-divider" />
-      <button
+      <AppConfirmButton
         v-for="action in closeActions"
         :key="action.key"
+        v-slot="{ armed }"
         class="menu-item"
-        :class="{ confirming: confirmingKey === action.key }"
         :disabled="action.disabled"
-        @click="menuCloseAction(action.key)"
+        @confirm="menuCloseAction(action.key)"
       >
         <svg
           class="menu-icon"
@@ -684,15 +680,11 @@ onBeforeUnmount(() => {
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path
-            v-for="d in confirmingKey === action.key ? WARNING_ICON : action.icon"
-            :key="d"
-            :d="d"
-          />
+          <path v-for="d in armed ? WARNING_ICON : action.icon" :key="d" :d="d" />
         </svg>
         {{ action.label }}
-        <span class="menu-confirm-hint">Click again</span>
-      </button>
+        <span class="menu-confirm-hint" :class="{ shown: armed }">Click again</span>
+      </AppConfirmButton>
       <div class="menu-divider" />
       <button class="menu-item" @click="menuClose">
         <svg
@@ -994,17 +986,6 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
-.menu-item.confirming,
-.menu-item.confirming:hover:not(:disabled) {
-  background: var(--color-error-muted);
-  color: var(--color-error);
-}
-
-.menu-item.confirming .menu-icon,
-.menu-item.confirming:hover:not(:disabled) .menu-icon {
-  color: var(--color-error);
-}
-
 .menu-confirm-hint {
   margin-left: auto;
   padding-left: var(--space-4);
@@ -1012,7 +993,7 @@ onBeforeUnmount(() => {
   visibility: hidden;
 }
 
-.menu-item.confirming .menu-confirm-hint {
+.menu-confirm-hint.shown {
   visibility: visible;
 }
 

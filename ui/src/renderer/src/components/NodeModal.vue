@@ -1,8 +1,12 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import AppModal from './AppModal.vue'
 import AppButton from './AppButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
+import AppConfirmButton from './AppConfirmButton.vue'
 import AppSegmented from './AppSegmented.vue'
 import AppSwitcher from './AppSwitcher.vue'
 import type {
@@ -64,7 +68,6 @@ const previousId = ref<string | null>(null)
 const savedNotice = ref('')
 let savedTimer: ReturnType<typeof setTimeout> | undefined
 const issued = ref<(NodeIssued & { label: string }) | null>(null)
-const confirming = ref<string | null>(null)
 const copied = ref('')
 let copiedTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -169,20 +172,8 @@ function openTunnel(): Promise<void> {
 const status = computed(() => state.value?.status)
 const nodeURL = computed(() => status.value?.url ?? '')
 
-// Close drops every connected client, so it takes a second click to run.
-const confirmingClose = ref(false)
-
-watch(
-  () => status.value?.running,
-  () => (confirmingClose.value = false)
-)
-
+// Close drops every connected client, so it goes through a click-again confirm.
 function closeTunnel(): void {
-  if (!confirmingClose.value) {
-    confirmingClose.value = true
-    return
-  }
-  confirmingClose.value = false
   void run(() => window.api.node.closeTunnel())
 }
 
@@ -232,7 +223,6 @@ function switchTo(id: string): void {
   creating.value = false
   renaming.value = false
   selectedId.value = id
-  confirming.value = null
   addingResource.value = false
   if (issued.value?.id !== id) issued.value = null
   loadDraft()
@@ -248,7 +238,6 @@ function startAddToken(): void {
   if (!creating.value) previousId.value = selectedId.value
   creating.value = true
   renaming.value = false
-  confirming.value = null
   addingResource.value = false
   issued.value = null
   draft.value = {
@@ -338,13 +327,8 @@ const footerStatus = computed((): { text: string; tone: '' | 'muted' | 'saved' |
   return { text: 'No changes', tone: 'muted' }
 })
 
-// Disconnect and Remove act on the second click, the same as removing an account in Settings.
-function confirmThen(key: string, fn: () => Promise<NodeState>): void {
-  if (confirming.value !== key) {
-    confirming.value = key
-    return
-  }
-  confirming.value = null
+// Disconnect and Remove go through a click-again confirm, like removing an account in Settings.
+function confirmed(fn: () => Promise<NodeState>): void {
   void run(async () => {
     const next = await fn()
     baseline.value = JSON.stringify(draft.value)
@@ -544,16 +528,14 @@ function copy(key: string, text: string): void {
                   </template>
                 </svg>
               </button>
-              <button
-                type="button"
+              <AppConfirmButton
+                v-slot="{ armed }"
                 class="settings-action danger"
-                :class="{ confirming: confirmingClose }"
                 :disabled="busy"
-                @click="closeTunnel"
-                @mouseleave="confirmingClose = false"
+                @confirm="closeTunnel"
               >
-                {{ confirmingClose ? 'Click again' : 'Close' }}
-              </button>
+                {{ armed ? 'Click again' : 'Close' }}
+              </AppConfirmButton>
             </template>
           </li>
         </ul>
@@ -696,20 +678,20 @@ function copy(key: string, text: string): void {
           </div>
 
           <template v-if="!creating && selected && selected.revoked">
-            <ul class="settings-rows" @mouseleave="confirming = null">
+            <ul class="settings-rows">
               <li class="settings-row">
                 <span class="settings-row-title">{{ selected.label }}</span>
                 <span class="settings-row-meta">This token no longer works.</span>
                 <span class="settings-badge">Disconnected</span>
-                <button
-                  type="button"
+                <AppConfirmButton
+                  :key="selected.id"
+                  v-slot="{ armed }"
                   class="settings-action"
-                  :class="{ confirming: confirming === `remove:${selected.id}` }"
                   :disabled="busy"
-                  @click="confirmThen(`remove:${selected.id}`, () => removeToken(selected!.id))"
+                  @confirm="confirmed(() => removeToken(selected!.id))"
                 >
-                  {{ confirming === `remove:${selected.id}` ? 'Click again' : 'Remove' }}
-                </button>
+                  {{ armed ? 'Click again' : 'Remove' }}
+                </AppConfirmButton>
               </li>
             </ul>
           </template>
@@ -856,20 +838,20 @@ function copy(key: string, text: string): void {
             </div>
 
             <ul v-if="selected && !creating" class="settings-rows node-danger">
-              <li class="settings-row" @mouseleave="confirming = null">
+              <li class="settings-row">
                 <span class="settings-row-title">Disconnect</span>
                 <span class="settings-row-meta">
                   Ends this token. They would need a new setup.
                 </span>
-                <button
-                  type="button"
+                <AppConfirmButton
+                  :key="selected.id"
+                  v-slot="{ armed }"
                   class="settings-action"
-                  :class="{ confirming: confirming === `revoke:${selected.id}` }"
                   :disabled="busy"
-                  @click="confirmThen(`revoke:${selected.id}`, () => disconnect(selected!.id))"
+                  @confirm="confirmed(() => disconnect(selected!.id))"
                 >
-                  {{ confirming === `revoke:${selected.id}` ? 'Click again' : 'Disconnect' }}
-                </button>
+                  {{ armed ? 'Click again' : 'Disconnect' }}
+                </AppConfirmButton>
               </li>
             </ul>
           </template>

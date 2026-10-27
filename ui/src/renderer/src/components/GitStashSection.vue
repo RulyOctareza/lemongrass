@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Faizal Alviansyah -->
+
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { gitStateOf, runStash } from '../git'
@@ -6,6 +9,7 @@ import type { ProjectRef } from '../workspace'
 import type { GitStash } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
+import AppConfirmButton from './AppConfirmButton.vue'
 import AppModal from './AppModal.vue'
 import GitIcon from './GitIcon.vue'
 import RevisionView from './RevisionView.vue'
@@ -22,7 +26,6 @@ const saving = ref(false)
 const message = ref('')
 const includeUntracked = ref(true)
 const error = ref<string | null>(null)
-const confirmingDrop = ref<string | null>(null)
 const viewing = ref<GitStash | null>(null)
 
 async function perform(
@@ -41,15 +44,6 @@ async function save(): Promise<void> {
     message.value = ''
     saving.value = false
   }
-}
-
-async function drop(stash: GitStash): Promise<void> {
-  if (confirmingDrop.value !== stash.ref) {
-    confirmingDrop.value = stash.ref
-    return
-  }
-  confirmingDrop.value = null
-  await perform('drop', stash.ref)
 }
 </script>
 
@@ -125,17 +119,16 @@ async function drop(stash: GitStash): Promise<void> {
             >
               <GitIcon name="pop" />
             </button>
-            <button
+            <AppConfirmButton
               class="drop"
-              :class="{ confirming: confirmingDrop === stash.ref }"
-              :title="confirmingDrop === stash.ref ? 'Click again to drop' : 'Drop the stash'"
-              :aria-label="confirmingDrop === stash.ref ? 'Click again to drop' : 'Drop the stash'"
+              title="Drop the stash"
+              aria-label="Drop the stash"
+              confirm-label="Click again to drop"
               :disabled="state.busy !== null"
-              @click="drop(stash)"
-              @blur="confirmingDrop = null"
+              @confirm="perform('drop', stash.ref)"
             >
               <GitIcon name="drop" />
-            </button>
+            </AppConfirmButton>
           </div>
         </li>
       </ul>
@@ -328,9 +321,16 @@ async function drop(stash: GitStash): Promise<void> {
 }
 
 .stash-actions .drop:hover:not(:disabled),
-.stash-actions .drop:focus-visible:not(:disabled),
-.stash-actions .drop.confirming {
+.stash-actions .drop:focus-visible:not(:disabled) {
   color: var(--color-error);
+}
+
+/* Padding gives the confirm's progress bar and armed background room around the glyph, and the
+   negative margin keeps the icon row aligned. */
+.stash-actions .drop {
+  padding: 2px;
+  margin: -2px;
+  border-radius: var(--radius-sm);
 }
 
 .stash-view {

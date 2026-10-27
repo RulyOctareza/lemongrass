@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
@@ -15,18 +18,22 @@ import type {
   PtyExitPayload,
   Project,
   BiblioTree,
+  BiblioFileResult,
   ScratchpadImageResult,
   ImageFileResult,
   GitStatus,
   GitDiff,
   GitActionResult,
+  GitMoveResult,
   GitBlame,
   GitBranches,
   GitCommitInfo,
   GitLogResult,
   GitLogSearchMode,
   GitResetPreview,
-  GitIncomingCommit,
+  GitDeleteResult,
+  GitPushResult,
+  GitUpdateResult,
   GitRevFiles,
   GitRevision,
   GitStash,
@@ -115,6 +122,8 @@ const biblio = {
     ipcRenderer.invoke('biblio:tree', projectPath),
   read: (projectPath: string, relativePath: string): Promise<string | null> =>
     ipcRenderer.invoke('biblio:read', projectPath, relativePath),
+  readFile: (projectPath: string, relativePath: string): Promise<BiblioFileResult | null> =>
+    ipcRenderer.invoke('biblio:readFile', projectPath, relativePath),
   write: (projectPath: string, relativePath: string, content: string): Promise<boolean> =>
     ipcRenderer.invoke('biblio:write', projectPath, relativePath, content),
   createScratchpad: (projectPath: string, title: string, content: string): Promise<string | null> =>
@@ -152,14 +161,26 @@ const git = {
     ipcRenderer.invoke('git:diff', projectPath, path, origPath),
   commit: (projectPath: string, message: string, paths?: string[]): Promise<GitActionResult> =>
     ipcRenderer.invoke('git:commit', projectPath, message, paths),
-  push: (projectPath: string): Promise<GitActionResult> =>
+  push: (projectPath: string): Promise<GitPushResult> =>
     ipcRenderer.invoke('git:push', projectPath),
   lastMessage: (projectPath: string): Promise<string> =>
     ipcRenderer.invoke('git:lastMessage', projectPath),
   branches: (projectPath: string): Promise<GitBranches> =>
     ipcRenderer.invoke('git:branches', projectPath),
-  switchBranch: (projectPath: string, name: string, remote: boolean): Promise<GitActionResult> =>
+  switchBranch: (projectPath: string, name: string, remote: boolean): Promise<GitMoveResult> =>
     ipcRenderer.invoke('git:switchBranch', projectPath, name, remote),
+  createBranch: (projectPath: string, name: string, base: string): Promise<GitMoveResult> =>
+    ipcRenderer.invoke('git:createBranch', projectPath, name, base),
+  branchNameValid: (projectPath: string, name: string): Promise<boolean> =>
+    ipcRenderer.invoke('git:branchNameValid', projectPath, name),
+  updateBranch: (projectPath: string, name: string, remote: boolean): Promise<GitUpdateResult> =>
+    ipcRenderer.invoke('git:updateBranch', projectPath, name, remote),
+  rebaseOntoUpstream: (projectPath: string, name: string): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:rebaseOntoUpstream', projectPath, name),
+  deleteBranch: (projectPath: string, name: string): Promise<GitDeleteResult> =>
+    ipcRenderer.invoke('git:deleteBranch', projectPath, name),
+  commitsOnlyOn: (projectPath: string, name: string): Promise<number | null> =>
+    ipcRenderer.invoke('git:commitsOnlyOn', projectPath, name),
   revFiles: (projectPath: string, rev: GitRevision): Promise<GitRevFiles> =>
     ipcRenderer.invoke('git:revFiles', projectPath, rev),
   revDiff: (
@@ -183,13 +204,10 @@ const git = {
   ): Promise<GitActionResult> => ipcRenderer.invoke('git:stashAction', projectPath, ref, action),
   fetch: (projectPath: string): Promise<GitActionResult> =>
     ipcRenderer.invoke('git:fetch', projectPath),
-  incoming: (projectPath: string, target: string): Promise<GitIncomingCommit[]> =>
-    ipcRenderer.invoke('git:incoming', projectPath, target),
-  integrate: (
-    projectPath: string,
-    target: string,
-    mode: 'merge' | 'rebase'
-  ): Promise<GitActionResult> => ipcRenderer.invoke('git:integrate', projectPath, target, mode),
+  mergeCount: (projectPath: string, source: string): Promise<number> =>
+    ipcRenderer.invoke('git:mergeCount', projectPath, source),
+  merge: (projectPath: string, source: string): Promise<GitActionResult> =>
+    ipcRenderer.invoke('git:merge', projectPath, source),
   finish: (projectPath: string, action: 'continue' | 'abort'): Promise<GitActionResult> =>
     ipcRenderer.invoke('git:finish', projectPath, action),
   log: (

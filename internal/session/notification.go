@@ -1,7 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package session
 
 import (
 	"database/sql"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -46,23 +50,89 @@ type PendingThread struct {
 
 func (p PendingThread) Count() int { return len(p.RowIDs) }
 
+// What a ledger row is about. A thread row's ref is its message id; any other source defines its own ref.
+const (
+	SourceThread = "thread"
+	SourceBranch = "branch"
+)
+
+// A pending row from a source other than a thread. It is settled once sent, since there is nothing to read afterwards.
+type PendingEvent struct {
+	RowID  int64
+	Source string
+	Ref    string
+}
+
+// A tab's pending rows, thread rows grouped per thread and the rest one per row.
+type Pending struct {
+	Threads []PendingThread
+	Events  []PendingEvent
+}
+
+func (p Pending) Empty() bool { return len(p.Threads) == 0 && len(p.Events) == 0 }
+
+func (p Pending) RowIDs() []int64 {
+	var ids []int64
+	for _, t := range p.Threads {
+		ids = append(ids, t.RowIDs...)
+	}
+	for _, e := range p.Events {
+		ids = append(ids, e.RowID)
+	}
+	return ids
+}
+
 // The rows that may wake a tab, meaning every kind but other. A tab id is globally unique, so this ignores the store's project.
-func (s *Store) PendingForTab(tabID string) ([]PendingThread, error) {
+func (s *Store) PendingForTab(tabID string) (Pending, error) {
 	return s.pendingRows(tabID, `AND n.kind != 'other'`)
 }
 
 // Every pending row of the tab, other included, for a tab that is already mid-turn and sees them as hook context.
-func (s *Store) SurfaceableForTab(tabID string) ([]PendingThread, error) {
+func (s *Store) SurfaceableForTab(tabID string) (Pending, error) {
 	return s.pendingRows(tabID, ``)
 }
 
-func (s *Store) pendingRows(tabID, filter string) ([]PendingThread, error) {
+func (s *Store) pendingRows(tabID, filter string) (Pending, error) {
+	threads, err := s.pendingThreads(tabID, filter)
+	if err != nil {
+		return Pending{}, err
+	}
+	events, err := s.pendingEvents(tabID, filter)
+	if err != nil {
+		return Pending{}, err
+	}
+	return Pending{Threads: threads, Events: events}, nil
+}
+
+func (s *Store) pendingEvents(tabID, filter string) ([]PendingEvent, error) {
 	rows, err := s.db.Query(`
-		SELECT n.id, n.thread_id, t.title, m.tab_id, n.kind, n.message_id
+		SELECT n.id, n.source, n.ref FROM lg_notifications n
+		WHERE n.target_tab_id = ? AND n.state = 'pending' AND n.source != 'thread' `+filter+`
+		ORDER BY n.id
+	`, tabID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PendingEvent
+	for rows.Next() {
+		var e PendingEvent
+		if err := rows.Scan(&e.RowID, &e.Source, &e.Ref); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// The thread comes through the message, since a thread row's ref is the message id and message ids are unique across the store.
+func (s *Store) pendingThreads(tabID, filter string) ([]PendingThread, error) {
+	rows, err := s.db.Query(`
+		SELECT n.id, m.thread_id, t.title, m.tab_id, n.kind, m.id
 		FROM lg_notifications n
-		JOIN lg_threads t ON t.id = n.thread_id
-		JOIN lg_messages m ON m.id = n.message_id
-		WHERE n.target_tab_id = ? AND n.state = 'pending' `+filter+`
+		JOIN lg_messages m ON m.id = n.ref
+		JOIN lg_threads t ON t.id = m.thread_id
+		WHERE n.target_tab_id = ? AND n.state = 'pending' AND n.source = 'thread' `+filter+`
 		ORDER BY n.id
 	`, tabID)
 	if err != nil {
@@ -185,8 +255,13 @@ func (s *Store) MarkMessagesRead(tabID string, messageIDs []int64) error {
 	if len(messageIDs) == 0 {
 		return nil
 	}
-	marks, args := idPlaceholders(messageIDs)
-	_, err := s.db.Exec(`UPDATE lg_notifications SET state = 'read', read_at = ? WHERE target_tab_id = ? AND state != 'read' AND message_id IN (`+marks+`)`, append([]interface{}{now(), tabID}, args...)...)
+	marks := make([]string, len(messageIDs))
+	args := []interface{}{now(), tabID}
+	for i, id := range messageIDs {
+		marks[i] = "?"
+		args = append(args, strconv.FormatInt(id, 10))
+	}
+	_, err := s.db.Exec(`UPDATE lg_notifications SET state = 'read', read_at = ? WHERE target_tab_id = ? AND state != 'read' AND source = 'thread' AND ref IN (`+strings.Join(marks, ",")+`)`, args...)
 	return err
 }
 
@@ -268,14 +343,10 @@ func (s *Store) VendorForTab(tabID string) (string, error) {
 // The tab's pending nudge text with its rows marked sent; false when nothing is pending.
 func (s *Store) ConsumePending(tab string) (string, bool) {
 	pending, err := s.PendingForTab(tab)
-	if err != nil || len(pending) == 0 {
+	if err != nil || pending.Empty() {
 		return "", false
 	}
-	var rowIDs []int64
-	for _, p := range pending {
-		rowIDs = append(rowIDs, p.RowIDs...)
-	}
-	s.MarkNotificationsSent(rowIDs)
+	s.MarkNotificationsSent(pending.RowIDs())
 	s.MarkOtherSent(tab)
 	return s.NotificationText(pending), true
 }

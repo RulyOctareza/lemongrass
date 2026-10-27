@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package session
 
 import (
@@ -94,7 +97,7 @@ func TestSystemMessageNotifiesEveryMemberTheLeaderIncluded(t *testing.T) {
 		t.Errorf("author = %q, want %q", msg.TabID, SystemAuthor)
 	}
 	for _, tab := range []string{tabA, tabB} {
-		pending, err := store.PendingForTab(tab)
+		pending, err := threadsOf(store.PendingForTab(tab))
 		if err != nil || len(pending) != 1 || pending[0].All.Count != 1 {
 			t.Errorf("PendingForTab(%s) = %+v, %v, want one message for everyone", tab, pending, err)
 		}

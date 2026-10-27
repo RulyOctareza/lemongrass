@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package dbgate runs database work for a channel: it classifies a statement, enforces the channel's scope, pools connections and executes. Credentials come from the vault and never persist here.
 package dbgate
 

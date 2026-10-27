@@ -1,4 +1,7 @@
-// Package threadsvc delivers thread notifications: the ledger-driven delivery routines and the socket service the agent process hosts.
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
+// Package threadsvc delivers ledger notifications, from threads and other sources: the ledger-driven delivery routines and the socket service the agent process hosts.
 package threadsvc
 
 import (
@@ -45,7 +48,7 @@ func (d *Deliverer) DeliverTab(tabID string) (bool, error) {
 		return false, err
 	}
 	pending, err := d.Store.PendingForTab(tabID)
-	if err != nil || len(pending) == 0 {
+	if err != nil || pending.Empty() {
 		return false, err
 	}
 	if d.Ready != nil && !d.Ready(tabID) {
@@ -55,11 +58,7 @@ func (d *Deliverer) DeliverTab(tabID string) (bool, error) {
 
 	typed, _, err := d.Nudge(tabID)
 	if err != nil {
-		var rowIDs []int64
-		for _, p := range pending {
-			rowIDs = append(rowIDs, p.RowIDs...)
-		}
-		return false, d.Store.RecordNotificationAttempt(rowIDs)
+		return false, d.Store.RecordNotificationAttempt(pending.RowIDs())
 	}
 	if !typed {
 		d.later(tabID)

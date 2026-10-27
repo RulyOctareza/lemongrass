@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (C) 2026 Faizal Alviansyah */
+
 /*
  * The shared layout of every modal that has a section list on the left: Settings, Node.
  * A new section of such a modal uses these classes, so the two never drift apart.
@@ -160,13 +163,6 @@
 
 .settings-action.danger:hover {
   background: var(--color-error-muted);
-}
-
-.settings-action.confirming,
-.settings-action.confirming:hover {
-  background: var(--color-error-muted);
-  border-color: var(--color-error);
-  color: var(--color-error);
 }
 
 .settings-add {

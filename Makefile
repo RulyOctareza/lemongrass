@@ -5,7 +5,7 @@ D_BIN_DIR := $(HOME)/.lemongrass/bin
 LDFLAGS := -ldflags "-X github.com/faizalv/lemongrass/cmd/lgrass/version.Version=$(VERSION)"
 BINARIES := lgrass lgrassd lgrassconf
 
-.PHONY: build-linux build-rpm build-mac dist dist-linux dist-darwin dev install verify clean submodules bibliothek-update
+.PHONY: build-linux build-rpm build-mac dist dist-linux dist-darwin dev install verify clean submodules bibliothek-update license license-check
 
 dist: dist-linux dist-darwin
 
@@ -71,6 +71,12 @@ dev:
 # Compiles everything and discards the output, since a plain `go build` of a single main package writes its binary into the source directory.
 verify: submodules
 	go build -a -o /dev/null ./...
+
+license:
+	./scripts/license-headers.sh
+
+license-check:
+	./scripts/license-headers.sh --check
 
 clean:
 	rm -rf $(DIST) ui/out ui/dist

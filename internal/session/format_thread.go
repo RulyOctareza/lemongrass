@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 package session
 
 import (
@@ -117,15 +120,22 @@ func labelList(labels map[string]string, ids []string) string {
 	return strings.Join(names, ", ")
 }
 
-// Store-aware wrapper: resolves the senders' labels before formatting.
-func (s *Store) NotificationText(pending []PendingThread) string {
+// Store-aware wrapper: resolves the senders' labels before formatting. Thread lines come first, then one line per event row.
+func (s *Store) NotificationText(pending Pending) string {
 	var ids []string
-	for _, p := range pending {
+	for _, p := range pending.Threads {
 		ids = append(ids, p.You.Tabs...)
 		ids = append(ids, p.All.Tabs...)
 		ids = append(ids, p.Other.Tabs...)
 	}
-	return FormatNotification(pending, s.Labels(ids))
+	var lines []string
+	if len(pending.Threads) > 0 {
+		lines = append(lines, FormatNotification(pending.Threads, s.Labels(ids)))
+	}
+	for _, e := range pending.Events {
+		lines = append(lines, formatEvent(e))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func FormatGroupHeader(g Group, members []Member) string {

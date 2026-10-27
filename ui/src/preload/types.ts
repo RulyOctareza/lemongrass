@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Shared preload/renderer type contracts. Kept separate from index.ts, which
 // imports 'electron' and other main-process-only packages the renderer's own
 // tsconfig can't resolve -- the renderer and index.d.ts both import from here
@@ -47,6 +50,12 @@ export type ScratchpadImageResult =
 
 export type ImageFileResult =
   { bytes: Uint8Array; mime: string } | { error: 'too-large' | 'unsupported' | 'failed' }
+
+export type BiblioFileResult =
+  | { kind: 'text'; text: string }
+  | { kind: 'image'; modifiedMs: number }
+  | { kind: 'binary' }
+  | { kind: 'tooLarge' }
 
 export interface BiblioTree {
   toc: BiblioNode | null
@@ -281,9 +290,17 @@ export type GitDiff =
   | { status: 'too-large' }
   | { status: 'error'; message: string }
 
+// ahead and behind count against upstream, and are 0 when there is none or it is gone.
+export interface GitLocalBranch {
+  name: string
+  upstream: string | null
+  ahead: number
+  behind: number
+}
+
 export interface GitBranches {
   current: string | null
-  local: string[]
+  local: GitLocalBranch[]
   remote: string[]
 }
 
@@ -304,13 +321,6 @@ export interface GitRevFile {
 
 export type GitRevFiles =
   { status: 'ok'; files: GitRevFile[] } | { status: 'error'; message: string }
-
-export interface GitIncomingCommit {
-  hash: string
-  author: string
-  time: number
-  subject: string
-}
 
 export interface GitRef {
   name: string
@@ -362,6 +372,39 @@ export type GitResetPreview =
   { ok: true; count: number; pushed: number } | { ok: false; error: string }
 
 export type GitActionResult = { ok: true } | { ok: false; error: string }
+
+// diverged marks a push the remote refused because it has commits the branch does not.
+export type GitPushResult = { ok: true } | { ok: false; error: string; diverged?: boolean }
+
+// Diverged means both sides have commits the other lacks, so only a rebase brings them together.
+export type GitUpdateResult =
+  | { status: 'updated' }
+  | { status: 'diverged'; branch: string; upstream: string; ahead: number; behind: number }
+  // The remote deleted the branch, and its stale remote-tracking ref was dropped.
+  | { status: 'gone'; message: string }
+  | { status: 'error'; error: string }
+
+// The switch to main made before deleting the checked-out branch. It stands even when the delete
+// itself then fails.
+export interface GitDeleteMove {
+  from: string
+  to: string
+  carry: GitCarry
+  notice?: string
+}
+
+export type GitDeleteResult =
+  | { ok: true; moved: GitDeleteMove | null }
+  | { ok: false; error: string; moved: GitDeleteMove | null }
+
+// How uncommitted changes fared across a branch move: none to carry, carried, or a conflict that
+// left the carry stash in place.
+export type GitCarry = 'none' | 'carried' | 'conflict'
+
+// notice explains a carry that needs the human's attention, such as a kept stash.
+export type GitMoveResult =
+  | { ok: true; from: string; to: string; carry: GitCarry; notice?: string }
+  | { ok: false; error: string }
 
 export interface DeviceInfo {
   serial: string

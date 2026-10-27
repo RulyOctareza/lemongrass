@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Compact relative age for a unix timestamp in seconds.
 export function formatAge(time: number): string {
   const minutes = Math.max(0, Math.round((Date.now() / 1000 - time) / 60))

@@ -1,0 +1,65 @@
+# Builds the x86_64 rpm for a pushed v<version> tag, versioned from the tag, and publishes it with its SHA256SUMS as
+# a GitHub Release.
+# The in-app updater reads the latest release and verifies the rpm against SHA256SUMS, so both asset names are fixed.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  rpm:
+    name: rpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      # The tag is the only source of the version. main keeps 0.0.0-dev in ui/package.json, and this step writes the
+      # tag's version into the CI checkout only, where the Makefile and electron-builder both read it. npm rejects a
+      # tag that is not valid semver.
+      - name: Stamp version from tag
+        run: npm --prefix ui version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
+      - name: Install rpm tooling
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install UI dependencies
+        run: npm --prefix ui ci
+
+      - name: Build Go binaries
+        run: make dist-linux
+
+      # --publish never stops electron-builder from publishing on its own when it sees a tag on CI.
+      - name: Build rpm
+        run: npm --prefix ui run build:rpm -- --x64 --publish never
+
+      - name: Write SHA256SUMS
+        working-directory: ui/dist
+        run: sha256sum lemongrass-*.x86_64.rpm > SHA256SUMS
+
+      # Uploads into the tag's release when one already exists and creates it otherwise, so a re-run or a release
+      # GitHub made for the tag does not fail the job. A tag with a prerelease part, such as v0.2.0-rc.1, is published
+      # as a prerelease, which GitHub's latest release endpoint skips, so installed apps are never offered one.
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            ui/dist/lemongrass-*.x86_64.rpm
+            ui/dist/SHA256SUMS
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

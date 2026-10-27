@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Faizal Alviansyah
+
 // Package node serves granted books, scratchpad tasks, laws and handovers read-only from ~/.lemongrass/node.json, which only the Electron app writes.
 package node
 
