@@ -63,6 +63,24 @@ func runTrickSuite(t *testing.T, engine Engine, dsn string, tricks []trick) {
 		}
 	})
 
+	t.Run("controls", func(t *testing.T) {
+		for _, c := range trickControls[engine] {
+			t.Run(c.sql, func(t *testing.T) {
+				id := channels.get(c.scope)
+				var err error
+				if c.path == trickWrite {
+					// A dry run, so the snapshot at the end still has to match.
+					_, err = svc.Execute(id, c.sql, false, "red-team")
+				} else {
+					_, err = svc.Query(id, c.sql)
+				}
+				if err != nil {
+					t.Errorf("ordinary %s was refused: %v", c.path, err)
+				}
+			})
+		}
+	})
+
 	t.Run("read-only transaction alone", func(t *testing.T) {
 		db := openSingleConn(t, dsn)
 		for _, tr := range tricks {
@@ -371,4 +389,48 @@ func queryRow(t *testing.T, db *sql.DB, q string, n int) []string {
 		out[i] = v.String
 	}
 	return out
+}
+
+// trickControl is an ordinary statement the vault must still run, so the suite proves it refuses tricks rather than everything.
+type trickControl struct {
+	sql   string
+	scope vault.Scope
+	path  trickPath
+}
+
+var (
+	controlRead  = vault.Scope{Tables: []string{"employees", "salaries"}, Operations: []string{"select", "explain", "show"}}
+	controlPerf  = vault.Scope{Tables: []string{"employees"}, Operations: []string{"select", OperationPerformance}}
+	controlWrite = vault.Scope{Tables: []string{"employees"}, Operations: []string{"select", "insert", "update", "delete"}}
+)
+
+// trickControls avoid the names the seeds trap on purpose: on Postgres a bare = and lower resolve to the seeded public overloads, so comparisons use > or the pg_catalog form, and on MySQL sum is a seeded stored function.
+var trickControls = map[Engine][]trickControl{
+	EnginePostgres: {
+		{"SELECT e.id, e.name, s.amount FROM employees e JOIN salaries s ON e.id OPERATOR(pg_catalog.=) s.employee_id ORDER BY e.id", controlRead, trickRead},
+		{"SELECT count(*), avg(amount), max(amount) FROM salaries", controlRead, trickRead},
+		{"SELECT upper(name), length(name), date_trunc('day', now()), to_char(now(), 'YYYY') FROM employees", controlRead, trickRead},
+		{"SELECT pg_catalog.lower(name) FROM employees", controlRead, trickRead},
+		{"SELECT id FROM employees WHERE name OPERATOR(pg_catalog.=) 'Ada Example'", controlRead, trickRead},
+		{"WITH top AS (SELECT employee_id FROM salaries WHERE amount > 5500) SELECT count(*) FROM top", controlRead, trickRead},
+		{"EXPLAIN SELECT * FROM employees WHERE id > 1", controlRead, trickRead},
+		{"SELECT relname, seq_scan FROM pg_stat_user_tables", controlPerf, trickRead},
+		{"SELECT calls, total_exec_time FROM pg_stat_statements LIMIT 5", controlPerf, trickRead},
+		{"INSERT INTO employees (id, name) VALUES (900, 'Dee Draft')", controlWrite, trickWrite},
+		{"UPDATE employees SET name = upper(name) WHERE id > 2", controlWrite, trickWrite},
+		{"DELETE FROM employees WHERE id > 2", controlWrite, trickWrite},
+	},
+	EngineMySQL: {
+		{"SELECT e.id, e.name, s.amount FROM employees e JOIN salaries s ON e.id = s.employee_id ORDER BY e.id", controlRead, trickRead},
+		{"SELECT COUNT(*), AVG(amount), MAX(amount) FROM salaries", controlRead, trickRead},
+		{"SELECT UPPER(name), LENGTH(name), DATE_FORMAT(NOW(), '%Y'), CONCAT(name, '!') FROM employees", controlRead, trickRead},
+		{"SELECT id FROM employees WHERE name = 'Ada Example'", controlRead, trickRead},
+		{"EXPLAIN SELECT * FROM employees WHERE id > 1", controlRead, trickRead},
+		{"DESCRIBE employees", controlRead, trickRead},
+		{"SHOW TABLES", controlRead, trickRead},
+		{"SELECT digest_text, count_star FROM performance_schema.events_statements_summary_by_digest LIMIT 5", controlPerf, trickRead},
+		{"INSERT INTO employees (id, name) VALUES (900, 'Dee Draft')", controlWrite, trickWrite},
+		{"UPDATE employees SET name = UPPER(name) WHERE id > 2", controlWrite, trickWrite},
+		{"DELETE FROM employees WHERE id > 2", controlWrite, trickWrite},
+	},
 }
