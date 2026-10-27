@@ -43,9 +43,6 @@ async function merge(): Promise<void> {
 <template>
   <AppModal :title="`Merge ${source} into ${target}`" @close="emit('close')">
     <p class="merge-note">{{ summary }}</p>
-    <p class="merge-note">
-      A conflict stops the merge so you can resolve it, then continue or abort.
-    </p>
     <p v-if="error" class="merge-error">{{ error }}</p>
 
     <template #footer>
