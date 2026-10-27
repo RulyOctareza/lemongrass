@@ -47,9 +47,9 @@ CREATE DATABASE vault_archive;
 CREATE TABLE vault_archive.employees (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL DEFAULT '');
 INSERT INTO vault_archive.employees VALUES (1, 'Archived Example');
 
--- The app user the suite connects as: DML and EXECUTE on its own databases, plus what the performance views need (PROCESS and reads of performance_schema and sys). No FILE, no SUPER, no DDL.
+-- The app user the suite connects as: DML and EXECUTE on its own databases, CREATE and DROP on vaultapp the way an app that runs its own migrations has them (service_mysql_test.go builds its own tables), plus what the performance views need (PROCESS and reads of performance_schema and sys). No FILE, no SUPER.
 CREATE USER 'vaultapp'@'%' IDENTIFIED BY 'vaultapp-pass';
-GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON vaultapp.* TO 'vaultapp'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE, CREATE, DROP ON vaultapp.* TO 'vaultapp'@'%';
 GRANT SELECT, INSERT, UPDATE, DELETE ON vault_archive.* TO 'vaultapp'@'%';
 GRANT SELECT ON performance_schema.* TO 'vaultapp'@'%';
 GRANT SELECT, EXECUTE ON sys.* TO 'vaultapp'@'%';
