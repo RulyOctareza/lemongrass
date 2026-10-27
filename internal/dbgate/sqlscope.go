@@ -193,15 +193,22 @@ func classifyMySQLUpdate(sqlText string, stmt *sqlparser.Update) (Statement, err
 		return Statement{}, err
 	}
 	tables := mysqlTables(stmt)
-	return Statement{Kind: KindUpdate, Tables: tables, WriteTables: mysqlUpdateWriteTables(stmt, tables), Catalog: CatalogNames{Functions: calls}}, nil
+	writes, err := mysqlUpdateWriteTables(stmt, tables)
+	if err != nil {
+		return Statement{}, err
+	}
+	return Statement{Kind: KindUpdate, Tables: tables, WriteTables: writes, Catalog: CatalogNames{Functions: calls}}, nil
 }
 
-// mysqlUpdateWriteTables resolves which of the update's tables are actually written to. A single-table update is unambiguous; a multi-table one (UPDATE a, b SET a.x = b.x ...) is resolved by tracing each SET column's table qualifier, alias or real name, back to a real table via mysqlTableAliases.
-func mysqlUpdateWriteTables(stmt *sqlparser.Update, tables []string) []string {
+// mysqlUpdateWriteTables resolves which of the update's tables are actually written to. A single-table update is unambiguous; a multi-table one (UPDATE a, b SET a.x = b.x ...) is resolved by tracing each SET column's table qualifier, alias or real name, back to a real table via mysqlTableRefs.
+func mysqlUpdateWriteTables(stmt *sqlparser.Update, tables []string) ([]string, error) {
 	if len(tables) == 1 {
-		return tables
+		return tables, nil
 	}
-	aliases := mysqlTableAliases(stmt.TableExprs)
+	aliases, err := mysqlTableRefs(stmt.TableExprs)
+	if err != nil {
+		return nil, err
+	}
 	seen := make(map[string]bool)
 	for _, e := range stmt.Exprs {
 		q := e.Name.Qualifier
@@ -216,7 +223,7 @@ func mysqlUpdateWriteTables(stmt *sqlparser.Update, tables []string) []string {
 			seen[real] = true
 		}
 	}
-	return sortedKeys(seen)
+	return sortedKeys(seen), nil
 }
 
 func classifyMySQLDelete(sqlText string, stmt *sqlparser.Delete) (Statement, error) {
@@ -232,29 +239,54 @@ func classifyMySQLDelete(sqlText string, stmt *sqlparser.Delete) (Statement, err
 	if len(stmt.Targets) == 0 {
 		return Statement{Kind: KindDelete, Tables: tables, WriteTables: tables, Catalog: catalog}, nil
 	}
+	refs, err := mysqlTableRefs(stmt.TableExprs)
+	if err != nil {
+		return Statement{}, err
+	}
+	all := toSet(tables)
 	seen := make(map[string]bool)
 	for _, tn := range stmt.Targets {
-		seen[qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String())] = true
+		var real string
+		if tn.Qualifier.IsEmpty() {
+			real = refs[strings.ToLower(tn.Name.String())]
+		} else if q := qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String()); all[q] {
+			real = q
+		}
+		// MySQL itself rejects a target that names no table in the FROM list, so refusing one loses nothing.
+		if real == "" {
+			return Statement{}, fmt.Errorf("dbgate: DELETE target %s does not name a table in the statement", sqlparser.String(tn))
+		}
+		seen[real] = true
 	}
 	return Statement{Kind: KindDelete, Tables: tables, WriteTables: sortedKeys(seen), Catalog: catalog}, nil
 }
 
-// mysqlTableAliases maps each table's alias, and its real name, to its qualified table name, for resolving a SET column's qualifier in a multi-table UPDATE back to a real table.
-func mysqlTableAliases(node sqlparser.SQLNode) map[string]string {
-	aliases := make(map[string]string)
-	mysqlWalk(func(n sqlparser.SQLNode) (bool, error) {
-		if ate, ok := n.(*sqlparser.AliasedTableExpr); ok {
-			if tn, ok := ate.Expr.(sqlparser.TableName); ok && !tn.IsEmpty() {
-				qualified := qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String())
-				aliases[strings.ToLower(tn.Name.String())] = qualified
-				if !ate.As.IsEmpty() {
-					aliases[strings.ToLower(ate.As.String())] = qualified
-				}
+// mysqlTableRefs maps the name each table in a multi-table UPDATE or DELETE's own table list answers to, its alias when it has one and its real name otherwise, to its qualified table name, which is how MySQL resolves a DELETE target or a SET column qualifier. Subqueries are skipped, since their tables are out of reach of both. A name two different tables answer to, compared case-insensitively since alias case sensitivity depends on the server, is refused as ambiguous.
+func mysqlTableRefs(exprs sqlparser.TableExprs) (map[string]string, error) {
+	refs := make(map[string]string)
+	err := mysqlWalk(func(n sqlparser.SQLNode) (bool, error) {
+		switch node := n.(type) {
+		case *sqlparser.Subquery:
+			return false, nil
+		case *sqlparser.AliasedTableExpr:
+			tn, ok := node.Expr.(sqlparser.TableName)
+			if !ok || tn.IsEmpty() {
+				return true, nil
 			}
+			qualified := qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String())
+			name := tn.Name.String()
+			if !node.As.IsEmpty() {
+				name = node.As.String()
+			}
+			key := strings.ToLower(name)
+			if prev, ok := refs[key]; ok && prev != qualified {
+				return false, fmt.Errorf("dbgate: table name %s is ambiguous in this statement", name)
+			}
+			refs[key] = qualified
 		}
 		return true, nil
-	}, node)
-	return aliases
+	}, exprs)
+	return refs, err
 }
 
 var errExplainNotReadOnly = errors.New("dbgate: EXPLAIN is only allowed on a SELECT that writes nothing")
