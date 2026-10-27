@@ -12,6 +12,7 @@ import {
   removeAccount
 } from '../accounts'
 import AppButton from './AppButton.vue'
+import AppConfirmButton from './AppConfirmButton.vue'
 import PolicySection from './safety/PolicySection.vue'
 import type { Project } from '../../../preload/types'
 
@@ -29,7 +30,6 @@ const section = ref<'accounts' | 'safety'>('accounts')
 const newName = ref('')
 const addError = ref('')
 const adding = ref(false)
-const confirmingRemoval = ref<string | null>(null)
 const removeError = ref('')
 
 const nameError = computed(() => accountNameError(newName.value))
@@ -46,12 +46,6 @@ async function submitAdd(): Promise<void> {
 }
 
 async function onRemove(name: string): Promise<void> {
-  if (confirmingRemoval.value !== name) {
-    confirmingRemoval.value = name
-    removeError.value = ''
-    return
-  }
-  confirmingRemoval.value = null
   removeError.value = await removeAccount(name)
 }
 </script>
@@ -96,22 +90,16 @@ async function onRemove(name: string): Promise<void> {
             <span class="settings-row-meta">{{ PRIMARY_ACCOUNT_DIR }}</span>
             <span class="settings-badge">Primary</span>
           </li>
-          <li
-            v-for="account in accountStore.items"
-            :key="account.name"
-            class="settings-row"
-            @mouseleave="confirmingRemoval = null"
-          >
+          <li v-for="account in accountStore.items" :key="account.name" class="settings-row">
             <span class="settings-row-title">{{ account.name }}</span>
             <span class="settings-row-meta">{{ account.dir }}</span>
-            <button
-              type="button"
+            <AppConfirmButton
+              v-slot="{ armed }"
               class="settings-action"
-              :class="{ confirming: confirmingRemoval === account.name }"
-              @click="onRemove(account.name)"
+              @confirm="onRemove(account.name)"
             >
-              {{ confirmingRemoval === account.name ? 'Click again' : 'Remove' }}
-            </button>
+              {{ armed ? 'Click again' : 'Remove' }}
+            </AppConfirmButton>
           </li>
         </ul>
         <p v-if="removeError" class="settings-error">{{ removeError }}</p>

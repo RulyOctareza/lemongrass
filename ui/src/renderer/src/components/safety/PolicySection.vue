@@ -11,6 +11,7 @@ import type {
   VaultPolicyRule
 } from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
+import AppConfirmButton from '../AppConfirmButton.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -51,7 +52,6 @@ const loadError = ref('')
 const saveError = ref('')
 const savedNotice = ref('')
 const passphraseInput = ref('')
-const confirmingReset = ref(false)
 
 const newBinary = ref('')
 const newPath = ref('')
@@ -184,7 +184,6 @@ function showScope(): void {
   pathError.value = ''
   savedNotice.value = ''
   saveError.value = ''
-  confirmingReset.value = false
   applyPolicy(
     isGlobal.value ? policies.value.global : (policies.value.projects[scope.value] ?? emptyPolicy())
   )
@@ -239,13 +238,8 @@ async function save(): Promise<void> {
   }
 }
 
-// The first click arms the reset and the second clears the shown scope, which still needs Save.
+// Clears the shown scope, which still needs Save.
 function resetToDefaults(): void {
-  if (!confirmingReset.value) {
-    confirmingReset.value = true
-    return
-  }
-  confirmingReset.value = false
   applyPolicy(emptyPolicy())
   savedNotice.value = ''
 }
@@ -342,14 +336,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
             {{ project.name }}
           </option>
         </select>
-        <AppButton
-          :variant="confirmingReset ? 'danger' : 'ghost'"
+        <!-- Keyed by scope so switching scope drops a half-finished confirm. -->
+        <AppConfirmButton
+          :key="scope"
+          v-slot="{ armed }"
+          variant="ghost"
+          confirm-label="Click again to reset"
           :disabled="loading || saving"
-          @click="resetToDefaults"
-          @mouseleave="confirmingReset = false"
+          @confirm="resetToDefaults"
         >
-          {{ confirmingReset ? 'Click again to reset' : 'Reset to defaults' }}
-        </AppButton>
+          {{ armed ? 'Click again to reset' : 'Reset to defaults' }}
+        </AppConfirmButton>
       </div>
       <div v-if="filterOpen" class="find">
         <input

@@ -165,13 +165,6 @@
   background: var(--color-error-muted);
 }
 
-.settings-action.confirming,
-.settings-action.confirming:hover {
-  background: var(--color-error-muted);
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-
 .settings-add {
   display: flex;
   gap: var(--space-2);

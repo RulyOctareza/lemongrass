@@ -2,15 +2,15 @@
 <!-- Copyright (C) 2026 Faizal Alviansyah -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
+import AppConfirmButton from './AppConfirmButton.vue'
 
 export interface MenuItem {
   key: string
   label: string
   disabled?: boolean
   title?: string
-  // A destructive item turns red with a "Click again" hint on its first click and is selected
-  // only on the second, the way the tab menu's close actions behave.
+  // A destructive item is an AppConfirmButton, selected only on its armed click.
   confirm?: boolean
 }
 
@@ -24,17 +24,6 @@ const emit = defineEmits<{
   select: [key: string]
   close: []
 }>()
-
-const confirmingKey = ref<string | null>(null)
-
-function choose(item: MenuItem): void {
-  if (item.confirm && confirmingKey.value !== item.key) {
-    confirmingKey.value = item.key
-    return
-  }
-  confirmingKey.value = null
-  emit('select', item.key)
-}
 
 const WIDTH = 200
 const ROW = 30
@@ -66,19 +55,30 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="context-menu" role="menu" :style="{ left: `${left}px`, top: `${top}px` }">
-    <button
-      v-for="item in items"
-      :key="item.key"
-      class="menu-item"
-      role="menuitem"
-      :class="{ confirming: confirmingKey === item.key }"
-      :disabled="item.disabled"
-      :title="item.title"
-      @click="choose(item)"
-    >
-      {{ item.label }}
-      <span v-if="item.confirm" class="menu-confirm-hint">Click again</span>
-    </button>
+    <template v-for="item in items" :key="item.key">
+      <AppConfirmButton
+        v-if="item.confirm"
+        v-slot="{ armed }"
+        class="menu-item"
+        role="menuitem"
+        :disabled="item.disabled"
+        :title="item.title"
+        @confirm="emit('select', item.key)"
+      >
+        {{ item.label }}
+        <span class="menu-confirm-hint" :class="{ shown: armed }">Click again</span>
+      </AppConfirmButton>
+      <button
+        v-else
+        class="menu-item"
+        role="menuitem"
+        :disabled="item.disabled"
+        :title="item.title"
+        @click="emit('select', item.key)"
+      >
+        {{ item.label }}
+      </button>
+    </template>
   </div>
 </template>
 
@@ -115,12 +115,6 @@ onBeforeUnmount(() => {
   background: var(--color-surface-3);
 }
 
-.menu-item.confirming,
-.menu-item.confirming:hover:not(:disabled) {
-  background: var(--color-error-muted);
-  color: var(--color-error);
-}
-
 .menu-confirm-hint {
   margin-left: auto;
   padding-left: var(--space-4);
@@ -128,7 +122,7 @@ onBeforeUnmount(() => {
   visibility: hidden;
 }
 
-.menu-item.confirming .menu-confirm-hint {
+.menu-confirm-hint.shown {
   visibility: visible;
 }
 
