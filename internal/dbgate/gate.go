@@ -5,6 +5,7 @@
 package dbgate
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -198,22 +199,44 @@ func (g *Gate) Execute(id vault.ChannelID, sqlText string, commit bool, actor st
 	return g.runWrite(id, actor, stmt, db, sqlText, commit)
 }
 
-// runWrite runs sqlText inside a transaction and resolves it, committing when commit is true and rolling back otherwise, or rolling back regardless if the statement itself failed. The audit row is written right after resolution either way, so a rejection earlier in Execute (classify, scope) that never opened a transaction never produces one, but an attempt that reached the database and failed there still does.
+// runWrite runs sqlText inside a transaction and resolves it, committing when commit is true and rolling back otherwise, or rolling back regardless if the statement itself failed or ran into the limit. The audit row is written right after resolution either way, so a rejection earlier in Execute (classify, scope) that never opened a transaction never produces one, but an attempt that reached the database and failed there still does.
 func (g *Gate) runWrite(id vault.ChannelID, actor string, stmt Statement, db *sql.DB, sqlText string, commit bool) (WriteResult, error) {
-	tx, err := db.Begin()
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return WriteResult{}, fmt.Errorf("dbgate: beginning transaction: %s", describeDBError(err))
+	}
+	discard := false
+	defer func() {
+		if discard {
+			discardConn(conn)
+		} else {
+			conn.Close()
+		}
+	}()
+	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		return WriteResult{}, fmt.Errorf("dbgate: beginning transaction: %s", describeDBError(err))
 	}
 	// A refusal here writes no audit row, since the statement itself never ran.
-	if err := prepareTx(tx, stmt); err != nil {
+	stop, err := prepareTx(db, tx, stmt)
+	if err != nil {
 		tx.Rollback()
 		return WriteResult{}, err
 	}
 
-	res, execErr := tx.Exec(sqlText)
+	ctx, cancel := statementContext()
+	stop.arm()
+	res, execErr := tx.ExecContext(ctx, sqlText)
 	var affected int64
 	if execErr == nil {
 		affected, execErr = res.RowsAffected()
+	}
+	// The limit ends before COMMIT, so a late KILL can never leave a commit's outcome unknown: once it fired, the write is rolled back whatever the statement returned.
+	fired := stop.disarm()
+	cancel()
+	if fired {
+		discard = true
+		execErr = errStatementLimit()
 	}
 
 	var resolveErr error
@@ -225,7 +248,10 @@ func (g *Gate) runWrite(id vault.ChannelID, actor string, stmt Statement, db *sq
 	g.auditWrite(id, actor, stmt, affected, commit, execErr)
 
 	if execErr != nil {
-		return WriteResult{}, fmt.Errorf("dbgate: executing statement: %s", describeDBError(execErr))
+		if fired {
+			return WriteResult{}, execErr
+		}
+		return WriteResult{}, statementError("executing statement", execErr)
 	}
 	if resolveErr != nil {
 		verb := "committing"

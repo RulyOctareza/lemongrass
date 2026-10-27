@@ -6,6 +6,7 @@ package dbgate
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net/url"
@@ -84,10 +85,13 @@ func openDB(connString string) (*sql.DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("dbgate: parsing connection string: %w", err)
 		}
-		if sshAlias == "" {
-			return sql.OpenDB(connector), nil
+		var c driver.Connector = connector
+		if sshAlias != "" {
+			c = sshConnector{connector}
 		}
-		return sql.OpenDB(sshConnector{connector}), nil
+		db := sql.OpenDB(c)
+		registerKillConnector(db, c)
+		return db, nil
 	case EnginePostgres:
 		cfg, err := postgresConfig(connString)
 		if err != nil {
@@ -230,53 +234,93 @@ type QueryResult struct {
 	Rows    [][]interface{} `json:"rows"`
 }
 
-// postgresTxGuard runs before the caller's SQL in every transaction. It puts pg_catalog first on search_path, so a role or database default can't resolve an allowlisted name like lower() to a user function, and turns standard_conforming_strings on, the setting the parser assumes, so backslashes in strings mean the same to both. Both are transaction-local and end with it.
-const postgresTxGuard = `SELECT set_config('search_path', concat_ws(', ', 'pg_catalog', NULLIF(current_setting('search_path'), '')), true), set_config('standard_conforming_strings', 'on', true)`
+// postgresTxGuard runs before the caller's SQL in every transaction. It puts pg_catalog first on search_path, so a role or database default can't resolve an allowlisted name like lower() to a user function, turns standard_conforming_strings on, the setting the parser assumes, so backslashes in strings mean the same to both, and sets statement_timeout ($1, in milliseconds) so the server itself stops a statement at the limit. All three are transaction-local and end with it.
+const postgresTxGuard = `SELECT set_config('search_path', concat_ws(', ', 'pg_catalog', NULLIF(current_setting('search_path'), '')), true), set_config('standard_conforming_strings', 'on', true), set_config('statement_timeout', $1, true)`
 
 // guardTx prepares tx for the caller's SQL on engine.
 func guardTx(tx *sql.Tx, engine Engine) error {
 	if engine != EnginePostgres {
 		return nil
 	}
-	if _, err := tx.Exec(postgresTxGuard); err != nil {
+	if _, err := tx.Exec(postgresTxGuard, postgresStatementTimeout()); err != nil {
 		return fmt.Errorf("dbgate: preparing transaction: %s", describeDBError(err))
 	}
 	return nil
 }
 
-// prepareTx runs, inside tx and before the caller's SQL, the session pins and then the catalog check for the functions stmt calls.
-func prepareTx(tx *sql.Tx, stmt Statement) error {
+// prepareTx runs, inside tx and before the caller's SQL, the session pins and then the catalog check for the functions stmt calls, and returns how the caller's statement is stopped at the limit. The limit covers only the caller's statement, not these steps.
+func prepareTx(db *sql.DB, tx *sql.Tx, stmt Statement) (*statementStop, error) {
 	if err := guardTx(tx, stmt.Engine); err != nil {
-		return err
+		return nil, err
 	}
+	stop := &statementStop{db: db, engine: stmt.Engine}
 	switch stmt.Engine {
 	case EngineMySQL:
-		return checkMySQLCatalog(tx, stmt)
+		if err := checkMySQLCatalog(tx, stmt); err != nil {
+			return nil, err
+		}
+		id, err := mysqlConnectionID(tx)
+		if err != nil {
+			return nil, err
+		}
+		stop.connID = id
 	case EnginePostgres:
-		return checkPostgresCatalog(tx, stmt)
+		if err := checkPostgresCatalog(tx, stmt); err != nil {
+			return nil, err
+		}
 	default:
-		return fmt.Errorf("dbgate: unsupported engine %q", stmt.Engine)
+		return nil, fmt.Errorf("dbgate: unsupported engine %q", stmt.Engine)
 	}
+	return stop, nil
 }
 
 // runQuery executes sqlText against db and shapes the result. sqlText has already been
 // classified by ClassifyQuery into stmt, a single read-only statement. It runs in a read-only
 // transaction that is always rolled back, so the database itself refuses a write the classifier
-// missed and nothing the statement did outlives the call.
+// missed and nothing the statement did outlives the call. The statement, reading its rows
+// included, is stopped at statementLimit.
 func runQuery(db *sql.DB, stmt Statement, sqlText string) (QueryResult, error) {
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("dbgate: executing query: %s", describeDBError(err))
+	}
+	discard := false
+	defer func() {
+		if discard {
+			discardConn(conn)
+		} else {
+			conn.Close()
+		}
+	}()
 	// BEGIN is the first round trip, so its failure is reported the same way a failed statement is.
-	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	tx, err := conn.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return QueryResult{}, fmt.Errorf("dbgate: executing query: %s", describeDBError(err))
 	}
 	defer tx.Rollback()
-	if err := prepareTx(tx, stmt); err != nil {
+	stop, err := prepareTx(db, tx, stmt)
+	if err != nil {
 		return QueryResult{}, err
 	}
 
-	rows, err := tx.Query(sqlText)
+	ctx, cancel := statementContext()
+	defer cancel()
+	stop.arm()
+	result, err := readRows(ctx, tx, sqlText)
+	fired := stop.disarm()
+	// A KILL may have landed after the rows were read, so this connection can't go back to the pool.
+	discard = fired
+	if fired {
+		return QueryResult{}, errStatementLimit()
+	}
+	return result, err
+}
+
+// readRows runs sqlText in tx and reads every row, since MySQL streams rows while the statement is still running.
+func readRows(ctx context.Context, tx *sql.Tx, sqlText string) (QueryResult, error) {
+	rows, err := tx.QueryContext(ctx, sqlText)
 	if err != nil {
-		return QueryResult{}, fmt.Errorf("dbgate: executing query: %s", describeDBError(err))
+		return QueryResult{}, statementError("executing query", err)
 	}
 	defer rows.Close()
 
@@ -302,7 +346,7 @@ func runQuery(db *sql.DB, stmt Statement, sqlText string) (QueryResult, error) {
 		result.Rows = append(result.Rows, row)
 	}
 	if err := rows.Err(); err != nil {
-		return QueryResult{}, fmt.Errorf("dbgate: reading rows: %w", err)
+		return QueryResult{}, statementError("reading rows", err)
 	}
 	return result, nil
 }

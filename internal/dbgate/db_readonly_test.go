@@ -125,6 +125,8 @@ func stmtKinds(stmts []string) []string {
 			out[i] = "lookup"
 		case s == "SELECT VERSION()":
 			out[i] = "version"
+		case s == mysqlConnectionIDQuery:
+			out[i] = "connid"
 		default:
 			out[i] = "user"
 		}
@@ -147,8 +149,8 @@ func TestRunQueryOrderInReadOnlyTransaction(t *testing.T) {
 		sql    string
 		want   []string
 	}{
-		{EngineMySQL, "SELECT id FROM employees", []string{"user"}},
-		{EngineMySQL, "SELECT UPPER(name) FROM employees", []string{"lookup", "user"}},
+		{EngineMySQL, "SELECT id FROM employees", []string{"connid", "user"}},
+		{EngineMySQL, "SELECT UPPER(name) FROM employees", []string{"lookup", "connid", "user"}},
 		{EnginePostgres, "SELECT id FROM employees", []string{"pins", "user"}},
 		{EnginePostgres, "SELECT upper(name) FROM employees", []string{"pins", "lookup", "user"}},
 	}
@@ -232,7 +234,7 @@ func TestMySQLCatalogFallsBackToRoutinesOnMariaDB(t *testing.T) {
 	if _, err := runQuery(openFakeDB(t, log), classifyFor(t, EngineMySQL, sqlText), sqlText); err != nil {
 		t.Fatalf("runQuery: %v", err)
 	}
-	if got, want := stmtKinds(log.stmts), []string{"lookup", "version", "lookup", "user"}; !reflect.DeepEqual(got, want) {
+	if got, want := stmtKinds(log.stmts), []string{"lookup", "version", "lookup", "connid", "user"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("statements = %v, want %v", got, want)
 	}
 	if strings.Contains(log.stmts[2], "user_defined_functions") {
@@ -253,7 +255,7 @@ func TestRunWriteChecksBeforeTheStatement(t *testing.T) {
 		engine Engine
 		want   []string
 	}{
-		{EngineMySQL, []string{"lookup", "user"}},
+		{EngineMySQL, []string{"lookup", "connid", "user"}},
 		{EnginePostgres, []string{"pins", "lookup", "user"}},
 	}
 	for _, c := range cases {
@@ -294,7 +296,7 @@ func TestPostgresTxGuardPinsCatalogAndStrings(t *testing.T) {
 			t.Errorf("postgresTxGuard lacks %s", want)
 		}
 	}
-	if strings.Count(postgresTxGuard, ", true)") != 2 {
-		t.Errorf("postgresTxGuard must set both values transaction-local: %s", postgresTxGuard)
+	if strings.Count(postgresTxGuard, ", true)") != 3 {
+		t.Errorf("postgresTxGuard must set every value transaction-local: %s", postgresTxGuard)
 	}
 }
