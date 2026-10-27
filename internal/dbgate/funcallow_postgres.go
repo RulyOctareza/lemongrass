@@ -73,6 +73,26 @@ var postgresTypes = toSet([]string{
 // postgresTableSamples is every TABLESAMPLE method a statement may use, since a method is a handler function that could be user code.
 var postgresTableSamples = toSet([]string{"system", "bernoulli"})
 
+// postgresNodes is every parse-tree node kind a statement may hold. The JSON writes each Node as a one-key object named for its kind, always capitalized, so an unlisted kind, such as syntax a newer Postgres adds, refuses the statement instead of passing unchecked. Each kind is either checked in checkPostgresCalls or pure syntax whose children are walked; LockingClause is left out so FOR UPDATE/SHARE is refused even inside a write.
+var postgresNodes = toSet([]string{
+	// statements; nested writes are refused separately by postgresWriteCount
+	"SelectStmt", "InsertStmt", "UpdateStmt", "DeleteStmt", "ExplainStmt",
+	// checked
+	"FuncCall", "A_Expr", "SubLink", "SortBy", "TypeName", "TypeCast", "RangeTableSample", "ColumnRef", "A_Indirection", "RangeVar", "CommonTableExpr",
+	// expressions
+	"A_Const", "A_Star", "A_Indices", "A_ArrayExpr", "String", "Integer", "Float", "Boolean", "BitString", "List", "ParamRef", "NamedArgExpr",
+	"CollateClause", "BoolExpr", "NullTest", "BooleanTest", "CaseExpr", "CaseWhen", "CoalesceExpr", "MinMaxExpr", "RowExpr", "SQLValueFunction",
+	"GroupingFunc", "GroupingSet", "SetToDefault", "MultiAssignRef",
+	// clauses
+	"ResTarget", "WindowDef", "RangeSubselect", "RangeFunction", "JoinExpr", "ColumnDef", "DefElem", "IndexElem", "Alias",
+	// XML built-ins, none of which reads a table
+	"XmlExpr", "XmlSerialize", "RangeTableFunc", "RangeTableFuncCol",
+	// SQL/JSON built-ins; a jsonpath can neither call a function nor read a table
+	"JsonFuncExpr", "JsonTable", "JsonTablePathSpec", "JsonTableColumn", "JsonValueExpr", "JsonOutput", "JsonFormat", "JsonReturning",
+	"JsonBehavior", "JsonArgument", "JsonKeyValue", "JsonObjectConstructor", "JsonArrayConstructor", "JsonArrayQueryConstructor",
+	"JsonAggConstructor", "JsonObjectAgg", "JsonArrayAgg", "JsonParseExpr", "JsonScalarExpr", "JsonSerializeExpr", "JsonIsPredicate",
+})
+
 // checkPostgresCalls refuses a statement whose tree calls a function, operator, type or tablesample method outside its allowlist, wherever it sits, the FROM clause and ROWS FROM included. It returns the names the catalog check must still look up: a pg_catalog-qualified name is left out, since it resolves only inside pg_catalog.
 func checkPostgresCalls(tree any) (CatalogNames, error) {
 	functions := make(map[string]bool)
@@ -81,6 +101,10 @@ func checkPostgresCalls(tree any) (CatalogNames, error) {
 	var err error
 	walkJSON(tree, func(key string, val any) {
 		if err != nil {
+			return
+		}
+		if key != "" && key[0] >= 'A' && key[0] <= 'Z' && !postgresNodes[key] {
+			err = fmt.Errorf("dbgate: %s is not supported", key)
 			return
 		}
 		m, _ := val.(map[string]any)
