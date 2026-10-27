@@ -4,6 +4,7 @@
 package dbgate
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -47,7 +48,9 @@ func TestClassifyQueryMySQLIntrospect(t *testing.T) {
 		{"SHOW CREATE TABLE employees", []string{"employees"}},
 		{"DESCRIBE employees", []string{"employees"}},
 		{"DESC employees", []string{"employees"}},
-		{"EXPLAIN SELECT * FROM employees", nil},
+		{"EXPLAIN employees", nil},
+		{"EXPLAIN WITH x AS (SELECT 1) SELECT * FROM x", nil},
+		{"EXPLAIN (SELECT * FROM employees)", nil},
 	}
 	for _, tt := range tests {
 		got, err := ClassifyQuery(EngineMySQL, tt.sql)
@@ -60,6 +63,49 @@ func TestClassifyQueryMySQLIntrospect(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got.Tables, tt.wantTables) {
 			t.Errorf("ClassifyQuery(%q).Tables = %v, want %v", tt.sql, got.Tables, tt.wantTables)
+		}
+	}
+}
+
+func TestClassifyQueryMySQLExplainKeepsWrappedTables(t *testing.T) {
+	cases := []struct {
+		sql    string
+		tables []string
+	}{
+		{"EXPLAIN SELECT * FROM employees e JOIN salaries s ON e.id = s.emp_id", []string{"employees", "salaries"}},
+		{"explain select * from employees", []string{"employees"}},
+		{"DESCRIBE SELECT * FROM employees", []string{"employees"}},
+		{"DESC SELECT * FROM employees", []string{"employees"}},
+		{"EXPLAIN FORMAT=JSON SELECT * FROM employees", []string{"employees"}},
+		{"EXPLAIN ANALYZE FORMAT = TREE SELECT * FROM employees", []string{"employees"}},
+		{"EXPLAIN SELECT id FROM employees UNION SELECT id FROM contractors", []string{"contractors", "employees"}},
+		{"EXPLAIN (SELECT id FROM employees) UNION (SELECT id FROM contractors)", []string{"contractors", "employees"}},
+	}
+	for _, c := range cases {
+		got, err := ClassifyQuery(EngineMySQL, c.sql)
+		if err != nil {
+			t.Errorf("ClassifyQuery(%q): %v", c.sql, err)
+			continue
+		}
+		if got.Kind != KindExplain {
+			t.Errorf("ClassifyQuery(%q).Kind = %q, want %q", c.sql, got.Kind, KindExplain)
+		}
+		if !reflect.DeepEqual(got.Tables, c.tables) {
+			t.Errorf("ClassifyQuery(%q).Tables = %v, want %v", c.sql, got.Tables, c.tables)
+		}
+	}
+}
+
+func TestClassifyQueryMySQLExplainRejectsWrite(t *testing.T) {
+	for _, sql := range []string{
+		"EXPLAIN UPDATE employees SET name = 'a' WHERE id = 1",
+		"EXPLAIN ANALYZE UPDATE employees e JOIN salaries s ON e.id = s.emp_id SET e.name = 'a' WHERE s.amount > 1",
+		"EXPLAIN DELETE FROM employees WHERE id = 1",
+		"EXPLAIN INSERT INTO employees (name) VALUES ('a')",
+		"DESCRIBE REPLACE INTO employees (name) VALUES ('a')",
+	} {
+		if _, err := ClassifyQuery(EngineMySQL, sql); !errors.Is(err, errExplainNotReadOnly) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errExplainNotReadOnly", sql, err)
 		}
 	}
 }
@@ -226,6 +272,23 @@ func TestClassifyQueryPostgresExplainKeepsWrappedTables(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Tables, []string{"employees", "salaries"}) {
 		t.Errorf("Tables = %v, want [employees salaries]", got.Tables)
+	}
+}
+
+func TestClassifyQueryPostgresExplainRejectsWrite(t *testing.T) {
+	for _, sql := range []string{
+		"EXPLAIN ANALYZE UPDATE employees SET name = 'a' WHERE id = 1",
+		"EXPLAIN DELETE FROM employees WHERE id = 1",
+		"EXPLAIN ANALYZE INSERT INTO employees (name) VALUES ('a')",
+		"EXPLAIN ANALYZE MERGE INTO employees e USING salaries s ON e.id = s.id WHEN MATCHED THEN DELETE",
+		"EXPLAIN ANALYZE CREATE TABLE copy AS SELECT * FROM employees",
+		"EXPLAIN ANALYZE SELECT * INTO copy FROM employees",
+		"EXPLAIN ANALYZE EXECUTE prepared",
+		"EXPLAIN ANALYZE WITH d AS (DELETE FROM employees WHERE id = 1 RETURNING *) SELECT * FROM d",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errExplainNotReadOnly) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errExplainNotReadOnly", sql, err)
+		}
 	}
 }
 

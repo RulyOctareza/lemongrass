@@ -156,6 +156,7 @@ func TestAllowStatementPerformanceGrant(t *testing.T) {
 		{"postgres bare view without grant", withoutGrant, EnginePostgres, "SELECT * FROM pg_stat_statements", false},
 		{"postgres pg_catalog view with grant", withGrant, EnginePostgres, "SELECT * FROM pg_catalog.pg_locks", true},
 		{"postgres pg_catalog table off the allowlist", withGrant, EnginePostgres, "SELECT * FROM pg_catalog.pg_class", false},
+		{"mysql explain of a view", vault.Scope{Operations: []string{"explain", OperationPerformance}}, EngineMySQL, "EXPLAIN SELECT digest_text FROM performance_schema.events_statements_summary_by_digest", true},
 		{"postgres explain of a view", vault.Scope{Operations: []string{"explain", OperationPerformance}}, EnginePostgres, "EXPLAIN SELECT * FROM pg_stat_statements", true},
 	}
 	for _, c := range cases {

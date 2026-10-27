@@ -5,6 +5,7 @@ package dbgate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -70,6 +71,10 @@ func classifyMySQL(sqlText string) (Statement, error) {
 	}
 	if len(stmts) != 1 {
 		return Statement{}, fmt.Errorf("dbgate: exactly one SQL statement is allowed, got %d", len(stmts))
+	}
+
+	if stmt, ok, err := classifyMySQLExplain(stmts[0]); ok || err != nil {
+		return stmt, err
 	}
 
 	stmt, err := sqlparser.Parse(stmts[0])
@@ -177,6 +182,45 @@ func mysqlTableAliases(node sqlparser.SQLNode) map[string]string {
 	return aliases
 }
 
+var errExplainNotReadOnly = errors.New("dbgate: EXPLAIN is only allowed on a SELECT that writes nothing")
+
+// mysqlExplainRegex splits EXPLAIN/DESCRIBE/DESC and its known modifiers from the statement it wraps, which this parser's grammar force_eofs instead of parsing.
+var mysqlExplainRegex = regexp.MustCompile(`(?is)^\s*(?:EXPLAIN|DESCRIBE|DESC)((?:\s+(?:ANALYZE|EXTENDED|PARTITIONS|FORMAT\s*=\s*\w+))*)\s+(.*)$`)
+
+var (
+	mysqlWriteLeadRegex  = regexp.MustCompile(`(?i)^(?:INSERT|REPLACE|UPDATE|DELETE)\b`)
+	mysqlSelectLeadRegex = regexp.MustCompile(`(?i)^(?:SELECT\b|\()`)
+)
+
+// classifyMySQLExplain parses the SELECT an EXPLAIN wraps so it is checked as explain on that SELECT's own tables. ok is false for any form it doesn't recognize, or a wrapped query this parser can't read, leaving it to the table-less introspect path.
+func classifyMySQLExplain(sqlText string) (Statement, bool, error) {
+	m := mysqlExplainRegex.FindStringSubmatch(sqlText)
+	if m == nil {
+		return Statement{}, false, nil
+	}
+	inner := m[2]
+	if mysqlWriteLeadRegex.MatchString(inner) {
+		return Statement{}, false, errExplainNotReadOnly
+	}
+	if !mysqlSelectLeadRegex.MatchString(inner) {
+		return Statement{}, false, nil
+	}
+	stmt, err := sqlparser.Parse(inner)
+	if err != nil {
+		return Statement{}, false, nil
+	}
+	switch stmt.(type) {
+	case *sqlparser.Select, *sqlparser.Union, *sqlparser.ParenSelect:
+	default:
+		return Statement{}, false, nil
+	}
+	tables := mysqlTables(stmt)
+	if err := checkRestrictedColumns(EngineMySQL, tables, mysqlColumnRefs(stmt)); err != nil {
+		return Statement{}, false, err
+	}
+	return Statement{Kind: KindExplain, Tables: tables}, true, nil
+}
+
 // introspectTableRegex recovers the table this parser force_eofs out of DESCRIBE/DESC and SHOW CREATE TABLE/COLUMNS/FIELDS/INDEX/INDEXES/KEYS.
 var introspectTableRegex = regexp.MustCompile(`(?is)^\s*(?:DESCRIBE|DESC|SHOW\s+CREATE\s+TABLE|SHOW\s+(?:COLUMNS|FIELDS|INDEX|INDEXES|KEYS)\s+(?:FROM|IN))\s+` + "`?([a-zA-Z0-9_$]+(?:\\.[a-zA-Z0-9_$]+)?)`?")
 
@@ -242,6 +286,10 @@ func classifyPostgres(sqlText string) (Statement, error) {
 	case *pganalyze.Node_SelectStmt:
 		kind = KindSelect
 	case *pganalyze.Node_ExplainStmt:
+		// EXPLAIN ANALYZE executes the statement it wraps, so anything but a SELECT would let an explain grant write.
+		if _, ok := st.ExplainStmt.GetQuery().GetNode().(*pganalyze.Node_SelectStmt); !ok {
+			return Statement{}, errExplainNotReadOnly
+		}
 		kind = KindExplain
 	case *pganalyze.Node_VariableShowStmt:
 		return Statement{Kind: KindIntrospect}, nil
@@ -267,6 +315,9 @@ func classifyPostgres(sqlText string) (Statement, error) {
 	parsed, err := postgresJSON(sqlText)
 	if err != nil {
 		return Statement{}, err
+	}
+	if kind == KindExplain && postgresWrites(parsed) {
+		return Statement{}, errExplainNotReadOnly
 	}
 	tables := postgresTables(parsed)
 
@@ -294,6 +345,18 @@ func postgresJSON(sqlText string) (any, error) {
 		return nil, fmt.Errorf("dbgate: decoding parsed SQL: %w", err)
 	}
 	return tree, nil
+}
+
+// postgresWrites reports whether a SELECT's tree writes anywhere, through a data-modifying CTE or SELECT INTO, neither of which postgresTables sees as a table.
+func postgresWrites(tree any) bool {
+	found := false
+	walkJSON(tree, func(key string, _ any) {
+		switch key {
+		case "InsertStmt", "UpdateStmt", "DeleteStmt", "MergeStmt", "intoClause":
+			found = true
+		}
+	})
+	return found
 }
 
 // postgresTables collects every RangeVar's relname except the statement's own CTE names, since Postgres uses RangeVar only for real relations, unlike MySQL's reused TableName.

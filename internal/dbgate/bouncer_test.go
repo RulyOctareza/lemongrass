@@ -59,6 +59,37 @@ func TestAllowStatementIntrospectDeniedWithoutShow(t *testing.T) {
 	}
 }
 
+func TestAllowStatementMySQLExplainNeedsExplainNotShow(t *testing.T) {
+	explainOnly := vault.Scope{Tables: []string{"employees"}, Operations: []string{"explain"}}
+	showOnly := vault.Scope{Tables: []string{"employees"}, Operations: []string{"show"}}
+	cases := []struct {
+		name    string
+		scope   vault.Scope
+		sql     string
+		allowed bool
+	}{
+		{"explain of a granted table", explainOnly, "EXPLAIN SELECT * FROM employees", true},
+		{"explain of an ungranted table", explainOnly, "EXPLAIN SELECT * FROM employees JOIN salaries ON employees.id = salaries.emp_id", false},
+		{"show tables without show", explainOnly, "SHOW TABLES", false},
+		{"explain without explain", showOnly, "EXPLAIN SELECT * FROM employees", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stmt, err := ClassifyQuery(EngineMySQL, c.sql)
+			if err != nil {
+				t.Fatalf("ClassifyQuery: %v", err)
+			}
+			err = AllowStatement(c.scope, stmt)
+			if c.allowed && err != nil {
+				t.Errorf("AllowStatement: %v", err)
+			}
+			if !c.allowed && err == nil {
+				t.Error("AllowStatement returned nil, want ErrScopeViolation")
+			}
+		})
+	}
+}
+
 func TestAllowStatementPermitsGrantedWrite(t *testing.T) {
 	s := vault.Scope{Tables: []string{"employees"}, Operations: []string{"insert"}}
 	stmt := Statement{Kind: KindInsert, Tables: []string{"employees"}, WriteTables: []string{"employees"}}
