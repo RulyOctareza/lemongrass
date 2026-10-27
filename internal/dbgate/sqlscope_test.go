@@ -261,6 +261,71 @@ func TestClassifyQueryPostgresSelect(t *testing.T) {
 	}
 }
 
+func TestClassifyQueryPostgresCTEScope(t *testing.T) {
+	cases := []struct {
+		name   string
+		sql    string
+		tables []string
+	}{
+		{"schema-qualified name is never a CTE", `WITH secrets AS (SELECT 1 AS x) SELECT * FROM public.secrets`, []string{"public.secrets"}},
+		{"inner CTE does not hide an outer read", `SELECT * FROM secrets WHERE id IN (WITH secrets AS (SELECT 1 AS id) SELECT id FROM secrets)`, []string{"secrets"}},
+		{"CTE does not see itself without RECURSIVE", `WITH secrets AS (SELECT * FROM secrets) SELECT * FROM secrets`, []string{"secrets"}},
+		{"CTE does not see a later sibling", `WITH a AS (SELECT * FROM secrets), secrets AS (SELECT 1 AS x) SELECT * FROM a`, []string{"secrets"}},
+		{"CTE sees an earlier sibling", `WITH secrets AS (SELECT 1 AS x), a AS (SELECT * FROM secrets) SELECT * FROM a`, nil},
+		{"RECURSIVE CTE sees itself", `WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM t WHERE n < 3) SELECT * FROM t`, nil},
+		{"outer CTE visible in a subquery", `WITH secrets AS (SELECT 1 AS id) SELECT * FROM employees WHERE id IN (SELECT id FROM secrets)`, []string{"employees"}},
+		{"name reused at two levels", `WITH secrets AS (SELECT * FROM employees) SELECT * FROM secrets WHERE id IN (WITH secrets AS (SELECT * FROM salaries) SELECT id FROM secrets)`, []string{"employees", "salaries"}},
+		{"CTE in a subquery leaves a sibling subquery alone", `SELECT (WITH secrets AS (SELECT 1 AS x) SELECT x FROM secrets), (SELECT count(*) FROM secrets)`, []string{"secrets"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ClassifyQuery(EnginePostgres, c.sql)
+			if err != nil {
+				t.Fatalf("ClassifyQuery: %v", err)
+			}
+			if len(got.Tables) != 0 || len(c.tables) != 0 {
+				if !reflect.DeepEqual(got.Tables, c.tables) {
+					t.Errorf("Tables = %v, want %v", got.Tables, c.tables)
+				}
+			}
+		})
+	}
+}
+
+func TestClassifyQueryPostgresWriteCTEScope(t *testing.T) {
+	cases := []struct {
+		name   string
+		sql    string
+		tables []string
+	}{
+		{"insert with a CTE", `WITH s AS (SELECT id FROM salaries) INSERT INTO employees (id) SELECT id FROM s`, []string{"employees", "salaries"}},
+		{"insert reading a qualified table named like its CTE", `WITH secrets AS (SELECT 1 AS id) INSERT INTO employees (id) SELECT id FROM public.secrets`, []string{"employees", "public.secrets"}},
+		{"update with a CTE", `WITH s AS (SELECT emp_id FROM salaries) UPDATE employees SET name = 'a' WHERE id IN (SELECT emp_id FROM s)`, []string{"employees", "salaries"}},
+		{"update reading a table its CTE shadows only inside", `UPDATE employees SET name = 'a' WHERE id IN (SELECT id FROM secrets) AND id IN (WITH secrets AS (SELECT 1 AS id) SELECT id FROM secrets)`, []string{"employees", "secrets"}},
+		{"delete with a self-referencing CTE", `WITH secrets AS (SELECT * FROM secrets) DELETE FROM employees WHERE id IN (SELECT id FROM secrets)`, []string{"employees", "secrets"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ClassifyQuery(EnginePostgres, c.sql)
+			if err != nil {
+				t.Fatalf("ClassifyQuery: %v", err)
+			}
+			if !reflect.DeepEqual(got.Tables, c.tables) {
+				t.Errorf("Tables = %v, want %v", got.Tables, c.tables)
+			}
+			if !reflect.DeepEqual(got.WriteTables, []string{"employees"}) {
+				t.Errorf("WriteTables = %v, want [employees]", got.WriteTables)
+			}
+		})
+	}
+}
+
+func TestClassifyQueryPostgresMergeWithCTEIsRefused(t *testing.T) {
+	if _, err := ClassifyQuery(EnginePostgres, "WITH secrets AS (SELECT 1 AS id) MERGE INTO employees e USING public.secrets s ON e.id = s.id WHEN MATCHED THEN DELETE"); err == nil {
+		t.Error("expected MERGE to be refused")
+	}
+}
+
 func TestClassifyQueryPostgresExplainKeepsWrappedTables(t *testing.T) {
 	got, err := ClassifyQuery(EnginePostgres, "EXPLAIN SELECT * FROM employees JOIN salaries ON employees.id = salaries.emp_id")
 	if err != nil {

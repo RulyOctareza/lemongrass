@@ -467,34 +467,73 @@ func postgresLocks(tree any) bool {
 	return found
 }
 
-// postgresTables collects every RangeVar's relname except the statement's own CTE names, since Postgres uses RangeVar only for real relations, unlike MySQL's reused TableName.
+// postgresTables collects every RangeVar's relation except a bare name that resolves to a CTE at that point in the tree, since Postgres uses RangeVar only for real relations, unlike MySQL's reused TableName.
 func postgresTables(tree any) []string {
-	ctes := make(map[string]bool)
-	walkJSON(tree, func(key string, val any) {
-		if key != "CommonTableExpr" {
-			return
-		}
-		if m, ok := val.(map[string]any); ok {
-			if name, ok := m["ctename"].(string); ok {
-				ctes[name] = true
-			}
-		}
-	})
-
 	tables := make(map[string]bool)
-	walkJSON(tree, func(key string, val any) {
-		if key != "RangeVar" {
-			return
+	collectPostgresTables(tree, nil, tables)
+	return sortedKeys(tables)
+}
+
+// collectPostgresTables walks node with the CTE names visible there, following Postgres's scoping: a WITH's names cover its own statement and every subquery under it, and inside the CTE queries themselves only earlier siblings, or all of them under RECURSIVE. A name it cannot prove is a CTE counts as a table, so a mistake can only refuse.
+func collectPostgresTables(node any, visible map[string]bool, tables map[string]bool) {
+	switch v := node.(type) {
+	case []any:
+		for _, item := range v {
+			collectPostgresTables(item, visible, tables)
 		}
-		if m, ok := val.(map[string]any); ok {
-			name, _ := m["relname"].(string)
-			schema, _ := m["schemaname"].(string)
-			if name != "" && !ctes[name] {
-				tables[qualifiedTable(EnginePostgres, schema, name)] = true
+	case map[string]any:
+		if with, ok := v["withClause"].(map[string]any); ok {
+			visible = collectPostgresWith(with, visible, tables)
+		}
+		for key, val := range v {
+			switch key {
+			case "withClause":
+			case "RangeVar":
+				m, _ := val.(map[string]any)
+				name, _ := m["relname"].(string)
+				schema, _ := m["schemaname"].(string)
+				// A schema-qualified name never refers to a CTE.
+				if name != "" && (schema != "" || !visible[name]) {
+					tables[qualifiedTable(EnginePostgres, schema, name)] = true
+				}
+			default:
+				collectPostgresTables(val, visible, tables)
 			}
 		}
-	})
-	return sortedKeys(tables)
+	}
+}
+
+// collectPostgresWith walks a WITH clause's CTE queries and returns the names visible in the statement body it belongs to.
+func collectPostgresWith(with map[string]any, outer map[string]bool, tables map[string]bool) map[string]bool {
+	recursive, _ := with["recursive"].(bool)
+	ctes, _ := with["ctes"].([]any)
+	var names []string
+	var queries []any
+	for _, item := range ctes {
+		node, _ := item.(map[string]any)
+		cte, _ := node["CommonTableExpr"].(map[string]any)
+		name, _ := cte["ctename"].(string)
+		names = append(names, name)
+		queries = append(queries, cte)
+	}
+	withNames := func(n int) map[string]bool {
+		out := make(map[string]bool, len(outer)+n)
+		for k := range outer {
+			out[k] = true
+		}
+		for _, name := range names[:n] {
+			out[name] = true
+		}
+		return out
+	}
+	for i, cte := range queries {
+		seen := i
+		if recursive {
+			seen = len(names)
+		}
+		collectPostgresTables(cte, withNames(seen), tables)
+	}
+	return withNames(len(names))
 }
 
 // postgresColumnRefs collects the last name of every ColumnRef and whether any of them is a star.
