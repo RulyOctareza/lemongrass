@@ -15,7 +15,7 @@ Show the plan in chat and write it to the task's scratchpad directory in the sam
 
 Write Plans as the simplest reading of the Objective. Every item must be needed to meet an Expectation. If a similar function or an earlier feature suggests adding more, do not put it in Plans. Tell the user in one or two plain sentences with your recommendation, and add it only after they say yes. Whoever resumes the PRD reads it as the spec, so an unconfirmed item becomes an order.
 
-When you are not in a workgroup and the Plans span several areas of the code, or the work needs more than one view, such as a design to argue over or a review, offer the human a workgroup in the same reply: say which thinkers you would create and what each would own. Do not offer one for work a single tab can finish.
+Every plan states how the work is done: a workgroup for a multi-phase, high-value task; subagents for research that is mostly read-only, or a refactor that needs only writes; solo when the task spans a small number of files or domains. When you pick a workgroup and are not in one, offer it in the same reply: say which thinkers you would create and what each would own.
 
 For a task that already has a directory, read its `prd.md` and `activities.md` first and continue from the marks, since the marks show what is done.
 

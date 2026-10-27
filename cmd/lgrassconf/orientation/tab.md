@@ -41,15 +41,19 @@ Use a thread when another tab owns the answer or the work: asking a tab in anoth
 
 You do not need to poll. Nudges are typed into your tab when a notification arrives, so an idle tab is woken by them. To wait for a reply before you continue, for example a plan you asked another tab for, end your turn. The nudge wakes you when the reply arrives, and the human can still reach you in the meantime. Never wait inside a tool call, such as a sleep or a polling loop, because nothing the human types gets through until it returns.
 
-## Workgroups and subagents
+## Solo, subagents and workgroups
 
-Lemongrass gives you two ways to spread work: a subagent inside your own session, and a workgroup of thinkers in tabs of their own. Pick by how heavy the task is and whether the work needs discussion.
+Pick one of three ways to work a task, and state which one in every plan you show the human:
 
-A subagent is a cold worker inside your own session. It starts without this orientation, costs roughly 24k tokens of fixed overhead on every spawn, forgets everything when it returns, and reports only back to you. Use subagents for light, mechanical gathering, such as finding callers or listing the tables a query touches. For dozens of such items, or when findings need cross-checking, Claude Code's own workflow scripts fit better.
+- A workgroup is best for a multi-phase, high-value task.
+- Subagents are best for research that is mostly read-only, or a refactor that needs only writes.
+- Solo is best when a task spans a small number of files or domains.
 
-A workgroup is a leader and one or more thinkers. The leader is the tab that declares the group, and each thinker is a full tab of its own running Claude or Codex. A thinker keeps its context across rounds, so it pays its startup cost once and builds understanding as it works. Thinkers talk to each other and to the leader directly in the group thread: they ask each other questions, hand over findings and challenge each other's results without routing everything through the leader. Every thinker posts its plan and waits for the leader's go before it changes anything. That discussion is what makes a workgroup worth its cost. The load is spread across several tabs while the work keeps the quality of one careful worker, because each thinker's output is checked and argued over by its peers before it lands. Thinkers share one working tree, so give each its own files.
+A subagent is a cold worker inside your own session. It starts without this orientation, forgets everything when it returns, and reports only back to you. For dozens of such items, or when findings need cross-checking, your agent's own workflow scripts fit better when it has them.
 
-When a task is heavy, such as a change across several areas of the code, a review that benefits from more than one view, a design that needs arguing over, or work against a database or an API through channels over many rounds, offer the human a workgroup. Say which thinkers you would create and what each would own, and let the human decide. Do not declare a workgroup without offering it first, and do not offer one for a task a single tab or a few subagents can finish.
+A workgroup is a leader and one or more thinkers. The leader is the tab that declares the group, and each thinker is a full tab of its own running Claude or Codex. A thinker keeps its context across rounds and builds understanding as it works. Thinkers talk to each other and to the leader directly in the group thread: they ask each other questions, hand over findings and challenge each other's results without routing everything through the leader. Every thinker posts its plan and waits for the leader's go before it changes anything. The load is spread across several tabs while the work keeps the quality of one careful worker, because each thinker's output is checked and argued over by its peers before it lands. Thinkers share one working tree, so give each its own files.
+
+When a task fits a workgroup, offer it to the human: say which thinkers you would create and what each would own, and let the human decide. Do not declare a workgroup without offering it first. Your agent's own guidance on spawning agents covers subagents, not workgroups.
 
 - `lgrass workgroup create <config>` declares a group from a YAML or JSON config and blocks until the human approves or declines it. Approved thinkers open as tabs next to yours and you become the leader. Load the skill `lgrass-howtobe-leader` before you write the config.
 - `lgrass workgroup thread` reads your group thread and shows the leader and the thinkers with their tab ids. Post to it with `lgrass thread post`.
