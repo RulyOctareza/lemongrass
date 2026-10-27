@@ -24,7 +24,7 @@ function errorText(result: RunResult): string {
 }
 
 // The branch name, or the short commit hash when HEAD is detached.
-async function currentName(git: GitRunner): Promise<string> {
+export async function currentName(git: GitRunner): Promise<string> {
   const branch = await git.read(['symbolic-ref', '--short', '-q', 'HEAD'])
   if (branch.code === 0 && branch.stdout.trim()) return branch.stdout.trim()
   const hash = await git.read(['rev-parse', '--short', 'HEAD'])

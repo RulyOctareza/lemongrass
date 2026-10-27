@@ -3,7 +3,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBlame, parseLog, parseNameStatus, parseStatus } from './gitParse.ts'
+import { parseBlame, parseLog, parseNameStatus, parseStatus, parseTrack } from './gitParse.ts'
 
 const HASH = '0000000000000000000000000000000000000000'
 const mode = '100644 100644 100644'
@@ -99,4 +99,11 @@ test('reads blame output where later lines of a commit carry no details', () => 
       [3, 'b', 'Bob', 200, 'three']
     ]
   )
+})
+
+test('reads ahead and behind from an upstream track', () => {
+  assert.deepEqual(parseTrack('[ahead 2, behind 1]'), { ahead: 2, behind: 1 })
+  assert.deepEqual(parseTrack('[behind 3]'), { ahead: 0, behind: 3 })
+  assert.deepEqual(parseTrack('[gone]'), { ahead: 0, behind: 0 })
+  assert.deepEqual(parseTrack(''), { ahead: 0, behind: 0 })
 })

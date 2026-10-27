@@ -30,13 +30,18 @@ const busy = ref(false)
 const nameRef = ref<HTMLInputElement | null>(null)
 
 const trimmed = computed(() => name.value.trim())
-const exists = computed(() => !!branches.value?.local.includes(trimmed.value))
+const exists = computed(
+  () => !!branches.value?.local.some((branch) => branch.name === trimmed.value)
+)
 
 // A detached HEAD has no branch to start from, so it is offered under its own name.
 const baseItems = computed(() => {
   const list = branches.value
   if (!list) return []
-  const items = [...list.local, ...list.remote].map((ref) => ({ id: ref, label: ref }))
+  const items = [...list.local.map((branch) => branch.name), ...list.remote].map((ref) => ({
+    id: ref,
+    label: ref
+  }))
   return list.current ? items : [{ id: DETACHED, label: 'Detached HEAD' }, ...items]
 })
 

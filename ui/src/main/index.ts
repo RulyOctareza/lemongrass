@@ -20,6 +20,7 @@ import { setTrustBinary } from './projectTrust'
 import { registerWorkspaceLayoutHandlers } from './workspaceLayouts'
 import { registerBiblioHandlers, registerBiblioImageScheme, closeBiblioWatchers } from './biblio'
 import { registerGitHandlers } from './git'
+import { flushBranchNotices } from './gitBranch'
 import { registerDeviceHandlers, stopAllDevices } from './device'
 import { registerVaultHandlers } from './vault'
 import { registerNodeHandlers } from './node'
@@ -129,7 +130,10 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('before-quit', () => stopWorkgroupBridge())
+app.on('before-quit', () => {
+  stopWorkgroupBridge()
+  flushBranchNotices()
+})
 
 // macOS apps conventionally stay alive with no windows open until Cmd+Q.
 app.on('window-all-closed', () => {

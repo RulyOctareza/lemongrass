@@ -5,8 +5,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   commitChanges,
+  fetchAll,
   gitStateOf,
   isChecked,
+  pushBranch,
   refreshGit,
   setAllChecked,
   toggleFile,
@@ -19,8 +21,11 @@ import AppCheckbox from './AppCheckbox.vue'
 import GitIcon from './GitIcon.vue'
 import GitBranchCreateModal from './GitBranchCreateModal.vue'
 import GitBranchMenu from './GitBranchMenu.vue'
+import GitCounts from './GitCounts.vue'
+import GitDivergedModal from './GitDivergedModal.vue'
+import GitMergeModal from './GitMergeModal.vue'
+import GitOperationBox from './GitOperationBox.vue'
 import GitStashSection from './GitStashSection.vue'
-import GitSyncSection from './GitSyncSection.vue'
 
 const POLL_MS = 5000
 
@@ -29,6 +34,7 @@ const props = defineProps<{
 }>()
 
 const creatingBranch = ref(false)
+const rowError = ref<string | null>(null)
 const state = computed(() => gitStateOf(props.project.id))
 const status = computed(() => state.value.status)
 const files = computed(() => status.value?.files ?? [])
@@ -110,8 +116,29 @@ const pushBlockedReason = computed((): string | null => {
 
 const canPush = computed(() => canCommit.value && pushBlockedReason.value === null)
 
+// Without an upstream the push sets one, so there is nothing to compare ahead against yet.
+const pushOnlyBlockedReason = computed((): string | null => {
+  if (pushBlockedReason.value) return pushBlockedReason.value
+  if (status.value?.upstream && status.value.ahead === 0) return 'Nothing to push'
+  return null
+})
+
+const pushOnlyTitle = computed(
+  () => pushOnlyBlockedReason.value ?? `Push ${status.value?.branch} to ${status.value?.pushTarget}`
+)
+
+async function fetchRemotes(): Promise<void> {
+  rowError.value = null
+  rowError.value = await fetchAll(props.project)
+}
+
+async function push(): Promise<void> {
+  rowError.value = null
+  rowError.value = await pushBranch(props.project)
+}
+
 const hint = computed((): string | null => {
-  if (status.value?.operation) return 'Continue or abort the merge or rebase in Sync first.'
+  if (status.value?.operation) return 'Continue or abort the merge or rebase first.'
   if (hasConflicts.value) return 'Resolve conflicts before committing.'
   if (state.value.busy === 'commit') return 'Committing...'
   if (state.value.busy === 'push') return 'Pushing...'
@@ -194,11 +221,7 @@ watch(() => props.project.id, refresh)
 
     <div v-if="!state.folded" class="git-body">
       <div v-if="status?.isRepo" class="branch-line">
-        <GitBranchMenu
-          :project="project"
-          :disabled="switchBlockedReason !== null"
-          :title="switchBlockedReason ?? 'Switch branch'"
-        >
+        <GitBranchMenu :project="project" :blocked-reason="switchBlockedReason">
           <GitIcon class="row-icon" name="branch" />
           <span class="row-name">{{ status.branch ?? 'detached HEAD' }}</span>
         </GitBranchMenu>
@@ -211,12 +234,35 @@ watch(() => props.project.id, refresh)
         >
           <GitIcon name="newBranch" />
         </button>
+        <span class="branch-spacer" />
+        <GitCounts :ahead="status.ahead" :behind="status.behind" />
+        <button
+          class="remote-icon fetch"
+          :disabled="state.busy !== null"
+          title="Fetch every remote"
+          aria-label="Fetch every remote"
+          @click="fetchRemotes"
+        >
+          <GitIcon v-if="state.busy === 'fetch'" class="spin" name="spinner" />
+          <GitIcon v-else name="fetch" />
+        </button>
+        <button
+          class="remote-icon push"
+          :disabled="state.busy !== null || pushOnlyBlockedReason !== null"
+          :title="pushOnlyTitle"
+          :aria-label="pushOnlyTitle"
+          @click="push"
+        >
+          <GitIcon v-if="state.busy === 'push'" class="spin" name="spinner" />
+          <GitIcon v-else name="push" />
+        </button>
       </div>
+      <p v-if="rowError" class="git-error">{{ rowError }}</p>
+      <GitOperationBox v-if="status?.isRepo" :project="project" />
       <button v-if="status?.isRepo" class="history-open" @click="openHistory(project)">
         <GitIcon class="row-icon" name="open" />
         <span>History</span>
       </button>
-      <GitSyncSection v-if="status?.isRepo" :project="project" />
 
       <div class="changes-head">
         <AppCheckbox
@@ -320,6 +366,18 @@ watch(() => props.project.id, refresh)
       :project="project"
       :has-changes="files.length > 0"
       @close="creatingBranch = false"
+    />
+    <GitMergeModal
+      v-if="state.mergeSource"
+      :project="project"
+      :source="state.mergeSource"
+      @close="state.mergeSource = null"
+    />
+    <GitDivergedModal
+      v-if="state.diverged"
+      :project="project"
+      :diverged="state.diverged"
+      @close="state.diverged = null"
     />
   </div>
 </template>
@@ -431,6 +489,50 @@ watch(() => props.project.id, refresh)
 .branch-new:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.branch-spacer {
+  flex: 1;
+}
+
+.remote-icon {
+  --tint: var(--color-fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--tint) 14%, transparent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--tint);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+/* Fetch matches the blue behind count and Push the green ahead count. */
+.remote-icon.fetch {
+  --tint: var(--color-info);
+}
+
+.remote-icon.push {
+  --tint: var(--color-success);
+}
+
+.remote-icon:hover:not(:disabled),
+.remote-icon:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--tint) 28%, transparent);
+}
+
+.remote-icon:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.remote-icon:has(.spin) {
+  opacity: 1;
 }
 
 .history-open {

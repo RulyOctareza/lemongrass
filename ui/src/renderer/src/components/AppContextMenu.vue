@@ -2,13 +2,16 @@
 <!-- Copyright (C) 2026 Faizal Alviansyah -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 export interface MenuItem {
   key: string
   label: string
   disabled?: boolean
   title?: string
+  // A destructive item turns red with a "Click again" hint on its first click and is selected
+  // only on the second, the way the tab menu's close actions behave.
+  confirm?: boolean
 }
 
 const props = defineProps<{
@@ -21,6 +24,17 @@ const emit = defineEmits<{
   select: [key: string]
   close: []
 }>()
+
+const confirmingKey = ref<string | null>(null)
+
+function choose(item: MenuItem): void {
+  if (item.confirm && confirmingKey.value !== item.key) {
+    confirmingKey.value = item.key
+    return
+  }
+  confirmingKey.value = null
+  emit('select', item.key)
+}
 
 const WIDTH = 200
 const ROW = 30
@@ -57,11 +71,13 @@ onBeforeUnmount(() => {
       :key="item.key"
       class="menu-item"
       role="menuitem"
+      :class="{ confirming: confirmingKey === item.key }"
       :disabled="item.disabled"
       :title="item.title"
-      @click="emit('select', item.key)"
+      @click="choose(item)"
     >
       {{ item.label }}
+      <span v-if="item.confirm" class="menu-confirm-hint">Click again</span>
     </button>
   </div>
 </template>
@@ -93,8 +109,27 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.menu-item:hover:not(:disabled) {
-  background: var(--color-surface-2);
+/* The menu sits on --color-bg-elevated, which equals --color-surface-2 in the dark theme. */
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible:not(:disabled) {
+  background: var(--color-surface-3);
+}
+
+.menu-item.confirming,
+.menu-item.confirming:hover:not(:disabled) {
+  background: var(--color-error-muted);
+  color: var(--color-error);
+}
+
+.menu-confirm-hint {
+  margin-left: auto;
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+  visibility: hidden;
+}
+
+.menu-item.confirming .menu-confirm-hint {
+  visibility: visible;
 }
 
 .menu-item:disabled {

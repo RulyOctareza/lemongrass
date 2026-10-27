@@ -280,3 +280,11 @@ export function parseBlame(raw: string): GitBlameLine[] {
   }
   return lines
 }
+
+// Parses `%(upstream:track)`, such as "[ahead 2, behind 1]". An upstream that is in sync or gone
+// has no counts.
+export function parseTrack(track: string): { ahead: number; behind: number } {
+  const ahead = /ahead (\d+)/.exec(track)
+  const behind = /behind (\d+)/.exec(track)
+  return { ahead: ahead ? Number(ahead[1]) : 0, behind: behind ? Number(behind[1]) : 0 }
+}
