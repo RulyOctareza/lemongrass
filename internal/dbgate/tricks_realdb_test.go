@@ -223,7 +223,7 @@ func snapshotState(t *testing.T, db *sql.DB, engine Engine) dbState {
 		s.Locks = queryString(t, db, "SELECT CAST((SELECT COUNT(*) FROM performance_schema.metadata_locks WHERE owner_thread_id <> PS_CURRENT_THREAD_ID() AND (object_type = 'USER LEVEL LOCK' OR object_schema IN ('vaultapp', 'vault_archive'))) + (SELECT COUNT(*) FROM performance_schema.data_locks WHERE object_schema IN ('vaultapp', 'vault_archive')) AS CHAR)")
 		return s
 	}
-	s.Relations = queryStrings(t, db, "SELECT n.nspname || '.' || c.relname || ':' || c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public', 'archive') OR n.nspname LIKE 'pg\\_temp\\_%' ORDER BY 1")
+	s.Relations = queryStrings(t, db, "SELECT n.nspname || '.' || c.relname || ':' || c.relkind::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('public', 'archive') OR n.nspname LIKE 'pg\\_temp\\_%' ORDER BY 1")
 	s.Checksums = make(map[string]string)
 	for _, name := range queryStrings(t, db, "SELECT schemaname || '.' || tablename FROM pg_tables WHERE schemaname IN ('public', 'archive') ORDER BY 1") {
 		s.Checksums[name] = queryString(t, db, "SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) FROM "+name+" t")
