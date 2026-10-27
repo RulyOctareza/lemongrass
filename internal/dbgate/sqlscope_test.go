@@ -6,6 +6,7 @@ package dbgate
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -448,9 +449,11 @@ func TestClassifyQueryPostgresRejectsUnsupportedStatements(t *testing.T) {
 	}
 }
 
-func TestClassifyQueryPostgresRejectsNulByte(t *testing.T) {
-	if _, err := ClassifyQuery(EnginePostgres, "SELECT 1\x00; DELETE FROM employees WHERE id = 1"); err == nil {
-		t.Error("expected a NUL byte to be refused")
+func TestClassifyQueryRejectsNulByte(t *testing.T) {
+	for _, engine := range []Engine{EngineMySQL, EnginePostgres} {
+		if _, err := ClassifyQuery(engine, "SELECT 1\x00; DELETE FROM employees WHERE id = 1"); err == nil || !strings.Contains(err.Error(), "NUL byte") {
+			t.Errorf("%s: error = %v, want the NUL byte refusal", engine, err)
+		}
 	}
 }
 

@@ -53,6 +53,10 @@ type CatalogNames struct {
 
 // ClassifyQuery accepts exactly one statement of a supported read-only kind, rejecting stacked statements outright rather than truncating to the first.
 func ClassifyQuery(engine Engine, sqlText string) (Statement, error) {
+	// A parser that reads a C string, like libpg_query, stops at the first NUL, so anything after it would reach the server unread.
+	if strings.ContainsRune(sqlText, 0) {
+		return Statement{}, errors.New("dbgate: SQL may not contain a NUL byte")
+	}
 	var stmt Statement
 	var err error
 	switch engine {
@@ -342,10 +346,6 @@ func mysqlColumnRefs(stmt sqlparser.SQLNode) columnRefs {
 }
 
 func classifyPostgres(sqlText string) (Statement, error) {
-	// libpg_query reads a C string and stops at the first NUL, so anything after it would reach the server unread.
-	if strings.ContainsRune(sqlText, 0) {
-		return Statement{}, errors.New("dbgate: SQL may not contain a NUL byte")
-	}
 	tree, err := pgquery.Parse(sqlText)
 	if err != nil {
 		return Statement{}, fmt.Errorf("dbgate: parsing SQL: %w", err)
