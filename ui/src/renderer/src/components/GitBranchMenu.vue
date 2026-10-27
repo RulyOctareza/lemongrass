@@ -42,6 +42,7 @@ const position = ref({ left: 0, top: 0, width: MENU_MIN_WIDTH, maxHeight: MENU_M
 const branches = ref<GitBranches | null>(null)
 const filter = ref('')
 const error = ref<string | null>(null)
+const notice = ref<string | null>(null)
 const selected = ref<Selected | null>(null)
 // Commits of the selected local branch that no other branch or remote has: undefined while
 // loading, null when git could not tell, in which case the delete itself reports why.
@@ -165,6 +166,7 @@ async function loadBranches(): Promise<void> {
 async function show(): Promise<void> {
   filter.value = ''
   error.value = null
+  notice.value = null
   branches.value = null
   closeActions()
   place()
@@ -214,6 +216,7 @@ async function act(key: string): Promise<void> {
   const target = selected.value
   if (!target) return
   error.value = null
+  notice.value = null
   if (key === 'merge') {
     state.value.mergeSource = target.name
     hide()
@@ -223,7 +226,9 @@ async function act(key: string): Promise<void> {
     if (!error.value) hide()
   } else if (key === 'update') {
     closeActions()
-    error.value = await updateBranch(props.project, target.name, target.remote)
+    const updated = await updateBranch(props.project, target.name, target.remote)
+    error.value = updated.error
+    notice.value = updated.notice
     if (state.value.diverged) hide()
     else await loadBranches()
   } else if (key === 'delete') {
@@ -326,6 +331,7 @@ onBeforeUnmount(removeListeners)
         @keydown.enter="openFirst"
       />
       <p v-if="error" class="branch-error">{{ error }}</p>
+      <p v-if="notice" class="branch-notice">{{ notice }}</p>
       <p v-if="!branches" class="branch-empty">Loading...</p>
       <div v-else class="branch-lists" role="listbox">
         <template v-if="local.length > 0">
@@ -503,6 +509,15 @@ onBeforeUnmount(removeListeners)
 
 .branch-tag {
   color: var(--color-fg-muted);
+}
+
+.branch-notice {
+  flex-shrink: 0;
+  padding: var(--space-2);
+  background: var(--color-surface-2);
+  border-radius: var(--radius-md);
+  color: var(--color-fg-secondary);
+  font-size: var(--text-xs);
 }
 
 .branch-empty {

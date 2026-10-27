@@ -140,6 +140,31 @@ test('rebasing another branch checks it out first', async () => {
   assert.equal(git(local, 'rev-parse', 'HEAD~1'), git(other, 'rev-parse', 'feat'))
 })
 
+test('a remote branch deleted on the remote is dropped from the remote-tracking refs', async () => {
+  const { local, other } = setup()
+  git(other, 'push', '-q', 'origin', '--delete', 'feat')
+  const result = await updateRemote(runner(local), 'origin/feat')
+  assert.deepEqual(result, {
+    status: 'gone',
+    message: 'origin/feat was deleted on origin, so it is removed from the list.'
+  })
+  assert.equal(git(local, 'for-each-ref', 'refs/remotes/origin/feat'), '')
+})
+
+test('a local branch whose upstream was deleted is left with no upstream', async () => {
+  const { local, other } = setup()
+  git(other, 'push', '-q', 'origin', '--delete', 'feat')
+  const result = await updateLocal(runner(local), 'feat')
+  assert.deepEqual(result, {
+    status: 'gone',
+    message: 'origin/feat was deleted on origin, so feat has no upstream now.'
+  })
+  assert.equal(
+    git(local, 'for-each-ref', '--format=%(upstream:track)', 'refs/heads/feat'),
+    '[gone]'
+  )
+})
+
 function toMain(root: string): () => ReturnType<typeof moveBranch> {
   return () => moveBranch(runner(root), { kind: 'switch', name: 'main', remote: false })
 }

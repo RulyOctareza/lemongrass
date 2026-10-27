@@ -247,17 +247,21 @@ export function deleteBranch(project: ProjectRef, name: string): Promise<string 
   })
 }
 
-// A diverged branch opens the dialog that offers the rebase instead of reporting an error.
-export function updateBranch(
+// A diverged branch opens the dialog that offers the rebase instead of reporting an error. A
+// branch the remote deleted is not an error either, so its message comes back as a notice.
+export async function updateBranch(
   project: ProjectRef,
   name: string,
   remote: boolean
-): Promise<string | null> {
-  return runBranchAction(project, 'branch', async () => {
+): Promise<{ error: string | null; notice: string | null }> {
+  let notice: string | null = null
+  const error = await runBranchAction(project, 'branch', async () => {
     const updated = await window.api.git.updateBranch(project.path, name, remote)
     if (updated.status === 'diverged') gitStateOf(project.id).diverged = updated
+    if (updated.status === 'gone') notice = updated.message
     return updated.status === 'error' ? { ok: false, error: updated.error } : { ok: true }
   })
+  return { error, notice }
 }
 
 // Pushes the checked-out branch on its own, for commits made earlier. Returns git's error text, or

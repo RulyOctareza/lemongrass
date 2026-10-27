@@ -66,6 +66,17 @@ async function counts(
   return { ahead, behind }
 }
 
+// git reports a branch the remote no longer has this way when it is fetched by name.
+function goneOnRemote(result: RunResult): boolean {
+  return result.stderr.includes("couldn't find remote ref")
+}
+
+// Drops the remote-tracking ref of a branch the remote deleted, as fetch --prune would.
+async function dropTracking(git: GitRunner, tracking: string): Promise<string | null> {
+  const dropped = await git.write(['update-ref', '-d', tracking])
+  return dropped.code === 0 ? null : errorText(dropped)
+}
+
 // Fetches the branch's upstream and fast-forwards the branch to it. A branch with commits of its
 // own is reported as diverged and left untouched.
 export async function updateLocal(git: GitRunner, name: string): Promise<GitUpdateResult> {
@@ -75,6 +86,14 @@ export async function updateLocal(git: GitRunner, name: string): Promise<GitUpda
   if (!upstream) return { status: 'error', error: `${name} has no upstream to update from.` }
   if (upstream.remote !== '.') {
     const fetched = await git.write(['fetch', upstream.remote, upstream.remoteRef])
+    if (goneOnRemote(fetched)) {
+      const failed = await dropTracking(git, upstream.tracking)
+      if (failed) return { status: 'error', error: failed }
+      return {
+        status: 'gone',
+        message: `${upstream.short} was deleted on ${upstream.remote}, so ${name} has no upstream now.`
+      }
+    }
     if (fetched.code !== 0) return { status: 'error', error: errorText(fetched) }
   }
   const sides = await counts(git, name, upstream.tracking)
@@ -104,6 +123,15 @@ export async function updateRemote(git: GitRunner, remoteBranch: string): Promis
     return { status: 'error', error: 'That is not a remote branch.' }
   }
   const fetched = await git.write(['fetch', remote, `refs/heads/${branch}`])
+  if (goneOnRemote(fetched)) {
+    // The default fetch refspec keeps a remote's branches under refs/remotes/<remote>/.
+    const failed = await dropTracking(git, `refs/remotes/${remoteBranch}`)
+    if (failed) return { status: 'error', error: failed }
+    return {
+      status: 'gone',
+      message: `${remoteBranch} was deleted on ${remote}, so it is removed from the list.`
+    }
+  }
   if (fetched.code !== 0) return { status: 'error', error: errorText(fetched) }
   return { status: 'updated' }
 }

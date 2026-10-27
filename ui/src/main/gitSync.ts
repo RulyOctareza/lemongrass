@@ -33,7 +33,13 @@ async function isBranch(root: string, name: string): Promise<boolean> {
 async function fetchAll(projectPath: string): Promise<GitActionResult> {
   const root = await repoRoot(projectPath)
   if (!root) return { ok: false, error: notARepo }
-  const result = await run(root, ['fetch', '--all'], { timeout: FETCH_TIMEOUT_MS, env: pushEnv })
+  // --prune drops remote branches deleted on the remote. git never moves a tag it already has, so
+  // a tag deleted and recreated on the remote needs --tags --force to follow it. --prune-tags is
+  // left out because it would also delete local tags that were never pushed.
+  const result = await run(root, ['fetch', '--all', '--prune', '--tags', '--force'], {
+    timeout: FETCH_TIMEOUT_MS,
+    env: pushEnv
+  })
   if (result.code !== 0) return { ok: false, error: errorText(result) }
   return { ok: true }
 }

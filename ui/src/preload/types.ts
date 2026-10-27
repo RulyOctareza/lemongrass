@@ -365,6 +365,8 @@ export type GitPushResult = { ok: true } | { ok: false; error: string; diverged?
 export type GitUpdateResult =
   | { status: 'updated' }
   | { status: 'diverged'; branch: string; upstream: string; ahead: number; behind: number }
+  // The remote deleted the branch, and its stale remote-tracking ref was dropped.
+  | { status: 'gone'; message: string }
   | { status: 'error'; error: string }
 
 // The switch to main made before deleting the checked-out branch. It stands even when the delete
