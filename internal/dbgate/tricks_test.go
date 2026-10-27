@@ -82,6 +82,7 @@ var postgresTricks = []trick{
 	pgRead("read function in update", "UPDATE employees SET name = read_secrets() WHERE id = 1").write().under(trickWriteEm),
 	pgRead("insert returning ungranted subquery", "INSERT INTO employees (id, name) VALUES (902, 'x') RETURNING (SELECT secret FROM secrets LIMIT 1)").write().under(trickWriteEm),
 	pgRead("insert on conflict reads ungranted", "INSERT INTO employees (id, name) VALUES (1, 'x') ON CONFLICT (id) DO UPDATE SET name = (SELECT secret FROM secrets LIMIT 1)").write().under(trickWriteEm),
+	pgRead("cte name hides read on write path", "WITH secrets AS (SELECT 1 AS x) INSERT INTO employees (id, name) SELECT 950, secret FROM public.secrets LIMIT 1").write().under(trickWriteEm),
 
 	// Side effects through functions in a SELECT.
 	pgRead("setval", "SELECT setval('invoice_seq', 1000)").stopped(),
@@ -142,6 +143,11 @@ var postgresTricks = []trick{
 	pgRead("other schema same name", "SELECT * FROM archive.employees"),
 	pgRead("only ungranted", "SELECT * FROM ONLY secrets"),
 
+	// CTE-name shadowing: postgresTables collects every CTE name into one global set and drops any RangeVar with that bare relname, ignoring query scope and schema qualification, so a CTE named like an ungranted table hides a real read of it.
+	pgRead("cte name hides schema-qualified read", "WITH secrets AS (SELECT 1 AS x) SELECT * FROM public.secrets"),
+	pgRead("cte name hides outer read in nested scope", "SELECT * FROM secrets WHERE id IN (WITH secrets AS (SELECT 1 AS id) SELECT id FROM secrets)"),
+	pgRead("cte self-reference reads real table", "WITH secrets AS (SELECT * FROM secrets) SELECT * FROM secrets"),
+
 	// Casts, operators and types that reach user or catalog code.
 	pgRead("regclass cast", "SELECT 'secrets'::regclass"),
 	pgRead("regclass cast of column", "SELECT CAST(name AS regclass) FROM employees"),
@@ -157,6 +163,11 @@ var postgresTricks = []trick{
 	pgRead("user equality operator", "SELECT * FROM employees WHERE name = 1").real(),
 	pgRead("pg_catalog lower cannot reach the int overload", "SELECT pg_catalog.lower(id) FROM employees").real(),
 	pgRead("pg_catalog equality cannot reach the user operator", "SELECT * FROM employees WHERE name OPERATOR(pg_catalog.=) 1").real(),
+
+	// SQL/JSON node forms (PG16/17): the node-kind allowlist accepts them as pure syntax but still walks their arguments and checks a RETURNING type, so a user object reached through one is refused.
+	pgRead("json_value returning user type", "SELECT JSON_VALUE('{\"a\":1}'::jsonb, '$.a' RETURNING public.secret_type)"),
+	pgRead("json_value argument calls read function", "SELECT JSON_VALUE(to_jsonb(read_secrets()), '$')"),
+	pgRead("json_value argument reads ungranted", "SELECT JSON_VALUE((SELECT to_jsonb(secret) FROM secrets LIMIT 1), '$')"),
 
 	// Quoting, case and unicode.
 	pgRead("quoted ungranted", `SELECT * FROM "secrets"`),
@@ -262,6 +273,9 @@ var mysqlTricks = []trick{
 	myRead("select for share", "SELECT * FROM employees FOR SHARE"),
 	myRead("lock in share mode", "SELECT * FROM employees LOCK IN SHARE MODE"),
 	myRead("for update in union", "SELECT id FROM employees UNION SELECT id FROM employees FOR UPDATE"),
+	// Union.walkSubtree skips the UNION's own ORDER BY and LIMIT, so a subquery or call there escaped every MySQL walk and reached the server.
+	myRead("union order by reads ungranted", "SELECT id FROM employees UNION SELECT id FROM employees ORDER BY (SELECT secret FROM secrets LIMIT 1)"),
+	myRead("union order by sleep", "SELECT id FROM employees UNION SELECT id FROM employees ORDER BY SLEEP(1)"),
 	myRead("cte", "WITH s AS (SELECT secret FROM secrets) SELECT * FROM s"),
 	myRead("recursive cte", "WITH RECURSIVE r AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM r) SELECT * FROM r"),
 	myRead("json_table", "SELECT * FROM JSON_TABLE('[1]', '$[*]' COLUMNS (x INT PATH '$')) t"),
