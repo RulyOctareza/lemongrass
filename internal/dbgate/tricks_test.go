@@ -276,6 +276,7 @@ var mysqlTricks = []trick{
 	// Union.walkSubtree skips the UNION's own ORDER BY and LIMIT, so a subquery or call there escaped every MySQL walk and reached the server.
 	myRead("union order by reads ungranted", "SELECT id FROM employees UNION SELECT id FROM employees ORDER BY (SELECT secret FROM secrets LIMIT 1)"),
 	myRead("union order by sleep", "SELECT id FROM employees UNION SELECT id FROM employees ORDER BY SLEEP(1)"),
+	myRead("nested union order by reads ungranted", "SELECT * FROM (SELECT id FROM employees UNION SELECT id FROM employees ORDER BY (SELECT secret FROM secrets LIMIT 1)) t"),
 	myRead("cte", "WITH s AS (SELECT secret FROM secrets) SELECT * FROM s"),
 	myRead("recursive cte", "WITH RECURSIVE r AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM r) SELECT * FROM r"),
 	myRead("json_table", "SELECT * FROM JSON_TABLE('[1]', '$[*]' COLUMNS (x INT PATH '$')) t"),
