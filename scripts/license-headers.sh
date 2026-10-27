@@ -1,13 +1,13 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-only
-# Copyright (C) 2026 Faizal Alviansyah
+# Copyright (C) 2026 The Lemongrass Authors
 
 # Adds the license header to every tracked source file that lacks one. With --check it only lists those files and fails.
 # git ls-files does not descend into the bibliothek submodule, which is a separate repository with its own license.
 set -eu
 
 LICENSE_ID="AGPL-3.0-only"
-HOLDER="Faizal Alviansyah"
+HOLDER="The Lemongrass Authors"
 
 cd "$(dirname "$0")/.."
 

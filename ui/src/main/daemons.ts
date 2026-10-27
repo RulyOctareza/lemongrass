@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 import { spawn, ChildProcess } from 'child_process'
 import { mkdirSync, openSync } from 'fs'

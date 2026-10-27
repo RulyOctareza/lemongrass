@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // Package agent maps short, model-facing channel ids to the vault's real channel ids and forwards query requests to the vault, holding no decryption power of its own.
 package agent

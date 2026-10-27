@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // Shared preload/renderer type contracts. Kept separate from index.ts, which
 // imports 'electron' and other main-process-only packages the renderer's own

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // Package guard decides whether an agent tool call is allowed, denied, or needs the user's approval, from a built-in catalog of dangerous operations and the user's own policy.
 package guard

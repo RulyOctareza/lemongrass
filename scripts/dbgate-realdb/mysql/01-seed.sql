@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-only
--- Copyright (C) 2026 Faizal Alviansyah
+-- Copyright (C) 2026 The Lemongrass Authors
 
 -- Fake fixtures for internal/dbgate/tricks_realdb_test.go, run as root by the image on a fresh volume, inside vaultapp.
 -- A channel may grant employees and salaries; nothing ever grants secrets. Every name here is used by tricks_test.go.

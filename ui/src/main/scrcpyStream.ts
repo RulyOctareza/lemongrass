@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // The video socket of a scrcpy-server started with tunnel_forward=true. The layout matches the
 // server shipped with scrcpy 3.3; newer servers mark packets differently, so a version bump needs

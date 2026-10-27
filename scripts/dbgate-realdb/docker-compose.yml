@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Copyright (C) 2026 Faizal Alviansyah
+# Copyright (C) 2026 The Lemongrass Authors
 
 # Disposable MySQL 8 and Postgres 16 servers for the dbgate real-database tests, seeded with fake data only.
 # Start with `docker compose up -d` in this directory, then run the tests as the least-privilege app user:

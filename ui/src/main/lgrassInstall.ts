@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 import { app } from 'electron'
 import { existsSync, copyFileSync, chmodSync, mkdirSync, renameSync, unlinkSync } from 'fs'
