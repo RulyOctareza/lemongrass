@@ -237,7 +237,7 @@ func (c resterCommand) checkBodyFlags() error {
 }
 
 func cmdRester(args []string) {
-	if routeResterWeb(args) {
+	if routeResterApp(args) || routeResterWeb(args) {
 		return
 	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {

@@ -137,9 +137,24 @@ export interface VaultResterWeb {
   Login: VaultLoginStep[] | null
 }
 
+export interface VaultAppStep {
+  Action: 'launch' | 'tap' | 'fill' | 'key' | 'wait'
+  Text: string
+  ID: string
+  Field: string
+  Key: string
+  TimeoutSeconds: number
+}
+
+export interface VaultResterApp {
+  Package: string
+  Login: VaultAppStep[] | null
+}
+
 export interface VaultRester {
   API: VaultResterAPI | null
   Web: VaultResterWeb | null
+  App: VaultResterApp | null
   Environments: VaultEnvironment[]
   Users: VaultResterUser[]
 }
@@ -170,7 +185,7 @@ export interface VaultHTTPChannel {
   Name: string
   Rester: string
   Environment: string
-  Type: 'api' | 'web'
+  Type: 'api' | 'web' | 'app'
   Scope: VaultHTTPScope
   WebScope: VaultWebScope | null
   CreatedAt: string

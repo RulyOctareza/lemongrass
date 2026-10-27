@@ -278,7 +278,7 @@ func contains(list []string, s string) bool {
 // routeResterWeb runs a web command, prints the web usage beside the rester usage, and refuses an api command on a web channel. It returns false when cmdRester should carry on as before.
 func routeResterWeb(args []string) bool {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(resterUsage + "\n" + resterWebUsage)
+		fmt.Print(resterUsage + "\n" + resterWebUsage + "\n" + resterAppUsage)
 		return true
 	}
 	if len(args) < 2 {
@@ -304,7 +304,7 @@ func routeResterWeb(args []string) bool {
 	return false
 }
 
-// refuseAPIOnWeb reads the channel's type for a request or flush command and refuses it on a web channel. A parse error is left to the ordinary rester path to report. A failed info call is returned, since sending the request anyway would count an unknown id twice in the agent's failure limiter.
+// refuseAPIOnWeb reads the channel's type for a request or flush command and refuses it on a web or an app channel. A parse error is left to the ordinary rester path to report. A failed info call is returned, since sending the request anyway would count an unknown id twice in the agent's failure limiter.
 func refuseAPIOnWeb(client *agent.Client, args []string) error {
 	cmd, err := parseResterArgs(args)
 	if err != nil || cmd.info || cmd.users {
@@ -313,6 +313,9 @@ func refuseAPIOnWeb(client *agent.Client, args []string) error {
 	info, err := client.HTTPChannelInfo(cmd.shortID)
 	if err != nil {
 		return err
+	}
+	if info.Type == "app" {
+		return fmt.Errorf("this is an app channel, it takes app-login, info and users, not %s. Run lgrass rester --help for the usage", strings.ToLower(args[1]))
 	}
 	if info.Type != "web" {
 		return nil

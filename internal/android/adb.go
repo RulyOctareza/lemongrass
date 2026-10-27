@@ -77,6 +77,12 @@ func ParseDevices(out string) []Device {
 }
 
 func run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return runCommand(ctx, false, name, args...)
+}
+
+// runCommand with redact set keeps the arguments and stderr out of the error, for a command
+// that carries a typed value such as a password.
+func runCommand(ctx context.Context, redact bool, name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
@@ -84,6 +90,9 @@ func run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		if redact {
+			return nil, fmt.Errorf("android: %s failed: %s", filepath.Base(name), err.Error())
+		}
 		detail := strings.TrimSpace(stderr.String())
 		if detail == "" {
 			detail = err.Error()
@@ -164,6 +173,17 @@ func (c *Client) Shell(ctx context.Context, args ...string) ([]byte, error) {
 	return c.Run(ctx, "shell", strings.Join(quoted, " "))
 }
 
+// shellRedacted is Shell for a command line that carries a typed value, whose errors never
+// repeat the command.
+func (c *Client) shellRedacted(ctx context.Context, args ...string) error {
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = shellQuote(a)
+	}
+	_, err := runCommand(ctx, true, c.ADB, "-s", c.Serial, "shell", strings.Join(quoted, " "))
+	return err
+}
+
 var safeShellWord = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
 
 func shellQuote(s string) string {
@@ -214,12 +234,22 @@ func (c *Client) Swipe(ctx context.Context, x1, y1, x2, y2 int, duration time.Du
 	return err
 }
 
-// Text types into the focused field. input text reads %s as a space, so spaces are sent that way.
-func (c *Client) Text(ctx context.Context, text string) error {
-	for _, r := range text {
+// CheckTypeable reports whether Text can type s. The error gives the position of the first
+// character it cannot type, never the character, since s may be a secret.
+func CheckTypeable(s string) error {
+	for i, r := range []rune(s) {
 		if r > 0x7e || (r < 0x20 && r != '\n') {
-			return fmt.Errorf("android: input text only types printable ASCII, %q is not", r)
+			return fmt.Errorf("android: character %d is not printable ASCII, and input text types nothing else", i+1)
 		}
+	}
+	return nil
+}
+
+// Text types into the focused field. Nothing is typed unless every character can be, and its
+// errors never contain the text.
+func (c *Client) Text(ctx context.Context, text string) error {
+	if err := CheckTypeable(text); err != nil {
+		return err
 	}
 	for i, line := range strings.Split(text, "\n") {
 		if i > 0 {
@@ -227,14 +257,37 @@ func (c *Client) Text(ctx context.Context, text string) error {
 				return err
 			}
 		}
-		if line == "" {
-			continue
-		}
-		if _, err := c.Shell(ctx, "input", "text", strings.ReplaceAll(line, " ", "%s")); err != nil {
-			return err
+		for _, chunk := range textChunks(line) {
+			if err := c.shellRedacted(ctx, "input", "text", chunk); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// textChunks splits one line into input text arguments. input text reads every %s as a space
+// and has no escape for a literal %s, so spaces are sent as %s and a literal % followed by s
+// ends its chunk, which keeps that pair out of any single call. Shell metacharacters need no
+// handling here, since Shell quotes each argument.
+func textChunks(line string) []string {
+	var chunks []string
+	var b strings.Builder
+	for i := 0; i < len(line); i++ {
+		if line[i] == ' ' {
+			b.WriteString("%s")
+			continue
+		}
+		b.WriteByte(line[i])
+		if line[i] == '%' && i+1 < len(line) && line[i+1] == 's' {
+			chunks = append(chunks, b.String())
+			b.Reset()
+		}
+	}
+	if b.Len() > 0 {
+		chunks = append(chunks, b.String())
+	}
+	return chunks
 }
 
 // KeyNames maps the names lgrass device key accepts to Android KeyEvent codes.
@@ -266,6 +319,18 @@ func (c *Client) Key(ctx context.Context, key string) error {
 	return err
 }
 
+// ClearField empties the focused single-line field: it moves the cursor to the end and deletes
+// chars characters before it, in one input keyevent call. Extra deletes on a shorter or empty
+// field do nothing, which keeps this working where input keycombination (Android 13+) is missing.
+func (c *Client) ClearField(ctx context.Context, chars int) error {
+	args := []string{"input", "keyevent", "123"} // KEYCODE_MOVE_END
+	for range chars {
+		args = append(args, "67") // KEYCODE_DEL
+	}
+	_, err := c.Shell(ctx, args...)
+	return err
+}
+
 // Logcat returns the last lines of the device log, optionally only one tag.
 func (c *Client) Logcat(ctx context.Context, lines int, tag string) (string, error) {
 	args := []string{"logcat", "-d", "-v", "time", "-t", strconv.Itoa(lines)}
@@ -274,6 +339,19 @@ func (c *Client) Logcat(ctx context.Context, lines int, tag string) (string, err
 	}
 	out, err := c.Run(ctx, args...)
 	return string(out), err
+}
+
+// Launch starts an app's launcher activity, or brings it to the front when it is running.
+func (c *Client) Launch(ctx context.Context, pkg string) error {
+	out, err := c.Shell(ctx, "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1")
+	if err != nil {
+		return err
+	}
+	// monkey exits 0 on older devices even when nothing launched, and says so on stdout.
+	if strings.Contains(string(out), "monkey aborted") {
+		return fmt.Errorf("android: %s has no launcher activity on this device, is it installed?", pkg)
+	}
+	return nil
 }
 
 // Dump reads the accessibility tree, which for a Flutter app is its semantics tree.

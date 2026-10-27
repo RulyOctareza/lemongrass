@@ -313,7 +313,7 @@ const vault = {
     name: string,
     rester: string,
     environment: string,
-    type: 'api' | 'web',
+    type: 'api' | 'web' | 'app',
     scope: VaultHTTPScope,
     webScope: VaultWebScope | null,
     ttlSeconds: number

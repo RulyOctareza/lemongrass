@@ -39,6 +39,9 @@ func (s *Service) WebCommand(shortID, tabID, command string, args []string, flag
 	if err != nil {
 		return web.Result{}, redactID(err, realID, shortID)
 	}
+	if info.Type == "app" {
+		return web.Result{}, fmt.Errorf("agent: this is an app channel, it takes app-login, info and users, not %s", command)
+	}
 	if info.Type != "web" {
 		return web.Result{}, fmt.Errorf("agent: this is an api channel, it takes get, post, put, patch, delete, head, options and flush, not %s", command)
 	}

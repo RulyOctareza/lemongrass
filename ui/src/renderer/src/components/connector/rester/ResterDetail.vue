@@ -6,6 +6,7 @@ import AppButton from '../../AppButton.vue'
 import EnvironmentsStrip from './EnvironmentsStrip.vue'
 import ApiSection from './ApiSection.vue'
 import WebSection from './WebSection.vue'
+import AppSection from './AppSection.vue'
 import UserCenter from './UserCenter.vue'
 import { plainCopy } from './resterDraft'
 
@@ -71,6 +72,7 @@ onMounted(load)
       <EnvironmentsStrip :rester="rester" :commit="commit" />
       <ApiSection :rester="rester" :commit="commit" />
       <WebSection :rester="rester" :commit="commit" />
+      <AppSection :rester="rester" :commit="commit" />
       <UserCenter :rester="rester" :commit="commit" />
     </template>
   </div>

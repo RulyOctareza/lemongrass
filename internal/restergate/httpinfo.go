@@ -33,6 +33,7 @@ type HTTPChannelInfo struct {
 	Exclusions       []vault.MethodPath `json:"exclusions"`
 	BaseURL          string             `json:"base_url,omitempty"`
 	Origin           string             `json:"origin,omitempty"`
+	Package          string             `json:"package,omitempty"`
 	WebOrigins       []string           `json:"web_origins,omitempty"`
 	WebExclusions    []vault.MethodPath `json:"web_exclusions,omitempty"`
 	Users            []HTTPUserInfo     `json:"users,omitempty"`
@@ -79,9 +80,12 @@ func (g *Gate) HTTPChannelInfo(id vault.ChannelID) (HTTPChannelInfo, error) {
 		return info, nil
 	}
 	info.Status = HTTPStatusActive
-	if c.Type == vault.TypeWeb {
+	switch c.Type {
+	case vault.TypeWeb:
 		info.Origin = rester.Origin
-	} else {
+	case vault.TypeApp:
+		info.Package = rester.Package
+	default:
 		info.BaseURL = rester.BaseURL
 	}
 	info.Users = userInfos(rester)

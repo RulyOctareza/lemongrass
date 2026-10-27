@@ -30,7 +30,9 @@ async function refreshResters(): Promise<void> {
   }
 }
 
-type ChannelType = 'api' | 'web'
+type ChannelType = 'api' | 'web' | 'app'
+
+const typeLabels: Record<ChannelType, string> = { api: 'API', web: 'Web', app: 'App' }
 
 // The picked rester, read in full for its environments and sides. A rester is one encrypted
 // record, so reading it needs the session passphrase.
@@ -82,6 +84,9 @@ function typeUnavailableReason(type: ChannelType): string {
     if (!env.BaseURL) return `Environment ${env.Name} has no base URL.`
     return ''
   }
+  if (type === 'app') {
+    return rester.App ? '' : `${newHTTPChannelRester.value} has no App side.`
+  }
   if (!rester.Web) return `${newHTTPChannelRester.value} has no Web side.`
   if (!env.Origin) return `Environment ${env.Name} has no web origin.`
   return ''
@@ -92,7 +97,8 @@ function typeAvailable(type: ChannelType): boolean {
 }
 
 function firstAvailableType(): ChannelType {
-  return typeAvailable('api') || !typeAvailable('web') ? 'api' : 'web'
+  const types: ChannelType[] = ['api', 'web', 'app']
+  return types.find(typeAvailable) ?? 'api'
 }
 
 function pickEnvironment(name: string): void {
@@ -155,7 +161,7 @@ function openHTTPCreateForm(): void {
 function openHTTPCopyForm(channel: VaultHTTPChannel): void {
   copiedFrom.value = channel.Name || 'channel'
   newHTTPChannelName.value = `${copiedFrom.value} copy`
-  const type: ChannelType = channel.Type === 'web' ? 'web' : 'api'
+  const type: ChannelType = channel.Type || 'api'
   const exclusions =
     type === 'web' ? (channel.WebScope?.Exclusions ?? []) : (channel.Scope.Exclusions ?? [])
   newHTTPType.value = type
@@ -223,10 +229,11 @@ async function submitHTTPCreate(): Promise<void> {
       .filter((e) => e.pathPattern.trim())
       .map((e) => ({ Method: e.method, PathPattern: e.pathPattern.trim() }))
     const web = newHTTPType.value === 'web'
-    // A channel carries only its own type's scope.
-    const scope: VaultHTTPScope = web
-      ? { Methods: [], Exclusions: [] }
-      : { Methods: [...newHTTPMethods.value], Exclusions: exclusions }
+    // A channel carries only its own type's scope, and an app channel has none.
+    const scope: VaultHTTPScope =
+      newHTTPType.value !== 'api'
+        ? { Methods: [], Exclusions: [] }
+        : { Methods: [...newHTTPMethods.value], Exclusions: exclusions }
     const webScope: VaultWebScope | null = web
       ? {
           Origins: newHTTPOrigins.value.map((o) => o.trim()).filter(Boolean),
@@ -414,7 +421,7 @@ onUnmounted(() => {
             <label class="field-label">Type</label>
             <div class="type-choice">
               <AppButton
-                v-for="t in ['api', 'web'] as const"
+                v-for="t in ['api', 'web', 'app'] as const"
                 :key="t"
                 type="button"
                 :variant="newHTTPType === t ? 'primary' : 'ghost'"
@@ -422,7 +429,7 @@ onUnmounted(() => {
                 :title="typeUnavailableReason(t)"
                 @click="newHTTPType = t"
               >
-                {{ t === 'api' ? 'API' : 'Web' }}
+                {{ typeLabels[t] }}
               </AppButton>
             </div>
             <p v-if="typeUnavailableReason('api')" class="hint">
@@ -430,6 +437,9 @@ onUnmounted(() => {
             </p>
             <p v-if="typeUnavailableReason('web')" class="hint">
               Web is unavailable: {{ typeUnavailableReason('web') }}
+            </p>
+            <p v-if="typeUnavailableReason('app')" class="hint">
+              App is unavailable: {{ typeUnavailableReason('app') }}
             </p>
           </div>
           <div class="field-block">
@@ -447,7 +457,13 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="form-column">
-          <div v-if="newHTTPType === 'api'" class="field-block">
+          <div v-if="newHTTPType === 'app'" class="field-block">
+            <p class="hint">
+              An app channel logs the phone in through the rester's app login steps. It needs a
+              login user that has every field those steps fill, and it has no scope to set.
+            </p>
+          </div>
+          <div v-else-if="newHTTPType === 'api'" class="field-block">
             <label class="field-label">Methods</label>
             <div class="checkbox-grid">
               <AppCheckbox
@@ -483,7 +499,7 @@ onUnmounted(() => {
             </div>
             <AppButton type="button" @click="addOrigin">+ Origin</AppButton>
           </div>
-          <div class="field-block">
+          <div v-if="newHTTPType !== 'app'" class="field-block">
             <label class="field-label">Exclusions</label>
             <p class="hint">
               {{
@@ -552,7 +568,7 @@ onUnmounted(() => {
             <span class="channel-db">{{ channel.Rester }}</span>
             <div class="capsule-row">
               <span class="value-capsule">{{ channel.Environment || 'default' }}</span>
-              <span class="value-capsule">{{ channel.Type === 'web' ? 'web' : 'api' }}</span>
+              <span class="value-capsule">{{ channel.Type || 'api' }}</span>
             </div>
             <div v-if="channel.Type === 'web'" class="capsule-group">
               <span class="capsule-group-label">Origins</span>
@@ -574,7 +590,7 @@ onUnmounted(() => {
                 </span>
               </div>
             </div>
-            <div v-if="channel.Type !== 'web'" class="capsule-group">
+            <div v-if="channel.Type === 'api' || !channel.Type" class="capsule-group">
               <span class="capsule-group-label">Methods</span>
               <div class="capsule-row">
                 <span v-for="m in channel.Scope.Methods || []" :key="m" class="value-capsule">
@@ -584,7 +600,7 @@ onUnmounted(() => {
               </div>
             </div>
             <div
-              v-if="channel.Type !== 'web' && channel.Scope.Exclusions?.length"
+              v-if="(channel.Type === 'api' || !channel.Type) && channel.Scope.Exclusions?.length"
               class="capsule-group"
             >
               <span class="capsule-group-label">Exclusions</span>

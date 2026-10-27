@@ -17,12 +17,12 @@ export function stepDrafts(login: VaultLoginStep[] | null): StepDraft[] {
   return (login ?? []).map((s) => ({ ...s, id: nextStepId++ }))
 }
 
-export function removeStep(steps: StepDraft[], index: number): void {
+export function removeStep<T>(steps: T[], index: number): void {
   steps.splice(index, 1)
 }
 
 // insertAt is a gap between rows, 0 before the first and steps.length after the last.
-export function moveStep(steps: StepDraft[], from: number, insertAt: number): void {
+export function moveStep<T>(steps: T[], from: number, insertAt: number): void {
   if (from < 0 || from >= steps.length) return
   const target = insertAt > from ? insertAt - 1 : insertAt
   if (target === from) return

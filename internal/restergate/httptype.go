@@ -6,11 +6,14 @@ import (
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
-// openAPIChannel opens an active channel for an api operation, refusing a web channel.
+// openAPIChannel opens an active channel for an api operation, refusing a web or an app channel.
 func (g *Gate) openAPIChannel(id vault.ChannelID) (vault.HTTPChannel, vault.ResolvedRester, error) {
 	c, rester, err := g.vault.OpenHTTPChannel(id)
 	if err != nil {
 		return vault.HTTPChannel{}, vault.ResolvedRester{}, err
+	}
+	if c.Type == vault.TypeApp {
+		return vault.HTTPChannel{}, vault.ResolvedRester{}, fmt.Errorf("restergate: this is an app channel for the %s environment, so it takes only app-login, not api calls", c.Environment)
 	}
 	if c.Type != vault.TypeAPI {
 		return vault.HTTPChannel{}, vault.ResolvedRester{}, fmt.Errorf("restergate: this is a %s channel for the %s environment, so it takes only the web commands (open, user, snapshot, click, type, wait, network, console, screenshot, back, reload, press), not api calls", c.Type, c.Environment)

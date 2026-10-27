@@ -134,6 +134,17 @@ func (s *Service) FlushHTTPTokens(shortID, user string) (int, error) {
 	return flushed, redactID(err, realID, shortID)
 }
 
+// AppLogin resolves shortID to its real vault channel and logs its app in on the connected
+// phone as user, returning the same error for an unregistered, forgotten, or mistyped id.
+func (s *Service) AppLogin(shortID, user, serial string) (restergate.AppLoginResult, error) {
+	realID, ok := s.lookup(shortID)
+	if !ok {
+		return restergate.AppLoginResult{}, ErrNoSuchChannel
+	}
+	res, err := s.vaultClient.AppLogin(realID, user, serial)
+	return res, redactID(err, realID, shortID)
+}
+
 // redactID replaces the real channel id in a vault error with the caller's short id, since
 // the real id is a credential the model must never see, including inside wrapped file errors.
 func redactID(err error, realID vault.ChannelID, shortID string) error {

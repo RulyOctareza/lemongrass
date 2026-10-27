@@ -39,7 +39,7 @@ func (u ResterUser) Effective(env string) ResterUser {
 }
 
 // CanUse reports whether user u, assigned to environment envName, can be used by a channel of
-// type typ. api needs the environment's BaseURL, an API side, and a token or a login endpoint.
+// type typ. app needs an App side and a login user carrying every field a fill step names. api needs the environment's BaseURL, an API side, and a token or a login endpoint.
 // web needs the environment's Origin, a web side, and a login user carrying every field a fill
 // step names, since a bring-your-own-token user has nothing to type into a login page.
 func (r Rester) CanUse(typ, envName string, u ResterUser) bool {
@@ -49,6 +49,19 @@ func (r Rester) CanUse(typ, envName string, u ResterUser) bool {
 	}
 	eff := u.Effective(envName)
 	switch typ {
+	case TypeApp:
+		if r.App == nil || eff.IsBYOT() {
+			return false
+		}
+		for _, s := range r.App.Login {
+			if s.Action != AppStepFill {
+				continue
+			}
+			if _, ok := eff.Fields[s.Field]; !ok {
+				return false
+			}
+		}
+		return true
 	case TypeAPI:
 		return env.BaseURL != "" && r.API != nil && (eff.IsBYOT() || r.API.LoginEndpoint != "")
 	case TypeWeb:
@@ -85,6 +98,11 @@ type ResolvedRester struct {
 	Headers         []Header
 
 	Login []LoginStep
+
+	// Package and AppLogin are the app side, set only on an app channel.
+	Package  string
+	AppLogin []AppStep
+
 	Users []ResterUser
 }
 
@@ -114,6 +132,12 @@ func (r Rester) resolve(envName, typ string) (ResolvedRester, error) {
 		if env.BaseURL == "" {
 			return ResolvedRester{}, fmt.Errorf("vault: environment %q has no base URL, so it has no api side", envName)
 		}
+	case TypeApp:
+		if r.App == nil {
+			return ResolvedRester{}, fmt.Errorf("vault: this rester has no app side")
+		}
+		out.Package = r.App.Package
+		out.AppLogin = slices.Clone(r.App.Login)
 	case TypeWeb:
 		if r.Web == nil {
 			return ResolvedRester{}, fmt.Errorf("vault: this rester has no web side")
@@ -124,7 +148,7 @@ func (r Rester) resolve(envName, typ string) (ResolvedRester, error) {
 		out.Origin = env.Origin
 		out.Login = slices.Clone(r.Web.Login)
 	default:
-		return ResolvedRester{}, fmt.Errorf("vault: unknown channel type %q, want %q or %q", typ, TypeAPI, TypeWeb)
+		return ResolvedRester{}, fmt.Errorf("vault: unknown channel type %q, want %q, %q or %q", typ, TypeAPI, TypeWeb, TypeApp)
 	}
 	for _, u := range r.Users {
 		if r.CanUse(typ, envName, u) {

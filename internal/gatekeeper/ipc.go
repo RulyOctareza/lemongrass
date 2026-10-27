@@ -52,6 +52,7 @@ const (
 	opGetRester           = "get_rester"
 	opUpdateRester        = "update_rester"
 	opWebLoginFields      = "web_login_fields"
+	opAppLogin            = "app_login"
 )
 
 var connDeadline = 10 * time.Second
@@ -261,6 +262,12 @@ type webLoginFieldsPayload struct {
 	User      string          `json:"user"`
 }
 
+type appLoginPayload struct {
+	ID     vault.ChannelID `json:"id"`
+	User   string          `json:"user"`
+	Serial string          `json:"serial,omitempty"`
+}
+
 type flushedPayload struct {
 	Flushed int `json:"flushed"`
 }
@@ -317,6 +324,9 @@ func handleConn(svc *Backend, adminLimiter *vault.FailureLimiter, conn net.Conn)
 	if req.Op == opRequestHTTP || req.Op == opRequestHTTPDownload {
 		conn.SetDeadline(time.Now().Add(restergate.RequestTimeout))
 	}
+	if req.Op == opAppLogin {
+		conn.SetDeadline(time.Now().Add(restergate.AppLoginTimeout))
+	}
 	if req.Op == opRequestHTTPDownload {
 		serveDownload(svc, conn, req)
 		return
@@ -328,7 +338,7 @@ func handleConn(svc *Backend, adminLimiter *vault.FailureLimiter, conn net.Conn)
 // issues, as opposed to Electron's admin ops -- Electron's own binary path isn't fixed yet,
 // so those ops stay at UID-only verification.
 func requiresPeerBinaryCheck(op string) bool {
-	return op == opCurrentPolicy || op == opQuery || op == opExecute || op == opChannelScope || op == opRequestHTTP || op == opRequestHTTPDownload || op == opHTTPChannelScope || op == opHTTPChannelInfo || op == opHTTPChannelUsers || op == opFlushHTTPTokens
+	return op == opCurrentPolicy || op == opQuery || op == opExecute || op == opChannelScope || op == opRequestHTTP || op == opRequestHTTPDownload || op == opHTTPChannelScope || op == opHTTPChannelInfo || op == opHTTPChannelUsers || op == opFlushHTTPTokens || op == opAppLogin
 }
 
 func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) response {
@@ -635,6 +645,17 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 			return errResponse(err)
 		}
 		return payloadResponse(fields)
+
+	case opAppLogin:
+		var p appLoginPayload
+		if err := json.Unmarshal(req.Payload, &p); err != nil {
+			return errResponse(err)
+		}
+		result, err := svc.HTTP.AppLogin(p.ID, p.User, p.Serial)
+		if err != nil {
+			return errResponse(err)
+		}
+		return payloadResponse(result)
 
 	case opFlushHTTPTokens:
 		var p flushHTTPTokensPayload
@@ -969,6 +990,13 @@ func (c *Client) HTTPChannelUsers(id vault.ChannelID) ([]restergate.HTTPUserInfo
 func (c *Client) WebLoginFields(id vault.ChannelID, user string) (restergate.WebLoginFields, error) {
 	var out restergate.WebLoginFields
 	err := c.call(opWebLoginFields, webLoginFieldsPayload{ChannelID: id, User: user}, &out)
+	return out, err
+}
+
+// AppLogin asks the vault to log the channel's app in on the connected phone as user. The reply names the user and the outcome, never a field value.
+func (c *Client) AppLogin(id vault.ChannelID, user, serial string) (restergate.AppLoginResult, error) {
+	var out restergate.AppLoginResult
+	err := c.callWithin(max(c.Timeout, restergate.AppLoginTimeout), opAppLogin, appLoginPayload{ID: id, User: user, Serial: serial}, &out)
 	return out, err
 }
 

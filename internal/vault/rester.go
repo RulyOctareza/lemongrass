@@ -28,17 +28,19 @@ type TokenPlacement struct {
 const (
 	TypeAPI = "api"
 	TypeWeb = "web"
+	TypeApp = "app"
 )
 
 // DefaultEnvironment is the environment a pre-environment domain or channel reads as.
 const DefaultEnvironment = "default"
 
 // Rester is one backend system a human stored: the environments it runs in, the users that log
-// in to it, and how a call (API side) or a browser (web side) logs them in. One Store entry
+// in to it, and how a call (API side), a browser (web side) or a phone app (app side) logs them in. One Store entry
 // holds the whole thing, so an edit is a read-modify-write of the record.
 type Rester struct {
 	API          *ResterAPI
 	Web          *ResterWeb
+	App          *ResterApp
 	Environments []Environment
 	Users        []ResterUser
 }
@@ -64,6 +66,34 @@ type ResterAPI struct {
 // ResterWeb is the browser login every environment shares, as ordered steps.
 type ResterWeb struct {
 	Login []LoginStep
+}
+
+// ResterApp is the phone app login every environment shares: the app's package name and ordered
+// steps typed over adb.
+type ResterApp struct {
+	Package string
+	Login   []AppStep
+}
+
+// App login step actions. A fill step names a key of the user's fields, never a literal value.
+const (
+	AppStepLaunch = "launch"
+	AppStepTap    = "tap"
+	AppStepFill   = "fill"
+	AppStepKey    = "key"
+	AppStepWait   = "wait"
+)
+
+// AppStep is one step of an app login. launch starts the package, tap and wait find an element
+// by Text or ID, fill finds one by Text or ID and types the user's Field into it, key sends the
+// key named Key. TimeoutSeconds bounds the step, 0 meaning the executor's default.
+type AppStep struct {
+	Action         string
+	Text           string
+	ID             string
+	Field          string
+	Key            string
+	TimeoutSeconds int
 }
 
 // Login step actions. A fill step names a key of the user's fields, never a literal value.

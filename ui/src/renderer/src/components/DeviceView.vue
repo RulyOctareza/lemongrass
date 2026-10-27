@@ -16,9 +16,13 @@ import type { DeviceInfo, DevicePacket } from '../../../preload/types'
 
 type Phase = 'picking' | 'starting' | 'live' | 'reconnecting' | 'ended'
 
-// adb's USB link to a phone can drop and come back within seconds, which ends the session.
-const RECONNECT_WINDOW_MS = 60_000
+// adb's USB link to a phone can drop and come back many times in a row for minutes, so the
+// pane keeps waiting for as long as it is open, polling less often the longer it waits.
 const RECONNECT_POLL_MS = 1_000
+const RECONNECT_POLL_MAX_MS = 5_000
+// A second decode error this soon after a restart ends the pane, so a stream that never
+// decodes does not restart forever.
+const DECODE_RETRY_WINDOW_MS = 10_000
 
 const phase = ref<Phase>('picking')
 const devices = ref<DeviceInfo[]>([])
@@ -37,8 +41,9 @@ let touching = false
 let stopPackets: (() => void) | undefined
 let stopEnd: (() => void) | undefined
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
-// Zero when not reconnecting; a failed start before it passes goes back to waiting.
-let reconnectDeadline = 0
+// While set, a failed start goes back to waiting instead of ending the pane.
+let reconnecting = false
+let lastDecodeRestart = 0
 
 async function refresh(): Promise<void> {
   const result = await window.api.device.list()
@@ -70,7 +75,7 @@ function onPacket(packet: DevicePacket): void {
       decoder?.close()
       decoder = new VideoDecoder({
         output: draw,
-        error: (error) => fail(`Decoding failed: ${error.message}`)
+        error: (error) => onDecodeError(error.message)
       })
       // With no description the decoder reads Annex B, which is what scrcpy sends.
       decoder.configure({ codec, optimizeForLatency: true })
@@ -106,16 +111,17 @@ function teardown(): void {
 
 function fail(message: string): void {
   teardown()
-  reconnectDeadline = 0
+  reconnecting = false
   streamError.value = message
   phase.value = 'ended'
 }
 
 function reconnect(device: DeviceInfo, reason: string): void {
   teardown()
-  if (!reconnectDeadline) reconnectDeadline = Date.now() + RECONNECT_WINDOW_MS
+  reconnecting = true
   streamError.value = reason
   phase.value = 'reconnecting'
+  let delay = RECONNECT_POLL_MS
   const poll = async (): Promise<void> => {
     reconnectTimer = undefined
     const result = await window.api.device.list()
@@ -124,10 +130,21 @@ function reconnect(device: DeviceInfo, reason: string): void {
       result.ok &&
       result.devices.some((entry) => entry.serial === device.serial && entry.state === 'device')
     if (back) return void start(device)
-    if (Date.now() >= reconnectDeadline) return fail(reason)
-    reconnectTimer = setTimeout(poll, RECONNECT_POLL_MS)
+    delay = Math.min(delay * 2, RECONNECT_POLL_MAX_MS)
+    reconnectTimer = setTimeout(poll, delay)
   }
-  reconnectTimer = setTimeout(poll, RECONNECT_POLL_MS)
+  reconnectTimer = setTimeout(poll, delay)
+}
+
+// A fresh session starts with a key frame, which is what a decoder needs after an error.
+function onDecodeError(message: string): void {
+  const device = current.value
+  const now = Date.now()
+  if (!device || now - lastDecodeRestart < DECODE_RETRY_WINDOW_MS) {
+    return fail(`Decoding failed: ${message}`)
+  }
+  lastDecodeRestart = now
+  void start(device)
 }
 
 async function start(device: DeviceInfo): Promise<void> {
@@ -145,8 +162,8 @@ async function start(device: DeviceInfo): Promise<void> {
   })
   const result = await window.api.device.start({ id, serial: device.serial })
   if (sessionId !== id) return
-  if (!result.ok) return reconnectDeadline ? reconnect(device, result.error) : fail(result.error)
-  reconnectDeadline = 0
+  if (!result.ok) return reconnecting ? reconnect(device, result.error) : fail(result.error)
+  reconnecting = false
   phase.value = 'live'
 }
 
@@ -240,7 +257,7 @@ function onPaste(event: ClipboardEvent): void {
 
 function backToList(): void {
   teardown()
-  reconnectDeadline = 0
+  reconnecting = false
   current.value = null
   phase.value = 'picking'
   void refresh()

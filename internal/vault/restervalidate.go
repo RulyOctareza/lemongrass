@@ -14,8 +14,8 @@ import (
 // assignments, overrides and credentials agree. A rester with no users is allowed, though no
 // channel can be made on it.
 func (r Rester) Validate() error {
-	if r.API == nil && r.Web == nil {
-		return fmt.Errorf("vault: a rester needs an api side, a web side or both")
+	if r.API == nil && r.Web == nil && r.App == nil {
+		return fmt.Errorf("vault: a rester needs an api side, a web side, an app side or a combination")
 	}
 	if len(r.Environments) == 0 {
 		return fmt.Errorf("vault: a rester needs at least one environment")
@@ -25,6 +25,11 @@ func (r Rester) Validate() error {
 	}
 	if r.Web != nil {
 		if err := checkLoginSteps(r.Web.Login); err != nil {
+			return err
+		}
+	}
+	if r.App != nil {
+		if err := checkAppLogin(*r.App); err != nil {
 			return err
 		}
 	}
@@ -118,6 +123,42 @@ func checkLoginSteps(steps []LoginStep) error {
 		}
 		if s.TimeoutSeconds < 0 {
 			return fmt.Errorf("vault: login step %d has a negative timeout", n)
+		}
+	}
+	return nil
+}
+
+// checkAppLogin wants a package name and steps that each carry what their action needs: a
+// locator (Text or ID) for tap, fill and wait, plus a field for fill, and a key for key.
+func checkAppLogin(a ResterApp) error {
+	if strings.TrimSpace(a.Package) == "" {
+		return fmt.Errorf("vault: the app side needs a package name")
+	}
+	for i, s := range a.Login {
+		n := i + 1
+		var missing string
+		switch s.Action {
+		case AppStepLaunch:
+		case AppStepTap, AppStepWait:
+			if s.Text == "" && s.ID == "" {
+				missing = "a text or an id"
+			}
+		case AppStepFill:
+			if (s.Text == "" && s.ID == "") || s.Field == "" {
+				missing = "a text or an id, and a field"
+			}
+		case AppStepKey:
+			if s.Key == "" {
+				missing = "a key"
+			}
+		default:
+			return fmt.Errorf("vault: app login step %d has an unknown action %q, want launch, tap, fill, key or wait", n, s.Action)
+		}
+		if missing != "" {
+			return fmt.Errorf("vault: app login step %d (%s) needs %s", n, s.Action, missing)
+		}
+		if s.TimeoutSeconds < 0 {
+			return fmt.Errorf("vault: app login step %d has a negative timeout", n)
 		}
 	}
 	return nil

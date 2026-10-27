@@ -160,9 +160,24 @@ export interface ResterWeb {
   Login: LoginStep[] | null
 }
 
+export interface AppStep {
+  Action: 'launch' | 'tap' | 'fill' | 'key' | 'wait'
+  Text: string
+  ID: string
+  Field: string
+  Key: string
+  TimeoutSeconds: number
+}
+
+export interface ResterApp {
+  Package: string
+  Login: AppStep[] | null
+}
+
 export interface Rester {
   API: ResterAPI | null
   Web: ResterWeb | null
+  App: ResterApp | null
   Environments: Environment[]
   Users: ResterUser[]
 }
@@ -194,7 +209,7 @@ export interface HTTPChannel {
   Name: string
   Rester: string
   Environment: string
-  Type: 'api' | 'web'
+  Type: 'api' | 'web' | 'app'
   Scope: HTTPScope
   WebScope: WebScope | null
   CreatedAt: string
@@ -402,7 +417,7 @@ async function createHTTPChannel(
   name: string,
   rester: string,
   environment: string,
-  type: 'api' | 'web',
+  type: 'api' | 'web' | 'app',
   scope: HTTPScope,
   webScope: WebScope | null,
   ttlSeconds: number
@@ -590,7 +605,7 @@ export function registerVaultHandlers(): void {
       name: string,
       rester: string,
       environment: string,
-      type: 'api' | 'web',
+      type: 'api' | 'web' | 'app',
       scope: HTTPScope,
       webScope: WebScope | null,
       ttlSeconds: number

@@ -23,6 +23,7 @@ const (
 	opHTTPChannelInfo     = "http_channel_info"
 	opHTTPUsers           = "http_users"
 	opHTTPFlush           = "http_flush"
+	opAppLogin            = "app_login"
 	opForget              = "forget"
 )
 
@@ -97,6 +98,12 @@ type httpFlushPayload struct {
 	User    string `json:"user"`
 }
 
+type appLoginPayload struct {
+	ShortID string `json:"short_id"`
+	User    string `json:"user"`
+	Serial  string `json:"serial,omitempty"`
+}
+
 type httpFlushedPayload struct {
 	Flushed int `json:"flushed"`
 }
@@ -126,6 +133,9 @@ func handleConn(svc *Service, queryLimiter *vault.FailureLimiter, conn net.Conn)
 	}
 	if req.Op == opRequestHTTP || req.Op == opRequestHTTPDownload {
 		conn.SetDeadline(time.Now().Add(restergate.RequestTimeout))
+	}
+	if req.Op == opAppLogin {
+		conn.SetDeadline(time.Now().Add(restergate.AppLoginTimeout))
 	}
 	if req.Op == opWebCommand {
 		conn.SetDeadline(time.Now().Add(web.Timeout))
@@ -208,6 +218,16 @@ func dispatch(svc *Service, queryLimiter *vault.FailureLimiter, req request) res
 		return queryOp(queryLimiter, func() (response, error) {
 			flushed, err := svc.FlushHTTPTokens(p.ShortID, p.User)
 			return payloadResponse(httpFlushedPayload{Flushed: flushed}), err
+		})
+
+	case opAppLogin:
+		var p appLoginPayload
+		if err := json.Unmarshal(req.Payload, &p); err != nil {
+			return errResponse(err)
+		}
+		return queryOp(queryLimiter, func() (response, error) {
+			result, err := svc.AppLogin(p.ShortID, p.User, p.Serial)
+			return payloadResponse(result), err
 		})
 
 	case opWebCommand:
@@ -389,6 +409,13 @@ func (c *Client) FlushHTTPTokens(shortID, user string) (int, error) {
 	var out httpFlushedPayload
 	err := c.call(opHTTPFlush, httpFlushPayload{ShortID: shortID, User: user}, &out)
 	return out.Flushed, err
+}
+
+// AppLogin asks the agent to log the channel's app in on the connected phone as user.
+func (c *Client) AppLogin(shortID, user, serial string) (restergate.AppLoginResult, error) {
+	var out restergate.AppLoginResult
+	err := c.callWithin(max(c.Timeout, restergate.AppLoginTimeout), opAppLogin, appLoginPayload{ShortID: shortID, User: user, Serial: serial}, &out)
+	return out, err
 }
 
 func (c *Client) Forget(shortID string) error {

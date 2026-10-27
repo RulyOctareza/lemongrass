@@ -23,6 +23,8 @@ const baseUrl = ref('')
 const origin = ref('')
 const withApi = ref(true)
 const withWeb = ref(false)
+const withApp = ref(false)
+const packageName = ref('')
 const saving = ref(false)
 const formError = ref('')
 
@@ -33,7 +35,8 @@ const canSave = computed(
     name.value.trim() !== '' &&
     !nameTaken.value &&
     envName.value.trim() !== '' &&
-    (withApi.value || withWeb.value)
+    (withApi.value || withWeb.value || withApp.value) &&
+    (!withApp.value || packageName.value.trim() !== '')
 )
 
 async function save(): Promise<void> {
@@ -43,6 +46,7 @@ async function save(): Promise<void> {
   const rester: VaultRester = {
     API: withApi.value ? defaultResterAPI() : null,
     Web: withWeb.value ? { Login: null } : null,
+    App: withApp.value ? { Package: packageName.value.trim(), Login: null } : null,
     Environments: [
       {
         Name: envName.value.trim(),
@@ -100,11 +104,18 @@ async function save(): Promise<void> {
       <div class="radio-row">
         <AppCheckbox :checked="withApi" @click="withApi = !withApi">API</AppCheckbox>
         <AppCheckbox :checked="withWeb" @click="withWeb = !withWeb">Web</AppCheckbox>
+        <AppCheckbox :checked="withApp" @click="withApp = !withApp">App</AppCheckbox>
       </div>
       <p class="hint">
         An environment reaches the API side through its base URL and the web side through its
-        origin. Login settings and users are added after creating.
+        origin. The app side logs in on a phone and needs no address. Login settings and users are
+        added after creating.
       </p>
+    </div>
+
+    <div v-if="withApp" class="field-block">
+      <label class="field-label" for="rester-package">App package name</label>
+      <input id="rester-package" v-model="packageName" type="text" placeholder="com.example.app" />
     </div>
 
     <div class="create-actions">

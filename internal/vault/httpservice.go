@@ -26,6 +26,8 @@ func (s *Service) CreateHTTPChannel(rootSecret, name, resterName, environment, t
 	switch typ {
 	case TypeAPI:
 		webScope = nil
+	case TypeApp:
+		scope, webScope = HTTPScope{}, nil
 	case TypeWeb:
 		scope = HTTPScope{}
 		if webScope == nil {
@@ -35,7 +37,7 @@ func (s *Service) CreateHTTPChannel(rootSecret, name, resterName, environment, t
 			return HTTPChannel{}, err
 		}
 	default:
-		return HTTPChannel{}, fmt.Errorf("vault: unknown channel type %q, want %q or %q", typ, TypeAPI, TypeWeb)
+		return HTTPChannel{}, fmt.Errorf("vault: unknown channel type %q, want %q, %q or %q", typ, TypeAPI, TypeWeb, TypeApp)
 	}
 
 	// Held until the metadata is saved so UpdateRester, which checks a rester's channels under the same lock, sees this one.
