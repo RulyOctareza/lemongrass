@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Faizal Alviansyah
+
+# Disposable MySQL 8 and Postgres 16 servers for the dbgate real-database tests, seeded with fake data only.
+# Start with `docker compose up -d` in this directory, then run the tests as the least-privilege app user:
+#
+#   export LGRASS_TEST_MYSQL_DSN='mysql://vaultapp:vaultapp-pass@127.0.0.1:33306/vaultapp'
+#   export LGRASS_TEST_POSTGRES_DSN='postgres://vaultapp:vaultapp-pass@127.0.0.1:55432/vaultapp?sslmode=disable'
+#   go test ./internal/dbgate/ -run 'RealMySQL|RealPostgres'
+#
+# The seeds run only on a fresh volume, so `docker compose down -v` before `up` resets every table, sequence and function.
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: vaultroot-pass
+      MYSQL_DATABASE: vaultapp
+    ports:
+      - "127.0.0.1:33306:3306"
+    volumes:
+      - ./mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pvaultroot-pass"]
+      interval: 2s
+      retries: 60
+
+  postgres:
+    image: postgres:16
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    environment:
+      POSTGRES_USER: vaultadmin
+      POSTGRES_PASSWORD: vaultadmin-pass
+      POSTGRES_DB: vaultapp
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - ./postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "vaultadmin", "-d", "vaultapp"]
+      interval: 2s
+      retries: 60
