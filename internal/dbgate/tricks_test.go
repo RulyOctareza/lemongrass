@@ -260,6 +260,7 @@ var mysqlTricks = []trick{
 	myRead("comment before builtin", "SELECT sum/**/(id) FROM employees"),
 	myRead("stored sum shadowing builtin", "SELECT sum(id) FROM employees").real(),
 	myRead("stored format_pico_time", "SELECT format_pico_time(id) FROM employees").real(),
+	myRead("from-less stored function still checked", "SELECT format_pico_time(1)").real(),
 	myRead("extractvalue", "SELECT EXTRACTVALUE('<a/>', '/a')"),
 	myRead("statement_digest", "SELECT STATEMENT_DIGEST('SELECT 1')"),
 
@@ -292,6 +293,11 @@ var mysqlTricks = []trick{
 	myRead("backticked other database", "SELECT * FROM `vault_archive`.`employees`"),
 	myRead("backticked ungranted", "SELECT * FROM `secrets`"),
 	myRead("ungranted with alias named granted", "SELECT * FROM secrets AS employees"),
+	// A backticked `dual` is a real table that needs a grant; bare dual and the implicit dual on a FROM-less SELECT carry no table (the FROM-less controls in tricks_realdb_test.go prove those run). The text-level rule keeps dual even inside a string literal, a safe over-refusal.
+	myRead("backticked dual", "SELECT id FROM `dual`"),
+	myRead("backticked dual in join", "SELECT e.id FROM employees e JOIN `dual` d ON 1 = 1"),
+	myRead("backticked dual in subquery", "SELECT * FROM employees WHERE id IN (SELECT id FROM `dual`)"),
+	myRead("backticked dual in string literal", "SELECT '`dual`'"),
 	myRead("table statement", "TABLE secrets"),
 	myRead("values statement", "VALUES ROW((SELECT secret FROM secrets LIMIT 1))"),
 	myRead("handler", "HANDLER secrets OPEN"),
