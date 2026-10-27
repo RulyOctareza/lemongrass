@@ -5,6 +5,7 @@ package dbgate
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 
 	"github.com/xwb1989/sqlparser"
@@ -84,4 +85,11 @@ func checkMySQLReadLocks(stmt sqlparser.SQLNode) error {
 		}
 		return true, nil
 	}, stmt)
+}
+
+var mysqlBacktickedDualRegex = regexp.MustCompile("(?i)`dual`")
+
+// mysqlBacktickedDual reports whether sqlText names dual in backticks. MySQL reads a bare DUAL only as its dummy table, and with ANSI_QUOTES forced off a double-quoted "dual" is a string, so a backtick is the only spelling that reaches a real table named dual, while the parser gives every spelling the same node. A match inside a string or comment keeps the table too, which can only refuse.
+func mysqlBacktickedDual(sqlText string) bool {
+	return mysqlBacktickedDualRegex.MatchString(sqlText)
 }

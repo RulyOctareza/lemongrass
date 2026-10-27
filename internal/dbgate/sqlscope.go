@@ -141,7 +141,7 @@ func classifyMySQLRead(kind Kind, sqlText string, stmt sqlparser.SQLNode) (State
 	if err != nil {
 		return Statement{}, err
 	}
-	tables := mysqlTables(stmt)
+	tables := mysqlTables(sqlText, stmt)
 	if err := checkRestrictedColumns(EngineMySQL, tables, mysqlColumnRefs(stmt)); err != nil {
 		return Statement{}, err
 	}
@@ -165,7 +165,7 @@ func classifyMySQLShowTablesFilter(sqlText string, filter sqlparser.Expr) (State
 	if err != nil {
 		return Statement{}, err
 	}
-	tables := mysqlTables(filter)
+	tables := mysqlTables(sqlText, filter)
 	if err := checkRestrictedColumns(EngineMySQL, tables, mysqlColumnRefs(filter)); err != nil {
 		return Statement{}, err
 	}
@@ -179,7 +179,7 @@ func classifyMySQLInsert(sqlText string, stmt *sqlparser.Insert) (Statement, err
 		return Statement{}, err
 	}
 	target := qualifiedTable(EngineMySQL, stmt.Table.Qualifier.String(), stmt.Table.Name.String())
-	tables := toSet(mysqlTables(stmt))
+	tables := toSet(mysqlTables(sqlText, stmt))
 	tables[target] = true
 	return Statement{Kind: KindInsert, Tables: sortedKeys(tables), WriteTables: []string{target}, Catalog: CatalogNames{Functions: calls}}, nil
 }
@@ -192,7 +192,7 @@ func classifyMySQLUpdate(sqlText string, stmt *sqlparser.Update) (Statement, err
 	if err != nil {
 		return Statement{}, err
 	}
-	tables := mysqlTables(stmt)
+	tables := mysqlTables(sqlText, stmt)
 	writes, err := mysqlUpdateWriteTables(stmt, tables)
 	if err != nil {
 		return Statement{}, err
@@ -235,7 +235,7 @@ func classifyMySQLDelete(sqlText string, stmt *sqlparser.Delete) (Statement, err
 		return Statement{}, err
 	}
 	catalog := CatalogNames{Functions: calls}
-	tables := mysqlTables(stmt)
+	tables := mysqlTables(sqlText, stmt)
 	if len(stmt.Targets) == 0 {
 		return Statement{Kind: KindDelete, Tables: tables, WriteTables: tables, Catalog: catalog}, nil
 	}
@@ -339,12 +339,16 @@ func introspectTableFromText(sqlText string) []string {
 	return []string{m[1]}
 }
 
-// mysqlTables collects TableName nodes only via AliasedTableExpr, since TableName is reused for column qualifiers and walking it directly would count aliases as tables.
-func mysqlTables(stmt sqlparser.SQLNode) []string {
+// mysqlTables collects TableName nodes only via AliasedTableExpr, since TableName is reused for column qualifiers and walking it directly would count aliases as tables. An unqualified dual is MySQL's dummy table, which the parser also adds to a FROM-less SELECT, and is left out unless sqlText backticks it, the only way to name a real table called dual.
+func mysqlTables(sqlText string, stmt sqlparser.SQLNode) []string {
+	keepDual := mysqlBacktickedDual(sqlText)
 	seen := make(map[string]bool)
 	mysqlWalk(func(node sqlparser.SQLNode) (bool, error) {
 		if ate, ok := node.(*sqlparser.AliasedTableExpr); ok {
 			if tn, ok := ate.Expr.(sqlparser.TableName); ok && !tn.IsEmpty() {
+				if !keepDual && tn.Qualifier.IsEmpty() && strings.EqualFold(tn.Name.String(), "dual") {
+					return true, nil
+				}
 				seen[qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String())] = true
 			}
 		}
