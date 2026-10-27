@@ -248,7 +248,7 @@ var mysqlTricks = []trick{
 	myRead("space before builtin", "SELECT sum (id) FROM employees"),
 	myRead("comment before builtin", "SELECT sum/**/(id) FROM employees"),
 	myRead("stored sum shadowing builtin", "SELECT sum(id) FROM employees").real(),
-	myRead("stored format_pico_time", "SELECT format_pico_time(1)").real(),
+	myRead("stored format_pico_time", "SELECT format_pico_time(id) FROM employees").real(),
 	myRead("extractvalue", "SELECT EXTRACTVALUE('<a/>', '/a')"),
 	myRead("statement_digest", "SELECT STATEMENT_DIGEST('SELECT 1')"),
 
@@ -284,13 +284,13 @@ var mysqlTricks = []trick{
 	// Comments the parser and MySQL may read differently.
 	myRead("double dash without space", "SELECT 1 --1, (SELECT secret FROM secrets)"),
 	myRead("double dash without space before newline", "SELECT 1 --1\n, (SELECT secret FROM secrets LIMIT 1)"),
-	myRead("versioned comment", "SELECT 1 /*!, (SELECT secret FROM secrets LIMIT 1) */"),
-	myRead("versioned comment with version", "SELECT 1 /*!50000 , (SELECT secret FROM secrets LIMIT 1) */"),
+	myRead("versioned comment", "SELECT id /*!, (SELECT secret FROM secrets LIMIT 1) */ FROM employees"),
+	myRead("versioned comment with version", "SELECT id /*!50000 , (SELECT secret FROM secrets LIMIT 1) */ FROM employees"),
 	myRead("versioned comment hides sleep", "SELECT 1 /*!50000 + SLEEP(1) */"),
 	myRead("mariadb executable comment", "SELECT 1 /*M! , (SELECT secret FROM secrets LIMIT 1) */"),
 	myRead("mariadb versioned executable comment", "SELECT 1 /*M!100100 , (SELECT secret FROM secrets LIMIT 1) */"),
 	myRead("optimizer hint sets sql_mode", "SELECT /*+ SET_VAR(sql_mode='ANSI_QUOTES') */ \"query_sample_text\" FROM performance_schema.events_statements_summary_by_digest").under(trickPerf),
-	myRead("hash comment before ungranted", "SELECT 1 # x\n, (SELECT secret FROM secrets LIMIT 1)"),
+	myRead("hash comment before ungranted", "SELECT id # x\n, (SELECT secret FROM secrets LIMIT 1) FROM employees"),
 
 	// Stacked statements.
 	myRead("stacked delete", "SELECT 1; DELETE FROM employees WHERE id = 1"),
@@ -368,7 +368,7 @@ var mysqlTricks = []trick{
 	myRead("explain analyze cte", "EXPLAIN ANALYZE WITH x AS (SELECT * FROM secrets) SELECT * FROM x").under(trickExplain),
 	myRead("explain format json ungranted", "EXPLAIN FORMAT=JSON SELECT * FROM secrets").under(trickExplain),
 	myRead("describe select ungranted", "DESCRIBE SELECT * FROM secrets").under(trickExplain),
-	myRead("explain constant subquery", "EXPLAIN SELECT (SELECT secret FROM secrets LIMIT 1)").under(trickExplain),
+	myRead("explain constant subquery", "EXPLAIN SELECT (SELECT secret FROM secrets LIMIT 1) FROM employees").under(trickExplain),
 	myRead("explain for connection", "EXPLAIN FOR CONNECTION 1").under(trickExplain),
 	myRead("explain without grant", "EXPLAIN SELECT * FROM employees"),
 }
