@@ -78,6 +78,7 @@ func TestMySQLStayOutFunctionsRefusedEverywhere(t *testing.T) {
 		"SELECT CAST(%s AS CHAR) FROM employees",
 		"SELECT CASE WHEN %s THEN 1 END FROM employees",
 		"SELECT CONCAT(UPPER(%s)) FROM employees",
+		"SELECT id FROM employees UNION SELECT id FROM employees ORDER BY %s",
 		"EXPLAIN SELECT %s FROM employees",
 		"EXPLAIN ANALYZE SELECT %s FROM employees",
 		"SHOW TABLES WHERE %s",

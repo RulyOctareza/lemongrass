@@ -54,12 +54,15 @@ var mysqlAllowedFunctions = toSet([]string{
 	"format_pico_time", "format_bytes", "ps_thread_id", "ps_current_thread_id",
 })
 
-// mysqlCalls refuses any function call in node that isn't an unqualified allowlisted built-in, checks sqlText spells every call the way MySQL resolves to the built-in, and returns the allowlisted names called, for the catalog check.
+// mysqlCalls refuses any node kind checkMySQLNode doesn't know and any function call in node that isn't an unqualified allowlisted built-in, checks sqlText spells every call the way MySQL resolves to the built-in, and returns the allowlisted names called, for the catalog check.
 func mysqlCalls(sqlText string, node sqlparser.SQLNode) ([]string, error) {
 	called := make(map[string]bool)
 	// names also holds the node forms, which are grammar keywords and so can't reach a stored function unless misspelled.
 	names := make(map[string]bool)
-	err := sqlparser.Walk(func(n sqlparser.SQLNode) (bool, error) {
+	err := mysqlWalk(func(n sqlparser.SQLNode) (bool, error) {
+		if err := checkMySQLNode(n); err != nil {
+			return false, err
+		}
 		switch f := n.(type) {
 		case *sqlparser.FuncExpr:
 			// A MySQL built-in can't be qualified, so a qualified call always names a stored function.

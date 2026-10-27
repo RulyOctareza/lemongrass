@@ -71,7 +71,7 @@ func checkMySQLOpaque(sqlText string) error {
 
 // checkMySQLReadLocks refuses a read that takes row locks, matching Postgres, where the read-only transaction refuses them too.
 func checkMySQLReadLocks(stmt sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(n sqlparser.SQLNode) (bool, error) {
+	return mysqlWalk(func(n sqlparser.SQLNode) (bool, error) {
 		switch s := n.(type) {
 		case *sqlparser.Select:
 			if s.Lock != "" {

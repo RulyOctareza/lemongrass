@@ -242,7 +242,7 @@ func classifyMySQLDelete(sqlText string, stmt *sqlparser.Delete) (Statement, err
 // mysqlTableAliases maps each table's alias, and its real name, to its qualified table name, for resolving a SET column's qualifier in a multi-table UPDATE back to a real table.
 func mysqlTableAliases(node sqlparser.SQLNode) map[string]string {
 	aliases := make(map[string]string)
-	sqlparser.Walk(func(n sqlparser.SQLNode) (bool, error) {
+	mysqlWalk(func(n sqlparser.SQLNode) (bool, error) {
 		if ate, ok := n.(*sqlparser.AliasedTableExpr); ok {
 			if tn, ok := ate.Expr.(sqlparser.TableName); ok && !tn.IsEmpty() {
 				qualified := qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String())
@@ -310,7 +310,7 @@ func introspectTableFromText(sqlText string) []string {
 // mysqlTables collects TableName nodes only via AliasedTableExpr, since TableName is reused for column qualifiers and walking it directly would count aliases as tables.
 func mysqlTables(stmt sqlparser.SQLNode) []string {
 	seen := make(map[string]bool)
-	sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+	mysqlWalk(func(node sqlparser.SQLNode) (bool, error) {
 		if ate, ok := node.(*sqlparser.AliasedTableExpr); ok {
 			if tn, ok := ate.Expr.(sqlparser.TableName); ok && !tn.IsEmpty() {
 				seen[qualifiedTable(EngineMySQL, tn.Qualifier.String(), tn.Name.String())] = true
@@ -325,7 +325,7 @@ func mysqlTables(stmt sqlparser.SQLNode) []string {
 func mysqlColumnRefs(stmt sqlparser.SQLNode) columnRefs {
 	refs := columnRefs{names: make(map[string]bool)}
 	aggregateStars := make(map[*sqlparser.StarExpr]bool)
-	sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+	mysqlWalk(func(node sqlparser.SQLNode) (bool, error) {
 		switch n := node.(type) {
 		case *sqlparser.FuncExpr:
 			for _, e := range n.Exprs {
