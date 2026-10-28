@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // Package restergate makes HTTP calls through a channel: it checks scope, logs users in, caches their tokens and sends the request. The rester config comes from the vault and only tokens are cached here.
 package restergate

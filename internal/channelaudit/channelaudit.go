@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // Package channelaudit is the shared lg_channel_audit table every vault-backed connector writes
 // a call's outcome to. It lives in its own SQLite file under the vault's own directory, is

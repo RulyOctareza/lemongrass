@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'

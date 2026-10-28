@@ -2,7 +2,7 @@
 
 Lemongrass runs coding agents in real terminals and gives them what a raw terminal does not: credentials they can use but never see, teammates they can message, a safety guard that holds with permission prompts off, and project rules that arrive at the start of every session.
 
-It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. Claude Code and Codex are supported, and a pane can also open Cursor Agent or a plain shell. Lemongrass is licensed under the GNU AGPL-3.0, see [LICENSE](LICENSE).
+It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. Claude Code and Codex are supported, and a pane can also open Cursor Agent or a plain shell. Lemongrass is licensed under the GNU AGPL-3.0, see [LICENSE](LICENSE). Copyright belongs to The Lemongrass Authors, see [AUTHORS](AUTHORS).
 
 ![The Lemongrass app with a live workgroup and its thread, a web tab and the Vault](docs/images/overall-view.png)
 
@@ -143,3 +143,11 @@ make dev       # builds the UI once and launches it
 ```
 go build -a ./... && go test ./...
 ```
+
+## Contributing
+
+Pull requests target `main` and need the `license-check` job to pass. Run `make license` to stamp the license header on new files. A first pull request from a fork waits for a maintainer's approval before its checks run.
+
+Anyone whose change is merged is welcome to add their name and email to [AUTHORS](AUTHORS) in the same pull request.
+
+The design notes behind Lemongrass are kept outside the repository. If you need background on a part of the code before changing it, email one of the people in [AUTHORS](AUTHORS).

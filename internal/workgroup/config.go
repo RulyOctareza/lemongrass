@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // Package workgroup parses workgroup configs and talks to the lemongrass app that spawns a group's tabs.
 package workgroup

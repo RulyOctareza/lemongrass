@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- Copyright (C) 2026 Faizal Alviansyah -->
+<!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'

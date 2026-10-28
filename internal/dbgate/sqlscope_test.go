@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 package dbgate
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -47,7 +49,7 @@ func TestClassifyQueryMySQLIntrospect(t *testing.T) {
 		{"SHOW CREATE TABLE employees", []string{"employees"}},
 		{"DESCRIBE employees", []string{"employees"}},
 		{"DESC employees", []string{"employees"}},
-		{"EXPLAIN SELECT * FROM employees", nil},
+		{"EXPLAIN employees", nil},
 	}
 	for _, tt := range tests {
 		got, err := ClassifyQuery(EngineMySQL, tt.sql)
@@ -60,6 +62,49 @@ func TestClassifyQueryMySQLIntrospect(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got.Tables, tt.wantTables) {
 			t.Errorf("ClassifyQuery(%q).Tables = %v, want %v", tt.sql, got.Tables, tt.wantTables)
+		}
+	}
+}
+
+func TestClassifyQueryMySQLExplainKeepsWrappedTables(t *testing.T) {
+	cases := []struct {
+		sql    string
+		tables []string
+	}{
+		{"EXPLAIN SELECT * FROM employees e JOIN salaries s ON e.id = s.emp_id", []string{"employees", "salaries"}},
+		{"explain select * from employees", []string{"employees"}},
+		{"DESCRIBE SELECT * FROM employees", []string{"employees"}},
+		{"DESC SELECT * FROM employees", []string{"employees"}},
+		{"EXPLAIN FORMAT=JSON SELECT * FROM employees", []string{"employees"}},
+		{"EXPLAIN ANALYZE FORMAT = TREE SELECT * FROM employees", []string{"employees"}},
+		{"EXPLAIN SELECT id FROM employees UNION SELECT id FROM contractors", []string{"contractors", "employees"}},
+		{"EXPLAIN (SELECT id FROM employees) UNION (SELECT id FROM contractors)", []string{"contractors", "employees"}},
+	}
+	for _, c := range cases {
+		got, err := ClassifyQuery(EngineMySQL, c.sql)
+		if err != nil {
+			t.Errorf("ClassifyQuery(%q): %v", c.sql, err)
+			continue
+		}
+		if got.Kind != KindExplain {
+			t.Errorf("ClassifyQuery(%q).Kind = %q, want %q", c.sql, got.Kind, KindExplain)
+		}
+		if !reflect.DeepEqual(got.Tables, c.tables) {
+			t.Errorf("ClassifyQuery(%q).Tables = %v, want %v", c.sql, got.Tables, c.tables)
+		}
+	}
+}
+
+func TestClassifyQueryMySQLExplainRejectsWrite(t *testing.T) {
+	for _, sql := range []string{
+		"EXPLAIN UPDATE employees SET name = 'a' WHERE id = 1",
+		"EXPLAIN ANALYZE UPDATE employees e JOIN salaries s ON e.id = s.emp_id SET e.name = 'a' WHERE s.amount > 1",
+		"EXPLAIN DELETE FROM employees WHERE id = 1",
+		"EXPLAIN INSERT INTO employees (name) VALUES ('a')",
+		"DESCRIBE REPLACE INTO employees (name) VALUES ('a')",
+	} {
+		if _, err := ClassifyQuery(EngineMySQL, sql); !errors.Is(err, errExplainNotReadOnly) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errExplainNotReadOnly", sql, err)
 		}
 	}
 }
@@ -216,6 +261,71 @@ func TestClassifyQueryPostgresSelect(t *testing.T) {
 	}
 }
 
+func TestClassifyQueryPostgresCTEScope(t *testing.T) {
+	cases := []struct {
+		name   string
+		sql    string
+		tables []string
+	}{
+		{"schema-qualified name is never a CTE", `WITH secrets AS (SELECT 1 AS x) SELECT * FROM public.secrets`, []string{"public.secrets"}},
+		{"inner CTE does not hide an outer read", `SELECT * FROM secrets WHERE id IN (WITH secrets AS (SELECT 1 AS id) SELECT id FROM secrets)`, []string{"secrets"}},
+		{"CTE does not see itself without RECURSIVE", `WITH secrets AS (SELECT * FROM secrets) SELECT * FROM secrets`, []string{"secrets"}},
+		{"CTE does not see a later sibling", `WITH a AS (SELECT * FROM secrets), secrets AS (SELECT 1 AS x) SELECT * FROM a`, []string{"secrets"}},
+		{"CTE sees an earlier sibling", `WITH secrets AS (SELECT 1 AS x), a AS (SELECT * FROM secrets) SELECT * FROM a`, nil},
+		{"RECURSIVE CTE sees itself", `WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM t WHERE n < 3) SELECT * FROM t`, nil},
+		{"outer CTE visible in a subquery", `WITH secrets AS (SELECT 1 AS id) SELECT * FROM employees WHERE id IN (SELECT id FROM secrets)`, []string{"employees"}},
+		{"name reused at two levels", `WITH secrets AS (SELECT * FROM employees) SELECT * FROM secrets WHERE id IN (WITH secrets AS (SELECT * FROM salaries) SELECT id FROM secrets)`, []string{"employees", "salaries"}},
+		{"CTE in a subquery leaves a sibling subquery alone", `SELECT (WITH secrets AS (SELECT 1 AS x) SELECT x FROM secrets), (SELECT count(*) FROM secrets)`, []string{"secrets"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ClassifyQuery(EnginePostgres, c.sql)
+			if err != nil {
+				t.Fatalf("ClassifyQuery: %v", err)
+			}
+			if len(got.Tables) != 0 || len(c.tables) != 0 {
+				if !reflect.DeepEqual(got.Tables, c.tables) {
+					t.Errorf("Tables = %v, want %v", got.Tables, c.tables)
+				}
+			}
+		})
+	}
+}
+
+func TestClassifyQueryPostgresWriteCTEScope(t *testing.T) {
+	cases := []struct {
+		name   string
+		sql    string
+		tables []string
+	}{
+		{"insert with a CTE", `WITH s AS (SELECT id FROM salaries) INSERT INTO employees (id) SELECT id FROM s`, []string{"employees", "salaries"}},
+		{"insert reading a qualified table named like its CTE", `WITH secrets AS (SELECT 1 AS id) INSERT INTO employees (id) SELECT id FROM public.secrets`, []string{"employees", "public.secrets"}},
+		{"update with a CTE", `WITH s AS (SELECT emp_id FROM salaries) UPDATE employees SET name = 'a' WHERE id IN (SELECT emp_id FROM s)`, []string{"employees", "salaries"}},
+		{"update reading a table its CTE shadows only inside", `UPDATE employees SET name = 'a' WHERE id IN (SELECT id FROM secrets) AND id IN (WITH secrets AS (SELECT 1 AS id) SELECT id FROM secrets)`, []string{"employees", "secrets"}},
+		{"delete with a self-referencing CTE", `WITH secrets AS (SELECT * FROM secrets) DELETE FROM employees WHERE id IN (SELECT id FROM secrets)`, []string{"employees", "secrets"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ClassifyQuery(EnginePostgres, c.sql)
+			if err != nil {
+				t.Fatalf("ClassifyQuery: %v", err)
+			}
+			if !reflect.DeepEqual(got.Tables, c.tables) {
+				t.Errorf("Tables = %v, want %v", got.Tables, c.tables)
+			}
+			if !reflect.DeepEqual(got.WriteTables, []string{"employees"}) {
+				t.Errorf("WriteTables = %v, want [employees]", got.WriteTables)
+			}
+		})
+	}
+}
+
+func TestClassifyQueryPostgresMergeWithCTEIsRefused(t *testing.T) {
+	if _, err := ClassifyQuery(EnginePostgres, "WITH secrets AS (SELECT 1 AS id) MERGE INTO employees e USING public.secrets s ON e.id = s.id WHEN MATCHED THEN DELETE"); err == nil {
+		t.Error("expected MERGE to be refused")
+	}
+}
+
 func TestClassifyQueryPostgresExplainKeepsWrappedTables(t *testing.T) {
 	got, err := ClassifyQuery(EnginePostgres, "EXPLAIN SELECT * FROM employees JOIN salaries ON employees.id = salaries.emp_id")
 	if err != nil {
@@ -226,6 +336,23 @@ func TestClassifyQueryPostgresExplainKeepsWrappedTables(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Tables, []string{"employees", "salaries"}) {
 		t.Errorf("Tables = %v, want [employees salaries]", got.Tables)
+	}
+}
+
+func TestClassifyQueryPostgresExplainRejectsWrite(t *testing.T) {
+	for _, sql := range []string{
+		"EXPLAIN ANALYZE UPDATE employees SET name = 'a' WHERE id = 1",
+		"EXPLAIN DELETE FROM employees WHERE id = 1",
+		"EXPLAIN ANALYZE INSERT INTO employees (name) VALUES ('a')",
+		"EXPLAIN ANALYZE MERGE INTO employees e USING salaries s ON e.id = s.id WHEN MATCHED THEN DELETE",
+		"EXPLAIN ANALYZE CREATE TABLE copy AS SELECT * FROM employees",
+		"EXPLAIN ANALYZE SELECT * INTO copy FROM employees",
+		"EXPLAIN ANALYZE EXECUTE prepared",
+		"EXPLAIN ANALYZE WITH d AS (DELETE FROM employees WHERE id = 1 RETURNING *) SELECT * FROM d",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errExplainNotReadOnly) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errExplainNotReadOnly", sql, err)
+		}
 	}
 }
 
@@ -326,6 +453,72 @@ func TestClassifyQueryPostgresDeleteRejectsMissingWhere(t *testing.T) {
 func TestClassifyQueryPostgresRejectsMultipleStatements(t *testing.T) {
 	if _, err := ClassifyQuery(EnginePostgres, "SELECT 1; DROP TABLE employees"); err == nil {
 		t.Error("expected stacked statements to be rejected")
+	}
+}
+
+func TestClassifyQueryPostgresReadRejectsWrite(t *testing.T) {
+	for _, sql := range []string{
+		"WITH d AS (DELETE FROM employees WHERE id = 1 RETURNING *) SELECT * FROM d",
+		"WITH u AS (UPDATE salaries SET amount = 0 WHERE id = 1 RETURNING *) SELECT 1",
+		"WITH i AS (INSERT INTO salaries (amount) VALUES (1) RETURNING *) SELECT * FROM employees",
+		"SELECT * FROM employees WHERE id IN (WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING emp_id) SELECT emp_id FROM d)",
+		"SELECT * INTO copy FROM employees",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errPostgresReadWrites) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errPostgresReadWrites", sql, err)
+		}
+	}
+}
+
+func TestClassifyQueryPostgresReadRejectsRowLocks(t *testing.T) {
+	for _, sql := range []string{
+		"SELECT * FROM employees FOR UPDATE",
+		"SELECT * FROM employees FOR SHARE",
+		"SELECT * FROM employees FOR NO KEY UPDATE SKIP LOCKED",
+		"SELECT * FROM employees WHERE id IN (SELECT emp_id FROM salaries FOR KEY SHARE)",
+		"EXPLAIN ANALYZE SELECT * FROM employees FOR UPDATE",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errPostgresReadLocks) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errPostgresReadLocks", sql, err)
+		}
+	}
+}
+
+func TestClassifyQueryPostgresWriteRejectsNestedWrite(t *testing.T) {
+	for _, sql := range []string{
+		"WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING *) INSERT INTO employees SELECT * FROM d",
+		"WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING emp_id) UPDATE employees SET name = 'a' WHERE id IN (SELECT emp_id FROM d)",
+		"WITH u AS (UPDATE salaries SET amount = 0 WHERE id = 1 RETURNING emp_id) DELETE FROM employees WHERE id IN (SELECT emp_id FROM u)",
+		"WITH i AS (INSERT INTO salaries (amount) VALUES (1) RETURNING id) INSERT INTO employees (id) SELECT id FROM i",
+		"INSERT INTO employees (id) SELECT emp_id FROM salaries WHERE emp_id IN (WITH d AS (DELETE FROM salaries WHERE id = 1 RETURNING emp_id) SELECT emp_id FROM d)",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); !errors.Is(err, errPostgresNestedWrite) {
+			t.Errorf("ClassifyQuery(%q) error = %v, want errPostgresNestedWrite", sql, err)
+		}
+	}
+}
+
+func TestClassifyQueryPostgresRejectsUnsupportedStatements(t *testing.T) {
+	for _, sql := range []string{
+		"CREATE TABLE copy AS SELECT * FROM employees",
+		"MERGE INTO employees e USING salaries s ON e.id = s.id WHEN MATCHED THEN DELETE",
+		"CALL do_something()",
+		"DO $$ BEGIN DELETE FROM salaries; END $$",
+		"COPY employees TO STDOUT",
+		"SET search_path = public, pg_catalog",
+		"LOCK TABLE employees",
+	} {
+		if _, err := ClassifyQuery(EnginePostgres, sql); err == nil {
+			t.Errorf("ClassifyQuery(%q): expected rejection, got nil error", sql)
+		}
+	}
+}
+
+func TestClassifyQueryRejectsNulByte(t *testing.T) {
+	for _, engine := range []Engine{EngineMySQL, EnginePostgres} {
+		if _, err := ClassifyQuery(engine, "SELECT 1\x00; DELETE FROM employees WHERE id = 1"); err == nil || !strings.Contains(err.Error(), "NUL byte") {
+			t.Errorf("%s: error = %v, want the NUL byte refusal", engine, err)
+		}
 	}
 }
 

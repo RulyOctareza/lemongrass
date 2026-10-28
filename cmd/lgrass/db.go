@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 package main
 
@@ -28,6 +28,13 @@ referenced directly in the statement. Quote a MySQL view name containing $ in ba
 sys.x$statement_analysis; a Postgres view is referenced by its bare name, or as pg_catalog.name
 when the statement qualifies it. Columns holding raw statement text are never readable: name the
 columns instead of using *, where a listed column is barred.
+
+A statement may call only the functions listed below for its engine. Any other function, a
+user-defined one or a qualified db.name() call included, is refused. On MySQL, CAST, CONVERT,
+CASE, GROUP_CONCAT, SUBSTRING and MATCH ... AGAINST are allowed forms, a function name must be
+written unquoted with "(" right after it, a "--" comment needs a space after the dashes, and a
+read may not use FOR UPDATE or LOCK IN SHARE MODE. Postgres names may be qualified only with
+pg_catalog.
 `
 
 func dbUsageText() string {
@@ -48,6 +55,31 @@ func dbUsageText() string {
 			fmt.Fprintf(&b, "  barred on %s: %s\n", name, strings.Join(restricted[name], ", "))
 		}
 	}
+	for _, e := range []struct {
+		label  string
+		engine dbgate.Engine
+	}{{"MySQL", dbgate.EngineMySQL}, {"Postgres", dbgate.EnginePostgres}} {
+		fmt.Fprintf(&b, "\n%s functions:\n%s", e.label, wrapNames(dbgate.FunctionNames(e.engine), 96))
+	}
+	return b.String()
+}
+
+// wrapNames lays names out comma-separated on indented lines of at most width columns.
+func wrapNames(names []string, width int) string {
+	var b strings.Builder
+	line := " "
+	for i, name := range names {
+		item := " " + name
+		if i < len(names)-1 {
+			item += ","
+		}
+		if len(line)+len(item) > width {
+			b.WriteString(line + "\n")
+			line = " "
+		}
+		line += item
+	}
+	b.WriteString(line + "\n")
 	return b.String()
 }
 

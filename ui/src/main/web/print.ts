@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 Faizal Alviansyah
+// Copyright (C) 2026 The Lemongrass Authors
 
 // Prints a tree from snapshot.ts as the indented text the model reads: the whole page, one subtree, or only
 // what changed since the model last saw it. Pure, like snapshot.ts.
