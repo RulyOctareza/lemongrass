@@ -12,6 +12,8 @@ export interface MenuItem {
   title?: string
   // A destructive item is an AppConfirmButton, selected only on its armed click.
   confirm?: boolean
+  // Stroke path data in a 14 by 14 box, drawn before the label.
+  icon?: readonly string[]
 }
 
 const props = defineProps<{
@@ -65,6 +67,21 @@ onBeforeUnmount(() => {
         :title="item.title"
         @confirm="emit('select', item.key)"
       >
+        <svg
+          v-if="item.icon"
+          class="menu-icon"
+          width="13"
+          height="13"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path v-for="d in item.icon" :key="d" :d="d" />
+        </svg>
         {{ item.label }}
         <span class="menu-confirm-hint" :class="{ shown: armed }">Click again</span>
       </AppConfirmButton>
@@ -76,6 +93,21 @@ onBeforeUnmount(() => {
         :title="item.title"
         @click="emit('select', item.key)"
       >
+        <svg
+          v-if="item.icon"
+          class="menu-icon"
+          width="13"
+          height="13"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path v-for="d in item.icon" :key="d" :d="d" />
+        </svg>
         {{ item.label }}
       </button>
     </template>
@@ -97,6 +129,7 @@ onBeforeUnmount(() => {
 .menu-item {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   width: 100%;
   padding: var(--space-1) var(--space-3);
   background: transparent;
@@ -113,6 +146,15 @@ onBeforeUnmount(() => {
 .menu-item:hover:not(:disabled),
 .menu-item:focus-visible:not(:disabled) {
   background: var(--color-surface-3);
+}
+
+.menu-icon {
+  flex-shrink: 0;
+  color: var(--color-fg-secondary);
+}
+
+.menu-item:disabled .menu-icon {
+  color: inherit;
 }
 
 .menu-confirm-hint {

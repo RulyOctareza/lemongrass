@@ -75,6 +75,7 @@ import AppButton from '../AppButton.vue'
 import AppMenuButton from '../AppMenuButton.vue'
 import AppModal from '../AppModal.vue'
 import ConflictIcon from './ConflictIcon.vue'
+import { CONFLICT_ICONS } from '../../conflictIcons'
 import type { MenuItem } from '../AppContextMenu.vue'
 
 type ConflictFile = Extract<GitConflictFile, { status: 'ok' }>
@@ -180,28 +181,38 @@ const statusTitle = computed(() => {
   return `${at}${unresolved.value} unresolved, ${proposedLeft.value} of them proposed by the model.`
 })
 
-// The whole-file actions replace every conflict at once, so they sit behind the overflow icon,
-// and confirm with a second click whenever a waiting proposal or the human's edits would go.
+// The whole-file actions replace every conflict in this file at once, so they sit behind the
+// overflow icon, and confirm with a second click whenever a waiting proposal or the human's edits
+// would go. They never reach past this file: the human still reads each file's code and proposal.
 const menuItems = computed((): MenuItem[] => {
   const none = conflictIndexes.value.length === 0
   const atRisk = proposedLeft.value > 0 || dirty.value
   return [
     {
       key: 'left',
-      label: `Take ${props.file.leftRef} for every conflict`,
+      label: `Take ${props.file.leftRef} in this file`,
+      icon: CONFLICT_ICONS.takeLeft,
       disabled: none,
       confirm: atRisk
     },
     {
       key: 'right',
-      label: `Take ${props.file.rightRef} for every conflict`,
+      label: `Take ${props.file.rightRef} in this file`,
+      icon: CONFLICT_ICONS.takeRight,
       disabled: none,
       confirm: atRisk
     },
-    { key: 'both', label: 'Take both for every conflict', disabled: none, confirm: atRisk },
+    {
+      key: 'both',
+      label: 'Take both in this file',
+      icon: CONFLICT_ICONS.takeBoth,
+      disabled: none,
+      confirm: atRisk
+    },
     {
       key: 'reset',
       label: proposalMode.value ? 'Reset to proposal' : 'Reset',
+      icon: CONFLICT_ICONS.reset,
       title: proposalMode.value
         ? 'Put the middle back as the model proposed it'
         : 'Put the middle back as it was loaded',

@@ -150,6 +150,8 @@ const sideDecisions = StateField.define<Record<number, SideDecision>>({
 
 export type OnDecide = (index: number, decision: 'taken' | 'rejected') => void
 
+// The same shapes as takeLeft and takeRight in conflictIcons.ts, kept literal because this module
+// runs under node's test runner, which cannot resolve an extensionless local import.
 const CHEVRONS = {
   left: 'M3 3.5l3.5 3.5L3 10.5M7.5 3.5L11 7l-3.5 3.5',
   right: 'M11 3.5L7.5 7l3.5 3.5M6.5 3.5L3 7l3.5 3.5'
