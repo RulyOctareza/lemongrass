@@ -7,6 +7,7 @@ import type {
   AccountAddResult,
   AccountInfo,
   AccountRemoveResult,
+  UsageReport,
   UpdateState,
   CreditsResult,
   DeviceEnd,
@@ -530,6 +531,10 @@ const accounts = {
     ipcRenderer.invoke('accounts:remove', name)
 }
 
+const usage = {
+  get: (): Promise<UsageReport | null> => ipcRenderer.invoke('usage:get')
+}
+
 const update = {
   state: (): Promise<UpdateState> => ipcRenderer.invoke('update:state'),
   check: (): Promise<UpdateState> => ipcRenderer.invoke('update:check'),
@@ -565,6 +570,7 @@ const web = {
 const api = {
   pty,
   accounts,
+  usage,
   update,
   credits,
   projects,

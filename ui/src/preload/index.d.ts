@@ -6,6 +6,7 @@ import type {
   AccountAddResult,
   AccountInfo,
   AccountRemoveResult,
+  UsageReport,
   UpdateState,
   CreditsResult,
   DeviceEnd,
@@ -114,6 +115,9 @@ interface Api {
     list: () => Promise<AccountInfo[]>
     add: (name: string) => Promise<AccountAddResult>
     remove: (name: string) => Promise<AccountRemoveResult>
+  }
+  usage: {
+    get: () => Promise<UsageReport | null>
   }
   update: {
     state: () => Promise<UpdateState>

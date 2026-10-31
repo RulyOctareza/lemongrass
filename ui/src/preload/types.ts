@@ -847,6 +847,33 @@ export type AccountAddResult = { ok: true; account: AccountInfo } | { ok: false;
 
 export type AccountRemoveResult = { ok: true } | { ok: false; error: string }
 
+// resets_at and seen_at are Unix seconds. reset is true once resets_at has passed: the agent has not reported since, but
+// the window is known to be empty. seen_at is when the agent last reported.
+export interface UsageWindow {
+  label: string
+  used_percent: number
+  resets_at: number
+  reset: boolean
+}
+
+export interface AccountUsage {
+  account: string
+  windows: UsageWindow[]
+  seen_at: number
+}
+
+export interface CodexUsage {
+  windows: UsageWindow[]
+  plan_type?: string
+  seen_at: number
+}
+
+export interface UsageReport {
+  claude: AccountUsage[]
+  codex: CodexUsage | null
+  errors?: string[]
+}
+
 // unsupported: this build cannot update itself (a source build, or not installed from the rpm), and
 // message says why. installing covers the polkit password prompt, which rpm cannot be told apart from.
 export type UpdatePhase =

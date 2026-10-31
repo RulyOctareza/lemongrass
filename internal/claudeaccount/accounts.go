@@ -213,7 +213,15 @@ func (a Accounts) ReconcileOne(name string) error {
 			errs = append(errs, err)
 		}
 	}
+	// Runs with no hook binary too, because that is when the human's own statusline is put back.
+	if err := agentconf.SyncStatusLine(a.SettingsPath(name), a.HookBinary, name, a.StatusLines()); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
+}
+
+func (a Accounts) StatusLines() agentconf.StatusLineStore {
+	return agentconf.StatusLineStore{Path: agentconf.StatusLineStorePath(a.Home)}
 }
 
 func (a Accounts) linkShared(name, entry string) error {

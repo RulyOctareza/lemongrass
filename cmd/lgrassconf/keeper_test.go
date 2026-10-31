@@ -249,3 +249,33 @@ func TestWatcherRegistersHooksWhenLgrassAppears(t *testing.T) {
 		return err == nil && strings.Contains(string(data), "LGRASS_HOOK_VENDOR=codex "+lgrass+" hook SessionStart")
 	})
 }
+
+func TestStatusLineChainedForPrimaryAndAccounts(t *testing.T) {
+	k, lgrass := fakeHome(t)
+	os.MkdirAll(filepath.Dir(k.claudeSettingsPath()), 0o755)
+	os.WriteFile(k.claudeSettingsPath(), []byte(`{"statusLine":{"type":"command","command":"line.sh"}}`), 0o644)
+	accounts := k.accounts()
+	os.WriteFile(accounts.FilePath(), []byte(`{"accounts":["work"]}`), 0o600)
+	store := accounts.StatusLines()
+	store.Prune(nil)
+	os.WriteFile(store.Path, []byte(`{"commands":{"gone":"x.sh"}}`), 0o600)
+
+	if err := k.reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ path, account string }{
+		{k.claudeSettingsPath(), "primary"},
+		{accounts.SettingsPath("work"), "work"},
+	} {
+		data, _ := os.ReadFile(c.path)
+		if !strings.Contains(string(data), agentconf.StatusLineCommand(lgrass, c.account)) {
+			t.Errorf("%s: statusline not chained: %s", c.account, data)
+		}
+	}
+	if got, _ := store.Command("primary"); got != "line.sh" {
+		t.Errorf("primary command stored as %q", got)
+	}
+	if got, _ := store.Command("gone"); got != "" {
+		t.Error("entry of a removed account kept")
+	}
+}

@@ -2,7 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import AppModal from './AppModal.vue'
 import {
   PRIMARY_ACCOUNT_DIR,
@@ -17,6 +17,8 @@ import PolicySection from './safety/PolicySection.vue'
 import UpdatesSection from './updates/UpdatesSection.vue'
 import CreditsSection from './credits/CreditsSection.vue'
 import GeneralSection from './general/GeneralSection.vue'
+import UsageMeters from './UsageMeters.vue'
+import { claudeUsage, refreshUsage, usageStore } from '../usage'
 import type { Project } from '../../../preload/types'
 
 const props = defineProps<{
@@ -29,6 +31,10 @@ const emit = defineEmits<{
 }>()
 
 const section = ref<'general' | 'accounts' | 'safety' | 'updates' | 'credits'>('general')
+
+watch(section, (value) => {
+  if (value === 'accounts') void refreshUsage()
+})
 
 const newName = ref('')
 const addError = ref('')
@@ -130,11 +136,19 @@ async function onRemove(name: string): Promise<void> {
           <li class="settings-row">
             <span class="settings-row-title">primary</span>
             <span class="settings-row-meta">{{ PRIMARY_ACCOUNT_DIR }}</span>
+            <UsageMeters
+              :windows="claudeUsage(undefined)?.windows"
+              :seen-at="claudeUsage(undefined)?.seen_at"
+            />
             <span class="settings-badge">Primary</span>
           </li>
           <li v-for="account in accountStore.items" :key="account.name" class="settings-row">
             <span class="settings-row-title">{{ account.name }}</span>
             <span class="settings-row-meta">{{ account.dir }}</span>
+            <UsageMeters
+              :windows="claudeUsage(account.name)?.windows"
+              :seen-at="claudeUsage(account.name)?.seen_at"
+            />
             <AppConfirmButton
               v-slot="{ armed }"
               class="settings-action"
@@ -160,6 +174,22 @@ async function onRemove(name: string): Promise<void> {
           <AppButton type="submit" variant="primary" :disabled="!canAdd">Add account</AppButton>
         </form>
         <p v-if="nameError || addError" class="settings-error">{{ nameError || addError }}</p>
+
+        <h5 class="settings-subtitle">Codex</h5>
+        <ul class="settings-rows">
+          <li class="settings-row">
+            <span class="settings-row-title">codex</span>
+            <span class="settings-row-meta">~/.codex</span>
+            <UsageMeters
+              :windows="usageStore.codex?.windows"
+              :seen-at="usageStore.codex?.seen_at"
+            />
+          </li>
+        </ul>
+        <p class="settings-text">
+          Usage comes from what Claude Code and Codex report while they run. An idle account shows
+          its last known figures.
+        </p>
       </section>
     </div>
   </AppModal>

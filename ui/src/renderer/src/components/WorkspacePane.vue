@@ -6,6 +6,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppConfirmButton from './AppConfirmButton.vue'
 import TabIcon from './TabIcon.vue'
 import { accountLabel, accountStore } from '../accounts'
+import { claudeUsage, resetText, seenText, usageLevel, usageStore, windowsSummary } from '../usage'
 import {
   activateTab,
   addShell,
@@ -30,7 +31,7 @@ import { tabGlow } from '../tabGlow'
 import { pointAnchor } from '../menuPlacement'
 import { useMenuPlacement } from '../useMenuPlacement'
 import { joinVendor, liveGroupsOf, openJoin } from '../workgroups'
-import type { WorkgroupInfo } from '../../../preload/types'
+import type { UsageWindow, WorkgroupInfo } from '../../../preload/types'
 import type { DropZone, EdgeZone } from '../layoutTree'
 import type { WorkspaceLayoutNode, WorkspaceTab } from '../../../preload/types'
 
@@ -61,6 +62,27 @@ const shellAccount = computed(() => {
   if (active?.kind !== 'shell' || active.command !== 'claude') return null
   if (!active.account && accountStore.items.length === 0) return null
   return accountLabel(active.account)
+})
+
+const shellUsage = computed(() => {
+  const active = props.leaf.tabs.find((tab) => tab.id === props.leaf.activeTabId)
+  if (active?.kind !== 'shell') return null
+  let windows: UsageWindow[] | undefined
+  let seenAt = 0
+  if (active.command === 'claude') {
+    const usage = claudeUsage(active.account)
+    windows = usage?.windows
+    seenAt = usage?.seen_at ?? 0
+  } else if (active.command === 'codex') {
+    windows = usageStore.codex?.windows
+    seenAt = usageStore.codex?.seen_at ?? 0
+  }
+  if (!windows || windows.length === 0) return null
+  return {
+    summary: windowsSummary(windows),
+    level: usageLevel(windows),
+    title: [...windows.map((w) => resetText(w)), seenText(seenAt)].join('\n')
+  }
 })
 
 const tabBar = ref<HTMLDivElement>()
@@ -513,12 +535,19 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="shellGroup || shellAccount" class="group-strip">
+    <div v-if="shellGroup || shellAccount || shellUsage" class="group-strip">
       <span v-if="shellGroup" class="strip-item">
         <span class="group-strip-band" :style="{ background: shellGroup.color }" />
         Workgroup: {{ shellGroup.groupName }}
       </span>
       <span v-if="shellAccount" class="strip-item">Account: {{ shellAccount }}</span>
+      <span
+        v-if="shellUsage"
+        class="strip-item strip-usage"
+        :class="`strip-usage-${shellUsage.level}`"
+        :title="shellUsage.title"
+        >{{ shellUsage.summary }}</span
+      >
     </div>
 
     <div
@@ -838,6 +867,19 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   width: 13px;
   height: 13px;
+}
+
+.strip-usage {
+  font-variant-numeric: tabular-nums;
+}
+
+.strip-usage-warn {
+  color: var(--color-warning);
+}
+
+.strip-usage-danger {
+  color: var(--color-error);
+  font-weight: 600;
 }
 
 .group-strip {

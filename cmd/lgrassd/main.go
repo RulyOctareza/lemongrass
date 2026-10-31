@@ -42,6 +42,10 @@ func main() {
 		cmdMigrate(os.Args[2:])
 	case "branch":
 		cmdBranch(os.Args[2:])
+	case "statusline":
+		cmdStatusline(os.Args[2:])
+	case "usage":
+		cmdUsage(os.Args[2:])
 	case "hook":
 		hook.Run(os.Args[2:], os.Getenv(tabIDEnv))
 	default:
@@ -78,6 +82,10 @@ COMMANDS
                                     Tells the project's recently active agent tabs the git branch
                                      moved; carry is none, carried or conflict
   hook <event>                      Invoked by Claude Code's and Codex's own hook systems, reads hook JSON off stdin
+  statusline --account <name>       Claude Code's statusLine command: records rate_limits for the account and
+                                     runs the human's own statusline command with the same stdin
+  usage                             Prints the last known rate-limit usage of every Claude account and of
+                                     Codex as JSON
 
   version                           Print version
 `)
