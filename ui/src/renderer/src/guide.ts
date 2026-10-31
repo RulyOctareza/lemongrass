@@ -32,8 +32,7 @@ export const GUIDE_CARDS: GuideCard[] = [
     purpose:
       'Biblio is the project knowledge folder, biblio/. It holds scratchpad tasks, laws, handovers and books, shown as a tree you can open and read.',
     when: 'When you want to see the plans, rules and notes an agent works from.',
-    example:
-      'Open biblio, then scratchpad, then a task, to read its PRD and activity log.'
+    example: 'Open biblio, then scratchpad, then a task, to read its PRD and activity log.'
   },
   {
     id: 'scratchpad-editor',
@@ -80,7 +79,7 @@ export const GUIDE_CARDS: GuideCard[] = [
     title: 'Node',
     where: 'Vault, then Node, in the sidebar',
     purpose:
-      'Node shares some of your books, scratchpad tasks, laws and handovers with someone else\'s agent over a read-only link. Each person gets one token and sets it up once, and you change what it can read at any time.',
+      "Node shares some of your books, scratchpad tasks, laws and handovers with someone else's agent over a read-only link. Each person gets one token and sets it up once, and you change what it can read at any time.",
     when: 'When someone outside your machine needs to read specific project notes through their own agent.',
     example:
       'Add a token for a colleague, add one book and one task to it, and open the link for two hours.'
@@ -88,7 +87,7 @@ export const GUIDE_CARDS: GuideCard[] = [
   {
     id: 'accounts',
     title: 'Claude accounts',
-    where: 'Settings, then Claude accounts',
+    where: 'Settings, then Accounts, then Claude',
     purpose:
       'If you use more than one Claude login, add each one here. Each account keeps its own settings and history, and a tab runs on the account it started with.',
     when: 'When you want some tabs or workgroup thinkers to run on a different Claude login.',
@@ -102,17 +101,15 @@ export const GUIDE_CARDS: GuideCard[] = [
     purpose:
       'The Git panel shows the changes in the current project, lets you read the diff, commit and push, without leaving Lemongrass.',
     when: 'When you want to review what an agent changed before you commit it.',
-    example:
-      'Open Git, click a changed file to read its diff, then write a message and commit.'
+    example: 'Open Git, click a changed file to read its diff, then write a message and commit.'
   },
   {
     id: 'settings',
     title: 'Settings',
     where: 'The cog icon in the header',
     purpose:
-      'Settings holds the app-wide options: Claude accounts and Safety rules. Use it to change how Lemongrass runs, not to change a project.',
+      'Settings holds the app-wide options: Claude and Codex accounts and Safety rules. Use it to change how Lemongrass runs, not to change a project.',
     when: 'When you want to add an account or change a Safety rule.',
-    example:
-      'Open the cog, choose Safety, and add a rule.'
+    example: 'Open the cog, choose Safety, and add a rule.'
   }
 ]

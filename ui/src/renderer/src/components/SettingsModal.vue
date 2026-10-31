@@ -31,7 +31,9 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const section = ref<'general' | 'accounts' | 'safety' | 'updates' | 'credits'>('general')
+type Section = 'general' | 'claude' | 'codex' | 'safety' | 'updates' | 'credits'
+
+const section = ref<Section>('general')
 
 // lgrassconf applies the switch a moment after lgrassd writes it, so the saved commands are read again after that.
 const KEEPER_SETTLE_MS = 1500
@@ -53,11 +55,14 @@ async function toggleChain(): Promise<void> {
 }
 
 const chainAccounts = computed(() => ['primary', ...accountStore.items.map((a) => a.name)])
+const hasOwnCommand = computed(() =>
+  chainAccounts.value.some((name) => chain.value?.commands[name])
+)
 
 watch(section, (value) => {
-  if (value !== 'accounts') return
+  if (value !== 'claude' && value !== 'codex') return
   void refreshUsage()
-  void loadChain()
+  if (value === 'claude') void loadChain()
 })
 
 const newName = ref('')
@@ -96,13 +101,24 @@ async function onRemove(name: string): Promise<void> {
         >
           General
         </button>
+        <button type="button" class="settings-nav-item" @click="section = 'claude'">
+          Accounts
+        </button>
         <button
           type="button"
-          class="settings-nav-item"
-          :class="{ selected: section === 'accounts' }"
-          @click="section = 'accounts'"
+          class="settings-nav-item settings-nav-subitem"
+          :class="{ selected: section === 'claude' }"
+          @click="section = 'claude'"
         >
-          Claude accounts
+          Claude
+        </button>
+        <button
+          type="button"
+          class="settings-nav-item settings-nav-subitem"
+          :class="{ selected: section === 'codex' }"
+          @click="section = 'codex'"
+        >
+          Codex
         </button>
         <button
           type="button"
@@ -150,10 +166,32 @@ async function onRemove(name: string): Promise<void> {
         <CreditsSection />
       </section>
 
+      <section v-else-if="section === 'codex'" class="settings-section">
+        <h4 class="settings-title">Codex</h4>
+        <p class="settings-text">
+          Codex runs under one login. Several accounts are for Claude only for now.
+        </p>
+        <ul class="settings-rows">
+          <li class="settings-row">
+            <span class="settings-row-title">codex</span>
+            <span class="settings-row-meta">~/.codex</span>
+            <UsageMeters
+              :windows="usageStore.codex?.windows"
+              :seen-at="usageStore.codex?.seen_at"
+            />
+          </li>
+        </ul>
+        <p class="settings-text">
+          Usage comes from what Codex writes while it runs. When Codex is idle, its last known
+          figures are shown.
+        </p>
+      </section>
+
       <section v-else class="settings-section">
-        <h4 class="settings-title">Claude accounts</h4>
+        <h4 class="settings-title">Claude</h4>
         <p class="settings-text">
           Each account has its own login. A new Claude tab asks which account it should run under.
+          An idle account shows its last known usage.
         </p>
 
         <ul class="settings-rows">
@@ -199,42 +237,88 @@ async function onRemove(name: string): Promise<void> {
         </form>
         <p v-if="nameError || addError" class="settings-error">{{ nameError || addError }}</p>
 
-        <template v-if="chain">
-          <h5 class="settings-subtitle">Statusline</h5>
-          <AppCheckbox :checked="chain.enabled" :disabled="chainBusy" @click="toggleChain">
-            Run my statusline through lemongrass to record Claude usage
-          </AppCheckbox>
-          <p class="settings-text">
-            When this is on, lemongrass takes Claude Code's statusline slot in every account, runs
-            your own statusline command unchanged and reads the usage Claude Code hands it. When it
-            is off, your own command is put back and Claude usage is no longer recorded.
+        <div v-if="chain" class="settings-group statusline">
+          <div class="statusline-head">
+            <span class="statusline-title">Statusline</span>
+            <AppCheckbox
+              :checked="chain.enabled"
+              :disabled="chainBusy"
+              title="When this is off, your own statusline command is put back in every account and Claude usage is no longer recorded."
+              @click="toggleChain"
+            >
+              Record usage
+            </AppCheckbox>
+          </div>
+          <p class="settings-text statusline-text">
+            Lemongrass runs your own statusline unchanged and reads the usage Claude Code passes to
+            it.
           </p>
-          <ul v-if="chain.enabled" class="settings-rows">
-            <li v-for="name in chainAccounts" :key="name" class="settings-row">
-              <span class="settings-row-title">{{ name }}</span>
-              <span class="settings-row-meta">{{
-                chain.commands[name] || 'No statusline of your own'
-              }}</span>
-            </li>
-          </ul>
-        </template>
-
-        <h5 class="settings-subtitle">Codex</h5>
-        <ul class="settings-rows">
-          <li class="settings-row">
-            <span class="settings-row-title">codex</span>
-            <span class="settings-row-meta">~/.codex</span>
-            <UsageMeters
-              :windows="usageStore.codex?.windows"
-              :seen-at="usageStore.codex?.seen_at"
-            />
-          </li>
-        </ul>
-        <p class="settings-text">
-          Usage comes from what Claude Code and Codex report while they run. An idle account shows
-          its last known figures.
-        </p>
+          <div class="statusline-body">
+            <p v-if="!chain.enabled" class="statusline-empty">
+              Off. Your own statusline is back in place and Claude usage is not recorded.
+            </p>
+            <dl v-else-if="hasOwnCommand" class="settings-facts">
+              <template v-for="name in chainAccounts" :key="name">
+                <dt>{{ name }}</dt>
+                <dd>
+                  <code v-if="chain.commands[name]" class="statusline-command">{{
+                    chain.commands[name]
+                  }}</code>
+                  <span v-else class="statusline-none">none</span>
+                </dd>
+              </template>
+            </dl>
+            <p v-else class="statusline-empty">
+              None of your accounts has a statusline of its own.
+            </p>
+          </div>
+        </div>
       </section>
     </div>
   </AppModal>
 </template>
+
+<style scoped>
+.statusline {
+  margin-top: var(--space-3);
+}
+
+.statusline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+.statusline-title {
+  color: var(--color-fg-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.statusline-text {
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.statusline-body {
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.statusline-command {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.statusline-none,
+.statusline-empty {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: var(--text-xs);
+}
+</style>

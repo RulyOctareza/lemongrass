@@ -343,3 +343,9 @@
 .settings-facts dd .settings-badge {
   display: inline-block;
 }
+
+/* A child of the nav item above it, indented so the pair reads as one group. */
+.settings-nav-subitem {
+  padding-left: var(--space-6);
+  font-size: var(--text-xs);
+}
