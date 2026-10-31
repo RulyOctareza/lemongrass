@@ -27,6 +27,8 @@ import {
 } from '../workspace'
 import { tabKindOf, type TabContext } from '../tabKinds'
 import { tabGlow } from '../tabGlow'
+import { pointAnchor } from '../menuPlacement'
+import { useMenuPlacement } from '../useMenuPlacement'
 import { joinVendor, liveGroupsOf, openJoin } from '../workgroups'
 import type { WorkgroupInfo } from '../../../preload/types'
 import type { DropZone, EdgeZone } from '../layoutTree'
@@ -149,6 +151,10 @@ function onTabBarDrop(event: DragEvent): void {
 
 const menu = ref<{ tabId: string; x: number; y: number } | null>(null)
 const menuTab = computed(() => props.leaf.tabs.find((t) => t.id === menu.value?.tabId))
+const tabMenuEl = ref<HTMLElement | null>(null)
+const tabMenuStyle = useMenuPlacement(tabMenuEl, () =>
+  menu.value ? pointAnchor(menu.value.x, menu.value.y) : null
+)
 
 const MENU_DIRECTIONS: { zone: EdgeZone; label: string }[] = [
   { zone: 'right', label: 'Right' },
@@ -517,8 +523,9 @@ onBeforeUnmount(() => {
 
     <div
       v-if="menu && menuTab"
+      ref="tabMenuEl"
       class="tab-menu"
-      :style="{ left: `${menu.x}px`, top: `${menu.y}px` }"
+      :style="tabMenuStyle"
       @pointerdown.stop
     >
       <p class="menu-heading">Move to new pane</p>
@@ -965,6 +972,9 @@ onBeforeUnmount(() => {
 
 .tab-menu {
   position: fixed;
+  /* Its natural width, so a menu near the window's edge moves instead of squeezing. */
+  width: max-content;
+  white-space: nowrap;
   z-index: 50;
   min-width: 160px;
   padding: var(--space-2);

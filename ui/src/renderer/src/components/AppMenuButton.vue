@@ -3,11 +3,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { MenuAnchor } from '../menuPlacement'
 import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
 
 // A bare icon that opens a menu of rarer actions, for a surface where those actions must not sit
 // as buttons of their own. The icon comes from the caller's slot; the label is its title.
-const props = defineProps<{
+defineProps<{
   items: MenuItem[]
   label: string
   disabled?: boolean
@@ -15,14 +16,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [key: string] }>()
 
-// AppContextMenu's own sizes, to open it above the icon when there is no room below.
-const MENU_ROW = 30
-const MENU_PAD = 16
-const MENU_WIDTH = 200
 const GAP = 4
 
 const root = ref<HTMLElement | null>(null)
-const menu = ref<{ x: number; y: number } | null>(null)
+const menu = ref<MenuAnchor | null>(null)
 // The menu closes on any pointerdown outside it, this icon included, before the icon's click
 // arrives; this keeps that click from opening it again.
 let closedAt = 0
@@ -35,11 +32,11 @@ function toggle(): void {
   if (Date.now() - closedAt < 300) return
   const rect = root.value?.getBoundingClientRect()
   if (!rect) return
-  const height = props.items.length * MENU_ROW + MENU_PAD
-  const below = window.innerHeight - rect.bottom - GAP
-  const y = below >= height ? rect.bottom + GAP : Math.max(GAP, rect.top - GAP - height)
-  // Right-aligned to the icon, which usually sits at the right of a toolbar.
-  menu.value = { x: Math.max(GAP, rect.right - MENU_WIDTH), y }
+  // Right-aligned to the icon, which usually sits at the right of a toolbar, below it or above.
+  menu.value = {
+    x: { start: rect.left, end: rect.right, prefer: 'backward' },
+    y: { start: rect.bottom + GAP, end: rect.top - GAP }
+  }
 }
 
 function close(): void {
@@ -69,14 +66,7 @@ function select(key: string): void {
     <slot />
   </button>
   <Teleport to="body">
-    <AppContextMenu
-      v-if="menu"
-      :x="menu.x"
-      :y="menu.y"
-      :items="items"
-      @select="select"
-      @close="close"
-    />
+    <AppContextMenu v-if="menu" :anchor="menu" :items="items" @select="select" @close="close" />
   </Teleport>
 </template>
 

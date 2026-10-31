@@ -2,7 +2,9 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { pointAnchor, type MenuAnchor } from '../menuPlacement'
+import { useMenuPlacement } from '../useMenuPlacement'
 import AppConfirmButton from './AppConfirmButton.vue'
 
 export interface MenuItem {
@@ -16,9 +18,12 @@ export interface MenuItem {
   icon?: readonly string[]
 }
 
+// A right-click menu opens at the pointer, x and y; a menu opened from a control passes the
+// control's edges as anchor, so a flipped menu still lines up with it.
 const props = defineProps<{
-  x: number
-  y: number
+  x?: number
+  y?: number
+  anchor?: MenuAnchor
   items: MenuItem[]
 }>()
 
@@ -27,13 +32,10 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const WIDTH = 200
-const ROW = 30
-
-// Keeps the menu inside the window when opened near the right or bottom edge.
-const left = computed(() => Math.max(0, Math.min(props.x, window.innerWidth - WIDTH - 8)))
-const top = computed(() =>
-  Math.max(0, Math.min(props.y, window.innerHeight - props.items.length * ROW - 16))
+const root = ref<HTMLElement | null>(null)
+const placement = useMenuPlacement(
+  root,
+  () => props.anchor ?? pointAnchor(props.x ?? 0, props.y ?? 0)
 )
 
 function onPointerDown(event: PointerEvent): void {
@@ -56,7 +58,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="context-menu" role="menu" :style="{ left: `${left}px`, top: `${top}px` }">
+  <div ref="root" class="context-menu" role="menu" :style="placement">
     <template v-for="item in items" :key="item.key">
       <AppConfirmButton
         v-if="item.confirm"
@@ -117,6 +119,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .context-menu {
   position: fixed;
+  /* Its natural width, so a menu near the window's edge moves instead of squeezing. */
+  width: max-content;
   z-index: 50;
   min-width: 180px;
   padding: var(--space-2);
@@ -129,6 +133,7 @@ onBeforeUnmount(() => {
 .menu-item {
   display: flex;
   align-items: center;
+  white-space: nowrap;
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-1) var(--space-3);

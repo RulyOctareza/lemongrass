@@ -6,6 +6,7 @@ import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { deleteBranch, gitStateOf, switchBranch, updateBranch } from '../git'
 import type { ProjectRef } from '../workspace'
 import type { GitBranches, GitLocalBranch } from '../../../preload/types'
+import type { MenuAnchor } from '../menuPlacement'
 import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
 import GitCounts from './GitCounts.vue'
 
@@ -30,8 +31,7 @@ interface Selected {
   name: string
   remote: boolean
   local: GitLocalBranch | null
-  x: number
-  y: number
+  anchor: MenuAnchor
 }
 
 const state = computed(() => gitStateOf(props.project.id))
@@ -211,8 +211,12 @@ function openActions(row: HTMLElement, name: string, isRemote: boolean): void {
     name,
     remote: isRemote,
     local: isRemote ? null : (branches.value?.local.find((branch) => branch.name === name) ?? null),
-    x: rect.right + GAP,
-    y: rect.top
+    // Beside the row, on its left when the right has no room, its top on the row's top or its
+    // bottom on the row's bottom.
+    anchor: {
+      x: { start: rect.right + GAP, end: rect.left - GAP },
+      y: { start: rect.top, end: rect.bottom }
+    }
   }
 }
 
@@ -388,8 +392,7 @@ onBeforeUnmount(removeListeners)
       </div>
       <AppContextMenu
         v-if="selected"
-        :x="selected.x"
-        :y="selected.y"
+        :anchor="selected.anchor"
         :items="actions"
         @select="act"
         @close="closeActions"

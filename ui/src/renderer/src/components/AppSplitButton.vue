@@ -4,11 +4,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import AppButton from './AppButton.vue'
+import type { MenuAnchor } from '../menuPlacement'
 import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
 
 // A main action with its alternatives behind a chevron: the main part runs the default, the
 // chevron opens an AppContextMenu with the rest. Both parts share one pill and one variant.
-const props = withDefaults(
+withDefaults(
   defineProps<{
     variant?: 'primary' | 'ghost' | 'danger'
     disabled?: boolean
@@ -25,13 +26,10 @@ const emit = defineEmits<{
   menu: []
 }>()
 
-// AppContextMenu's own sizes, to open it above the control when there is no room below.
-const MENU_ROW = 30
-const MENU_PAD = 16
 const GAP = 4
 
 const root = ref<HTMLElement | null>(null)
-const menu = ref<{ x: number; y: number } | null>(null)
+const menu = ref<MenuAnchor | null>(null)
 // The menu closes on any pointerdown outside it, the chevron included, before the chevron's click
 // arrives; this keeps that click from opening it again.
 let closedAt = 0
@@ -44,10 +42,11 @@ function toggleMenu(): void {
   if (Date.now() - closedAt < 300) return
   const rect = root.value?.getBoundingClientRect()
   if (!rect) return
-  const height = props.items.length * MENU_ROW + MENU_PAD
-  const below = window.innerHeight - rect.bottom - GAP
-  const y = below >= height ? rect.bottom + GAP : Math.max(GAP, rect.top - GAP - height)
-  menu.value = { x: rect.left, y }
+  // Left-aligned to the control, below it or above.
+  menu.value = {
+    x: { start: rect.left, end: rect.right },
+    y: { start: rect.bottom + GAP, end: rect.top - GAP }
+  }
   emit('menu')
 }
 
@@ -101,8 +100,7 @@ defineExpose({ el: root })
     <Teleport to="body">
       <AppContextMenu
         v-if="menu"
-        :x="menu.x"
-        :y="menu.y"
+        :anchor="menu"
         :items="items"
         @select="select"
         @close="closeMenu"
