@@ -7,8 +7,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 const props = withDefaults(
   defineProps<{
     // search is the text the filter box matches, the label when absent. disabled is the reason
-    // the item cannot be picked, shown beside its label.
-    items: { id: string; label: string; title?: string; search?: string; disabled?: string }[]
+    // the item cannot be picked, shown beside its label; hint is muted text in the same place for
+    // an item that can be picked.
+    items: {
+      id: string
+      label: string
+      title?: string
+      search?: string
+      disabled?: string
+      hint?: string
+    }[]
     activeId: string | null
     placeholder: string
     // Overrides what the closed trigger shows, such as an unsaved name; the list is unaffected.
@@ -139,6 +147,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
         >
           <span class="item-label">{{ item.label }}</span>
           <span v-if="item.disabled" class="item-reason">{{ item.disabled }}</span>
+          <span v-else-if="item.hint" class="item-reason hint">{{ item.hint }}</span>
         </button>
         <p v-if="items.length === 0" class="empty">{{ emptyText }}</p>
         <p v-else-if="shownItems.length === 0" class="empty">No match.</p>
@@ -296,6 +305,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   margin-left: auto;
   flex-shrink: 0;
   font-size: var(--text-xs);
+}
+
+.item-reason.hint {
+  color: var(--color-fg-muted);
 }
 
 .item-row.active {

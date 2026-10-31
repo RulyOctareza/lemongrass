@@ -101,11 +101,12 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
       { tag: 'path', attrs: { d: 'M5 2v10M9 2v10' } }
     ],
     label: (tab) => ({ prefix: 'conflict', text: tab.path.slice(tab.path.lastIndexOf('/') + 1) }),
-    title: (tab) => `Resolve conflict: ${tab.path}`,
+    title: (tab) => `Resolve conflicts: ${tab.path}`,
     body: ConflictView,
-    // Kept alive so an unsaved middle pane survives switching tabs.
+    // Kept alive so an unsaved middle pane survives switching tabs. One tab serves the whole
+    // conflict session; path is the file it shows.
     keepAlive: true,
-    bodyProps: (tab, ctx) => ({ project: ctx.project, path: tab.path })
+    bodyProps: (tab, ctx) => ({ project: ctx.project, path: tab.path, tabId: tab.id })
   },
   history: {
     icon: [

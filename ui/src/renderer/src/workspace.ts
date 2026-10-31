@@ -538,12 +538,10 @@ export function openDiff(project: ProjectRef, path: string): void {
   commit(project, tree.addTab(root, focused.id, newDiffTab(path)), focused.id)
 }
 
-// A resolver tab saves its draft on unmount only while it is still open, so closing it drops it.
-export function hasConflictTab(projectId: string, path: string): boolean {
-  return (
-    !!workspaces[projectId] &&
-    tabsOf(projectId).some((tab) => tab.kind === 'conflict' && tab.path === path)
-  )
+// A resolver view saves its draft on unmount only while a conflict tab is still open, so closing
+// the tab drops it.
+export function hasConflictTab(projectId: string): boolean {
+  return !!workspaces[projectId] && tabsOf(projectId).some((tab) => tab.kind === 'conflict')
 }
 
 export function activeConflictPath(projectId: string): string | null {
@@ -554,8 +552,20 @@ export function activeConflictPath(projectId: string): string | null {
   return tab?.kind === 'conflict' ? tab.path : null
 }
 
-// One conflict tab per path, unlike the diff tab, so moving to another file never drops the
-// unsaved middle pane of the one before. Opening it again focuses it wherever it lives.
+// The open conflict tab and its pane. One tab serves the whole conflict session; a layout saved
+// when every file had its own tab may still hold several, and the first one is used.
+function findConflictTab(
+  root: tree.LayoutNode<WorkspaceTab>
+): { leaf: tree.LayoutLeaf<WorkspaceTab>; tab: ConflictTab } | null {
+  for (const leaf of tree.allLeaves(root)) {
+    const tab = leaf.tabs.find((t): t is ConflictTab => t.kind === 'conflict')
+    if (tab) return { leaf, tab }
+  }
+  return null
+}
+
+// Shows a file in the conflict tab, which keeps the unsaved middle of every file it showed, and
+// focuses the tab wherever it lives.
 export function openConflict(project: ProjectRef, path: string): void {
   const layout = workspaces[project.id].layout
   const root = layout.root
@@ -564,20 +574,33 @@ export function openConflict(project: ProjectRef, path: string): void {
     commit(project, leaf, leaf.id)
     return
   }
-  const leaves = tree.allLeaves(root)
-  for (const leaf of leaves) {
-    const existing = leaf.tabs.find((tab) => tab.kind === 'conflict' && tab.path === path)
-    if (!existing) continue
-    commit(project, tree.setActiveTab(root, leaf.id, existing.id), leaf.id)
+  const found = findConflictTab(root)
+  if (found) {
+    found.tab.path = path
+    commit(project, tree.setActiveTab(root, found.leaf.id, found.tab.id), found.leaf.id)
     return
   }
+  const leaves = tree.allLeaves(root)
   const focused = leaves.find((leaf) => leaf.id === layout.focusedPaneId) ?? leaves[0]
   commit(project, tree.addTab(root, focused.id, newConflictTab(path)), focused.id)
 }
 
-// Opens a model's submitted file without taking the human's place: the resolver becomes the active
-// tab of the model's own pane, or of wherever its tab already is, and the focused pane, and so the
-// keyboard focus, stay where they are. The human may be typing elsewhere.
+// The file picker in the conflict tab's toolbar, which switches the file in place.
+export function setConflictPath(project: ProjectRef, tabId: string, path: string): void {
+  const root = workspaces[project.id]?.layout.root
+  if (!root) return
+  const tab = tree
+    .allLeaves(root)
+    .flatMap((leaf) => leaf.tabs)
+    .find((t): t is ConflictTab => t.id === tabId && t.kind === 'conflict')
+  if (!tab || tab.path === path) return
+  tab.path = path
+  commit(project, root)
+}
+
+// Opens a model's submitted file without taking the human's place: the conflict tab switches to it
+// and becomes the active tab of its own pane, or of the model's pane when none is open, and the
+// focused pane, and so the keyboard focus, stay where they are. The human may be typing elsewhere.
 export function openConflictBeside(project: ProjectRef, path: string, besideTabId: string): void {
   const layout = workspaces[project.id]?.layout
   const root = layout?.root
@@ -585,14 +608,13 @@ export function openConflictBeside(project: ProjectRef, path: string, besideTabI
     if (layout) commit(project, tree.createLeaf<WorkspaceTab>([newConflictTab(path)]))
     return
   }
-  const leaves = tree.allLeaves(root)
-  for (const leaf of leaves) {
-    const existing = leaf.tabs.find((tab) => tab.kind === 'conflict' && tab.path === path)
-    if (existing) {
-      commit(project, tree.setActiveTab(root, leaf.id, existing.id))
-      return
-    }
+  const found = findConflictTab(root)
+  if (found) {
+    found.tab.path = path
+    commit(project, tree.setActiveTab(root, found.leaf.id, found.tab.id))
+    return
   }
+  const leaves = tree.allLeaves(root)
   const home =
     tree.findLeafByTab(root, besideTabId) ??
     leaves.find((leaf) => leaf.id === layout.focusedPaneId) ??

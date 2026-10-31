@@ -2,7 +2,16 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import {
+  computed,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  shallowRef,
+  watch
+} from 'vue'
 import { Text, type EditorState, type Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { applyConflict } from '../../git'
@@ -670,12 +679,29 @@ onMounted(() => {
   if (draft && props.file.working !== workingSeen) onFileChange(props.file)
 })
 
-// The tab is unmounted when its project is switched away or it moves to another pane; it keeps
-// its work for the next mount unless it was closed or applied.
+// The conflict tab caches this file while it shows another, taking it out of the document, which
+// loses the panes' scroll positions, so they are put back when the file is shown again.
+let scrollTops: number[] | null = null
+onDeactivated(() => {
+  scrollTops = [left, middle, right].map((view) => view?.scrollDOM.scrollTop ?? 0)
+})
+onActivated(() => {
+  const tops = scrollTops
+  scrollTops = null
+  if (!tops) return
+  ;[left, middle, right].forEach((view, at) => {
+    if (!view) return
+    view.requestMeasure()
+    view.scrollDOM.scrollTop = tops[at]
+  })
+})
+
+// The file is unmounted when its project is switched away, its tab moves to another pane or the
+// tab closes; it keeps its work for the next mount unless the tab was closed or it was applied.
 onBeforeUnmount(() => {
   toolbarObserver?.disconnect()
   unregisterWork()
-  if (middle && loaded.value && !applied && hasConflictTab(props.project.id, props.path)) {
+  if (middle && loaded.value && !applied && hasConflictTab(props.project.id)) {
     saveDraft(props.project.id, props.path, {
       stages: stagesOf(props.file),
       chunks: source.chunks,
@@ -699,6 +725,7 @@ onBeforeUnmount(() => {
     <!-- Apply is the only button with a frame: navigation and Focus are bare icons, what is left
          is plain text, and the whole-file takes wait behind the overflow icon. -->
     <div ref="toolbarEl" class="toolbar">
+      <slot name="picker" />
       <div class="nav">
         <button
           type="button"

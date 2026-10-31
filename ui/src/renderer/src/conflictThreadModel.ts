@@ -34,6 +34,13 @@ export function notesFor(
   return messages.filter((message) => message.kind === 'note' && message.anchor?.path === path)
 }
 
+// The state of a file the model worked on, as the git panel and the resolver's file picker word it.
+export function fileStatusText(status: ConflictFileStatus): string {
+  if (status.kind === 'markers') return 'markers left'
+  if (status.notes === 0) return 'proposed'
+  return status.notes === 1 ? 'proposed, 1 note' : `proposed, ${status.notes} notes`
+}
+
 // A file the latest submission lists is proposed, unless it still holds marker blocks, which the
 // model left for the human. A file it does not list has nothing from the model yet.
 export function fileStatus(

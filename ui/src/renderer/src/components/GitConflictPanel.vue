@@ -14,7 +14,7 @@ import { computed, ref } from 'vue'
 import { finishOperation, gitStateOf } from '../git'
 import { openConflict, type ProjectRef } from '../workspace'
 import { handConflictTo, useConflictThread } from '../conflictThread'
-import { fileStatus, type ConflictFileStatus } from '../conflictThreadModel'
+import { fileStatus, fileStatusText, type ConflictFileStatus } from '../conflictThreadModel'
 import { shellTitles } from '../shellRegistry'
 import type { GitFile } from '../../../preload/types'
 import AppButton from './AppButton.vue'
@@ -55,12 +55,6 @@ const assignee = computed(() => {
 
 function statusOf(file: GitFile): ConflictFileStatus | null {
   return fileStatus(thread.value.messages, file.path, file.conflictBlocks)
-}
-
-function statusText(status: ConflictFileStatus): string {
-  if (status.kind === 'markers') return 'markers left'
-  if (status.notes === 0) return 'proposed'
-  return status.notes === 1 ? 'proposed, 1 note' : `proposed, ${status.notes} notes`
 }
 
 async function handOver(tabId: string): Promise<void> {
@@ -196,7 +190,7 @@ async function finish(action: 'continue' | 'abort'): Promise<void> {
             <span class="file-name">{{ fileName(file) }}</span>
             <span class="file-dir">{{ fileDir(file) }}</span>
             <span v-if="statusOf(file)" class="file-status" :class="statusOf(file)!.kind">{{
-              statusText(statusOf(file)!)
+              fileStatusText(statusOf(file)!)
             }}</span>
             <span v-if="file.conflictBlocks != null" class="file-blocks">{{
               file.conflictBlocks

@@ -9,9 +9,9 @@ import type {
 } from '../../preload/types'
 import type { MiddleProposal } from './conflictModel'
 
-// Only the active project's workspace is mounted, so switching projects unmounts a resolver tab.
-// Its work in progress is kept here by project and path, the one resolver tab per path, and handed
-// back on the next mount.
+// Only the active project's workspace is mounted, so switching projects unmounts the conflict tab
+// and every file it cached. Each file's work in progress is kept here by project and path and
+// handed back when that file is mounted again.
 export interface ConflictDraft {
   // The stages the draft was built from. A draft for other stages is stale.
   stages: string
@@ -45,7 +45,7 @@ export interface ConflictWork {
 }
 
 const drafts = new Map<string, ConflictDraft>()
-// Mounted resolver tabs, each giving its work or null when it has none.
+// Mounted resolver files, shown or cached by the conflict tab, each giving its work or null.
 const live = new Map<string, () => Omit<ConflictWork, 'path'> | null>()
 
 function keyOf(projectId: string, path: string): string {
@@ -84,7 +84,7 @@ export function registerWork(
   }
 }
 
-// The resolver tabs of a project with work: mounted ones, then drafts of tabs not mounted now.
+// The resolver files of a project with work: mounted ones, then drafts of files not mounted now.
 export function workSourcesOf(projectId: string): {
   live: ConflictWork[]
   drafts: { path: string; draft: ConflictDraft }[]
