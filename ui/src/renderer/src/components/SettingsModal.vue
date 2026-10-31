@@ -18,8 +18,9 @@ import UpdatesSection from './updates/UpdatesSection.vue'
 import CreditsSection from './credits/CreditsSection.vue'
 import GeneralSection from './general/GeneralSection.vue'
 import UsageMeters from './UsageMeters.vue'
+import AppCheckbox from './AppCheckbox.vue'
 import { claudeUsage, refreshUsage, usageStore } from '../usage'
-import type { Project } from '../../../preload/types'
+import type { Project, StatusLineChainState } from '../../../preload/types'
 
 const props = defineProps<{
   projects: Project[]
@@ -32,8 +33,31 @@ const emit = defineEmits<{
 
 const section = ref<'general' | 'accounts' | 'safety' | 'updates' | 'credits'>('general')
 
+// lgrassconf applies the switch a moment after lgrassd writes it, so the saved commands are read again after that.
+const KEEPER_SETTLE_MS = 1500
+
+const chain = ref<StatusLineChainState | null>(null)
+const chainBusy = ref(false)
+
+async function loadChain(): Promise<void> {
+  chain.value = await window.api.usage.statusLine()
+}
+
+async function toggleChain(): Promise<void> {
+  if (!chain.value || chainBusy.value) return
+  chainBusy.value = true
+  chain.value = (await window.api.usage.setStatusLine(!chain.value.enabled)) ?? chain.value
+  setTimeout(() => {
+    void loadChain().finally(() => (chainBusy.value = false))
+  }, KEEPER_SETTLE_MS)
+}
+
+const chainAccounts = computed(() => ['primary', ...accountStore.items.map((a) => a.name)])
+
 watch(section, (value) => {
-  if (value === 'accounts') void refreshUsage()
+  if (value !== 'accounts') return
+  void refreshUsage()
+  void loadChain()
 })
 
 const newName = ref('')
@@ -174,6 +198,26 @@ async function onRemove(name: string): Promise<void> {
           <AppButton type="submit" variant="primary" :disabled="!canAdd">Add account</AppButton>
         </form>
         <p v-if="nameError || addError" class="settings-error">{{ nameError || addError }}</p>
+
+        <template v-if="chain">
+          <h5 class="settings-subtitle">Statusline</h5>
+          <AppCheckbox :checked="chain.enabled" :disabled="chainBusy" @click="toggleChain">
+            Run my statusline through lemongrass to record Claude usage
+          </AppCheckbox>
+          <p class="settings-text">
+            When this is on, lemongrass takes Claude Code's statusline slot in every account, runs
+            your own statusline command unchanged and reads the usage Claude Code hands it. When it
+            is off, your own command is put back and Claude usage is no longer recorded.
+          </p>
+          <ul v-if="chain.enabled" class="settings-rows">
+            <li v-for="name in chainAccounts" :key="name" class="settings-row">
+              <span class="settings-row-title">{{ name }}</span>
+              <span class="settings-row-meta">{{
+                chain.commands[name] || 'No statusline of your own'
+              }}</span>
+            </li>
+          </ul>
+        </template>
 
         <h5 class="settings-subtitle">Codex</h5>
         <ul class="settings-rows">

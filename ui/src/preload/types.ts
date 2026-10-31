@@ -868,6 +868,12 @@ export interface CodexUsage {
   seen_at: number
 }
 
+// commands holds each account's own statusline command that lemongrass runs, keyed by account name.
+export interface StatusLineChainState {
+  enabled: boolean
+  commands: Record<string, string>
+}
+
 export interface UsageReport {
   claude: AccountUsage[]
   codex: CodexUsage | null

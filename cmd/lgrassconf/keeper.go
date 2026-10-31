@@ -171,7 +171,7 @@ func (k *keeper) reconcile() error {
 		}
 	}
 	accounts := k.accounts()
-	if err := agentconf.SyncStatusLine(k.claudeSettingsPath(), k.lgrassdPath(), "primary", accounts.StatusLines()); err != nil {
+	if err := agentconf.SyncStatusLine(k.claudeSettingsPath(), agentconf.StatusLineBinary(k.home, k.lgrassdPath()), "primary", accounts.StatusLines()); err != nil {
 		errs = append(errs, err)
 	}
 	if err := accounts.Reconcile(); err != nil {

@@ -76,14 +76,27 @@ func RecordClaude(home, account string, payload []byte, now time.Time) error {
 		return nil
 	}
 	path := claudePath(home, account)
-	if old, err := readClaude(path); err == nil && sameWindows(old, rec) && now.Unix()-old.SeenAt < int64(refreshSeen/time.Second) {
-		return nil
+	if old, err := readClaude(path); err == nil {
+		// Claude Code may report the two windows in separate payloads, so one left out keeps its last value until it
+		// resets instead of being wiped.
+		rec.FiveHour = keepUntilReset(rec.FiveHour, old.FiveHour, now)
+		rec.SevenDay = keepUntilReset(rec.SevenDay, old.SevenDay, now)
+		if sameWindows(old, rec) && now.Unix()-old.SeenAt < int64(refreshSeen/time.Second) {
+			return nil
+		}
 	}
 	data, err := json.Marshal(rec)
 	if err != nil {
 		return err
 	}
 	return agentconf.WriteAtomic(path, append(data, '\n'), 0o600)
+}
+
+func keepUntilReset(fresh, old *Window, now time.Time) *Window {
+	if fresh != nil || old == nil || old.ResetsAt <= now.Unix() {
+		return fresh
+	}
+	return old
 }
 
 func sameWindow(a, b *Window) bool {

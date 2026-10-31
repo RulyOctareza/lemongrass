@@ -7,6 +7,7 @@ import type {
   AccountInfo,
   AccountRemoveResult,
   UsageReport,
+  StatusLineChainState,
   UpdateState,
   CreditsResult,
   DeviceEnd,
@@ -118,6 +119,8 @@ interface Api {
   }
   usage: {
     get: () => Promise<UsageReport | null>
+    statusLine: () => Promise<StatusLineChainState | null>
+    setStatusLine: (enabled: boolean) => Promise<StatusLineChainState | null>
   }
   update: {
     state: () => Promise<UpdateState>

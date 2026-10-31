@@ -8,6 +8,7 @@ import type {
   AccountInfo,
   AccountRemoveResult,
   UsageReport,
+  StatusLineChainState,
   UpdateState,
   CreditsResult,
   DeviceEnd,
@@ -532,7 +533,10 @@ const accounts = {
 }
 
 const usage = {
-  get: (): Promise<UsageReport | null> => ipcRenderer.invoke('usage:get')
+  get: (): Promise<UsageReport | null> => ipcRenderer.invoke('usage:get'),
+  statusLine: (): Promise<StatusLineChainState | null> => ipcRenderer.invoke('statusline:state'),
+  setStatusLine: (enabled: boolean): Promise<StatusLineChainState | null> =>
+    ipcRenderer.invoke('statusline:set', enabled)
 }
 
 const update = {

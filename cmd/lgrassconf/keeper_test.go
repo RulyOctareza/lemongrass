@@ -279,3 +279,42 @@ func TestStatusLineChainedForPrimaryAndAccounts(t *testing.T) {
 		t.Error("entry of a removed account kept")
 	}
 }
+
+func TestStatusLineOffSwitchRestoresAndOnRetakes(t *testing.T) {
+	k, lgrass := fakeHome(t)
+	os.MkdirAll(filepath.Dir(k.claudeSettingsPath()), 0o755)
+	os.WriteFile(k.claudeSettingsPath(), []byte(`{"statusLine":{"type":"command","command":"line.sh"}}`), 0o644)
+	if err := k.reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	ours := agentconf.StatusLineCommand(lgrass, "primary")
+
+	off := agentconf.StatusLineOffPath(k.home)
+	os.WriteFile(off, nil, 0o600)
+	if err := k.reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(k.claudeSettingsPath())
+	if strings.Contains(string(data), ours) || !strings.Contains(string(data), "line.sh") {
+		t.Fatalf("off: %s", data)
+	}
+	if err := k.reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(k.claudeSettingsPath())
+	if strings.Contains(string(data), ours) {
+		t.Fatal("off: statusline retaken on a later pass")
+	}
+
+	os.Remove(off)
+	if err := k.reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(k.claudeSettingsPath())
+	if !strings.Contains(string(data), ours) {
+		t.Errorf("on: statusline not retaken: %s", data)
+	}
+	if got, _ := k.accounts().StatusLines().Command("primary"); got != "line.sh" {
+		t.Errorf("on: human command stored as %q", got)
+	}
+}

@@ -213,8 +213,8 @@ func (a Accounts) ReconcileOne(name string) error {
 			errs = append(errs, err)
 		}
 	}
-	// Runs with no hook binary too, because that is when the human's own statusline is put back.
-	if err := agentconf.SyncStatusLine(a.SettingsPath(name), a.HookBinary, name, a.StatusLines()); err != nil {
+	// Runs with no hook binary or with the off switch set too, because that is when the human's own statusline is put back.
+	if err := agentconf.SyncStatusLine(a.SettingsPath(name), agentconf.StatusLineBinary(a.Home, a.HookBinary), name, a.StatusLines()); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

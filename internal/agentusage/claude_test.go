@@ -66,3 +66,24 @@ func TestRecordClaudeRejectsBadJSON(t *testing.T) {
 		t.Error("bad payload accepted")
 	}
 }
+
+func TestRecordClaudeKeepsWindowLeftOutUntilItResets(t *testing.T) {
+	home := t.TempDir()
+	start := time.Unix(1793170000, 0)
+	RecordClaude(home, "primary", []byte(payload), start)
+	fiveOnly := `{"rate_limits":{"five_hour":{"used_percentage":40,"resets_at":1793173300}}}`
+	if err := RecordClaude(home, "primary", []byte(fiveOnly), start.Add(10*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	rec, _, _ := ReadClaude(home, "primary")
+	if rec.FiveHour.UsedPercent != 40 || rec.SevenDay == nil || rec.SevenDay.UsedPercent != 12 {
+		t.Fatalf("five %+v seven %+v", rec.FiveHour, rec.SevenDay)
+	}
+
+	afterWeek := time.Unix(1793688948+1, 0)
+	RecordClaude(home, "primary", []byte(`{"rate_limits":{"five_hour":{"used_percentage":1,"resets_at":1793700000}}}`), afterWeek)
+	rec, _, _ = ReadClaude(home, "primary")
+	if rec.SevenDay != nil {
+		t.Errorf("seven_day kept past its reset: %+v", rec.SevenDay)
+	}
+}

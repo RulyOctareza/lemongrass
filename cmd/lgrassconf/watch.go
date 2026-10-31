@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/faizalv/lemongrass/internal/agentconf"
 )
 
 const (
@@ -81,6 +83,7 @@ func (k *keeper) relevant() map[string]bool {
 	}
 	accounts := k.accounts()
 	set[accounts.FilePath()] = true
+	set[agentconf.StatusLineOffPath(k.home)] = true
 	names, _ := accounts.Names()
 	for _, name := range names {
 		set[accounts.SettingsPath(name)] = true

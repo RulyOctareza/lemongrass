@@ -100,6 +100,25 @@ func StatusLineStorePath(home string) string {
 	return filepath.Join(home, ".lemongrass", "statusline.json")
 }
 
+// StatusLineOffPath is the human's off switch for the chained statusline. Only `lgrassd statusline-chain` writes it,
+// and while it exists the keeper restores the human's own command as it does when the lgrassd binary is absent.
+func StatusLineOffPath(home string) string {
+	return filepath.Join(home, ".lemongrass", "statusline-off")
+}
+
+func StatusLineOn(home string) bool {
+	_, err := os.Lstat(StatusLineOffPath(home))
+	return err != nil
+}
+
+// StatusLineBinary is the lgrassd path to chain the statusline through, or empty when the human switched it off.
+func StatusLineBinary(home, lgrassdPath string) string {
+	if !StatusLineOn(home) {
+		return ""
+	}
+	return lgrassdPath
+}
+
 func (s StatusLineStore) load() (map[string]string, error) {
 	data, err := os.ReadFile(s.Path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -124,6 +143,10 @@ func (s StatusLineStore) save(commands map[string]string) error {
 		return err
 	}
 	return WriteAtomic(s.Path, append(data, '\n'), 0o600)
+}
+
+func (s StatusLineStore) Commands() (map[string]string, error) {
+	return s.load()
 }
 
 func (s StatusLineStore) Command(account string) (string, error) {

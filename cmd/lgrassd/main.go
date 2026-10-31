@@ -44,6 +44,8 @@ func main() {
 		cmdBranch(os.Args[2:])
 	case "statusline":
 		cmdStatusline(os.Args[2:])
+	case "statusline-chain":
+		cmdStatusLineChain(os.Args[2:])
 	case "usage":
 		cmdUsage(os.Args[2:])
 	case "hook":
@@ -84,6 +86,8 @@ COMMANDS
   hook <event>                      Invoked by Claude Code's and Codex's own hook systems, reads hook JSON off stdin
   statusline --account <name>       Claude Code's statusLine command: records rate_limits for the account and
                                      runs the human's own statusline command with the same stdin
+  statusline-chain [on|off]         Prints whether the statusline is chained and each account's own command;
+                                     on and off flip the human's switch, which lgrassconf applies
   usage                             Prints the last known rate-limit usage of every Claude account and of
                                      Codex as JSON
 
