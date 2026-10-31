@@ -75,6 +75,7 @@ watch(
       <slot name="picker" />
     </div>
     <div v-if="!file" class="notice">Loading {{ path }}</div>
+    <!-- Seen only until git status catches up: the tab then moves to another conflicted file. -->
     <div v-else-if="file.status === 'notConflicted'" class="notice done">
       {{ path }} is not in conflict. Pick another file above, or close this tab.
     </div>
