@@ -283,7 +283,7 @@ export function acceptAction(onAccept: OnAccept): Extension {
   return acceptHandler.of(onAccept)
 }
 
-// The frameless jade Accept on a proposed block, so the decision sits where the eye already is.
+// The solid jade Accept on a proposed block, so the decision sits where the eye already is.
 function acceptButton(index: number, onAccept: OnAccept): HTMLElement {
   const button = document.createElement('button')
   button.type = 'button'
@@ -594,24 +594,25 @@ const theme = EditorView.theme({
   '.cm-conflict-empty.open': { backgroundColor: 'var(--color-error-muted)' },
   '.cm-conflict-empty.picked': { backgroundColor: 'var(--color-jade-muted)' },
   '.cm-conflict-empty.proposed': { backgroundColor: 'var(--color-violet-muted)' },
-  // Frameless jade text, the go action for one block. Sticky to the right edge, so on a line wider
-  // than the pane it stays in view instead of scrolling away with the end of the line.
+  // The go action for one block, sticky to the right edge so on a line wider than the pane it stays
+  // in view. It then sits over the line's text, so it is solid: a see-through one lets the text
+  // bleed into it.
   '.cm-accept': {
     position: 'sticky',
     right: '8px',
     marginLeft: '2ch',
-    padding: '0 2px',
-    background: 'none',
+    padding: '0 6px',
+    background: 'var(--color-jade)',
     border: 'none',
     borderRadius: 'var(--radius-sm)',
-    color: 'var(--color-jade)',
+    color: 'var(--color-black)',
     fontFamily: 'var(--font-body)',
     fontSize: 'var(--text-xs)',
     fontStyle: 'normal',
     fontWeight: 'var(--weight-medium)',
     cursor: 'pointer'
   },
-  '.cm-accept:hover': { backgroundColor: 'var(--color-jade-muted)' }
+  '.cm-accept:hover': { backgroundColor: 'var(--color-jade-dim)' }
 })
 
 function base(extra: Extension[]): Extension[] {
