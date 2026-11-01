@@ -214,7 +214,7 @@ export interface VaultHTTPChannelWithShortId {
 
 // The global policy uses only binaries and paths. A project's may also exclude global entries.
 export interface VaultPolicy {
-  rules: Record<string, 'allow' | 'deny' | 'approval'>
+  rules: Record<string, 'allow' | 'deny' | 'ask'>
   binaries: string[]
   paths: string[]
   exclude_binaries: string[]
@@ -231,7 +231,7 @@ export interface VaultPolicyRule {
   id: string
   category: string
   description: string
-  mode: 'deny' | 'approval'
+  mode: 'deny' | 'ask'
   locked: boolean
 }
 

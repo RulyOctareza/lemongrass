@@ -18,7 +18,7 @@ const props = defineProps<{
   activeProjectId: string | null
 }>()
 
-type Mode = 'allow' | 'deny' | 'approval'
+type Mode = 'allow' | 'deny' | 'ask'
 
 const GLOBAL = 'global'
 
@@ -377,7 +377,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
     <div v-if="catalog.length" class="settings-scroll">
       <template v-if="!isGlobal">
         <p class="hint">
-          Needs approval is refused for now. Approving a call with your passphrase is not built yet.
+          Ask me refuses the call and sends it to you as a decision in the Vault. If you execute it,
+          the agent gets its result.
         </p>
 
         <div v-for="group in visibleGroups" :key="group.name" class="policy-group">
@@ -391,7 +392,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
               <span v-if="rule.locked" class="value-capsule">Locked</span>
               <select v-else v-model="modes[rule.id]" class="policy-mode" :aria-label="rule.id">
                 <option value="deny">Deny</option>
-                <option value="approval">Needs approval</option>
+                <option value="ask">Ask me</option>
                 <option value="allow">Allow</option>
               </select>
             </div>

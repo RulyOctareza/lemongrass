@@ -475,24 +475,31 @@ async function revokeHTTPChannel(id: string): Promise<void> {
 
 // The global policy uses only binaries and paths. A project's may also exclude global entries.
 export interface Policy {
-  rules: Record<string, 'allow' | 'deny' | 'approval'>
+  rules: Record<string, PolicyMode>
   binaries: string[]
   paths: string[]
   exclude_binaries: string[]
   exclude_paths: string[]
 }
 
+export type PolicyMode = 'allow' | 'deny' | 'ask'
+
+// Ask mode was called approval before; a policy stored then still says so, and the daemon still accepts it.
+function readMode(mode: string): PolicyMode {
+  return mode === 'approval' ? 'ask' : (mode as PolicyMode)
+}
+
 export interface PolicyRule {
   id: string
   category: string
   description: string
-  mode: 'deny' | 'approval'
+  mode: 'deny' | 'ask'
   locked: boolean
 }
 
 async function policyCatalog(): Promise<PolicyRule[]> {
-  const { rules } = await vaultCall<{ rules: PolicyRule[] }>('policy_catalog')
-  return rules ?? []
+  const { rules } = await vaultCall<{ rules: PolicyRule[] | null }>('policy_catalog')
+  return (rules ?? []).map((rule) => ({ ...rule, mode: readMode(rule.mode) as 'deny' | 'ask' }))
 }
 
 export interface Policies {
@@ -502,7 +509,9 @@ export interface Policies {
 
 function normalizePolicy(policy?: Partial<Policy>): Policy {
   return {
-    rules: policy?.rules ?? {},
+    rules: Object.fromEntries(
+      Object.entries(policy?.rules ?? {}).map(([id, mode]) => [id, readMode(mode)])
+    ),
     binaries: policy?.binaries ?? [],
     paths: policy?.paths ?? [],
     exclude_binaries: policy?.exclude_binaries ?? [],
