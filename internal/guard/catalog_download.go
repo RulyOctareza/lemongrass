@@ -20,7 +20,16 @@ var downloadRules = []rule{
 		{Tools: []string{"oras"}, Subs: []string{"pull"}},
 		{Tools: []string{"helm"}, Subs: []string{"pull", "fetch", "install", "i", "upgrade", "dependency update", "dependency build", "dep update", "dep build", "repo add", "repo update"}},
 	}},
-	{ID: "package-install", Category: catDownload, Description: "installing or fetching language packages", Mode: ModeAsk, Forms: []form{
+	// package-restore allows, by default, fetching what a committed manifest or lockfile already declares: a human chose those dependencies when committing them.
+	{ID: "package-restore", Category: catDownload, Description: "restoring the dependencies a project already declares", Mode: ModeAllow, Forms: []form{
+		{Match: func(call shellCall, _ matchEnv) (string, bool) {
+			if !restoreCall(call) {
+				return "", false
+			}
+			return "Matched: " + call.Name + " restoring declared dependencies.", true
+		}},
+	}},
+	{ID: "package-install", Category: catDownload, Description: "installing or fetching language packages", Mode: ModeAsk, Except: restoreCall, Forms: []form{
 		{Tools: []string{"npm"}, Subs: []string{"install", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall", "add", "ci", "clean-install", "install-clean", "isntall-clean", "update", "up", "upgrade", "udpate", "exec", "x", "install-test", "it", "install-ci-test", "cit", "init", "create"}},
 		{Tools: []string{"npx", "pnpx", "bunx", "uvx", "pipx"}, Match: func(call shellCall, _ matchEnv) (string, bool) {
 			if call.Name == "pipx" {

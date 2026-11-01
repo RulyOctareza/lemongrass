@@ -30,7 +30,8 @@ func TestDangerDecisionBash(t *testing.T) {
 		{"docker ps && docker run --rm --pull=never alpine true", ""},
 		{"docker ps && docker run --rm alpine true", "container-pull"},
 		{"npm run build && npm test", ""},
-		{"npm install && npm test", "package-install"},
+		{"npm install && npm test", ""},
+		{"npm install left-pad && npm test", "package-install"},
 		{"sed -n 1,5p file.txt", ""},
 
 		{"rm -rf build", "rm-force"},

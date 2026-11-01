@@ -18,6 +18,8 @@ const (
 	ModeDeny Mode = iota
 	// ModeAsk is a call that runs only once the human approves it.
 	ModeAsk
+	// ModeAllow is a rule listed in the Safety section that passes unless a project sets it to ask or deny.
+	ModeAllow
 )
 
 // ModeApproval is the earlier name of ModeAsk.
@@ -221,8 +223,11 @@ func expandHomePattern(pattern, home string) string {
 }
 
 func modeName(mode Mode) string {
-	if mode == ModeAsk {
+	switch mode {
+	case ModeAsk:
 		return overrideAsk
+	case ModeAllow:
+		return overrideAllow
 	}
 	return overrideDeny
 }

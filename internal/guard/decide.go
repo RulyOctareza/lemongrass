@@ -237,6 +237,9 @@ func (c checker) pick(found []Verdict) *Verdict {
 				verdict.Mode = ModeAsk
 			}
 		}
+		if verdict.Mode == ModeAllow {
+			continue
+		}
 		if verdict.Mode == ModeDeny {
 			picked := verdict
 			return &picked

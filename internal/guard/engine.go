@@ -195,6 +195,9 @@ func matchCall(call shellCall, env matchEnv) []Verdict {
 	var found []Verdict
 	for i := range catalogRules {
 		r := &catalogRules[i]
+		if r.Except != nil && r.Except(call) {
+			continue
+		}
 		for _, f := range r.Forms {
 			if detail, ok := f.match(call, words, env); ok {
 				found = append(found, Verdict{RuleID: r.ID, Category: r.Category, Description: r.Description, Mode: r.Mode, Detail: detail})

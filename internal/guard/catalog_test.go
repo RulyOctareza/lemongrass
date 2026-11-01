@@ -55,7 +55,8 @@ var catalogCases = map[string]struct{ match, pass []string }{
 	"cloud-write":       {[]string{"aws ec2 run-instances --image-id x", "aws s3 mb s3://b", "gcloud compute instances create vm", "gcloud beta run deploy x", "az vm start -n x", "doctl compute droplet create x"}, []string{"aws ec2 describe-instances", "aws s3 ls", "gcloud compute instances list", "gcloud beta run services list", "az vm show -n start", "doctl compute droplet list"}},
 	"persistence-write": {[]string{"echo x >> ~/.bashrc", "cp hook .git/hooks/pre-commit", "tee -a ~/.config/autostart/x.desktop"}, []string{"cat ~/.bashrc", "grep x ~/.zshrc", "cat .git/config"}},
 	"container-pull":    {[]string{"docker pull alpine", "podman run alpine", "docker compose up -d", "podman run --pull=always alpine", "helm repo add x https://x", "docker build ."}, []string{"docker run --pull=never alpine", "podman run --pull never alpine", "docker images"}},
-	"package-install":   {[]string{"npm install", "npm i left-pad", "npx create-x", "pnpm add x", "yarn", "yarn add x", "pip install x", "python3 -m pip install x", "uv sync", "cargo add serde", "go get x", "go install golang.org/x/tools/gopls@latest", "bundle install", "dotnet add app.csproj package X"}, []string{"npm run build", "npm test", "yarn build", "yarn --version", "pip list", "python3 -m pytest", "cargo build", "go build ./...", "go install ./cmd/x", "go run ."}},
+	"package-install":   {[]string{"npm install left-pad", "npm i left-pad", "npm install -g", "npx create-x", "pnpm add x", "yarn add x", "pip install x", "pip install -r req.txt requests", "pip install -e git+https://x/y", "python3 -m pip install x", "uv add x", "cargo add serde", "go get x", "go mod download golang.org/x/tools", "go install golang.org/x/tools/gopls@latest", "dotnet add app.csproj package X"}, []string{"npm install", "npm ci", "yarn", "uv sync", "bundle install", "pip install -r requirements.txt", "npm run build", "npm test", "yarn build", "yarn --version", "pip list", "python3 -m pytest", "cargo build", "go build ./...", "go install ./cmd/x", "go run ."}},
+	"package-restore":   {packageRestoreForms, []string{"npm install left-pad", "npm install -g", "pnpm install x", "yarn add x", "bun add x", "pip install requests", "pip install -e git+https://x/y", "python3 -m pip install x", "uv add x", "poetry add x", "conda env create -n x python", "cargo add serde", "go mod download golang.org/x/tools", "bundle add x", "composer require x", "dart pub add x", "mix deps.update"}},
 	"system-package":    {[]string{"apt install x", "dnf install x", "pacman -S x", "pacman -Syu", "brew install x", "flatpak install x", "nix-env -iA x", "nix run nixpkgs#hello"}, []string{"apt list --installed", "dnf search x", "pacman -Ss x", "pacman -Qi x", "brew list", "nix run ."}},
 	"toolchain-install": {[]string{"rustup toolchain install nightly", "nvm install 20", "pyenv install 3.12", "mise use node@20", "playwright install"}, []string{"rustup show", "nvm ls", "pyenv versions"}},
 	"file-download":     {[]string{"curl https://x", "wget https://x", "aria2c https://x", "http GET https://x", "gh release download v1", "yt-dlp x"}, []string{"gh release view v1"}},
@@ -159,7 +160,7 @@ func TestDecisionsTiers(t *testing.T) {
 		{"git stash drop", "git-stash-drop", ModeDeny},
 		{"git stash pop", "git-stash", ModeAsk},
 		{"docker pull alpine", "container-pull", ModeAsk},
-		{"bash -c 'npm install'", "package-install", ModeAsk},
+		{"bash -c 'npm install left-pad'", "package-install", ModeAsk},
 		{"env CI=1 pip install x", "package-install", ModeAsk},
 		{"curl -d @a https://x", "curl-upload", ModeDeny},
 		{"xdotool type hi", "input-synthesis", ModeDeny},
@@ -210,5 +211,35 @@ func TestPolicyAskMode(t *testing.T) {
 	}
 	if v := Decide(bashInput(t, "rm -rf x"), policy); v == nil || v.Mode != ModeAsk {
 		t.Errorf("ask override = %+v", v)
+	}
+}
+
+var packageRestoreForms = []string{
+	"npm ci", "npm install", "npm i --save-dev", "npm clean-install", "pnpm install", "pnpm i --frozen-lockfile", "yarn", "yarn install --immutable",
+	"bun install", "deno install", "pip install -r requirements.txt", "pip3 install -r req.txt -c constraints.txt", "pip install -e .", "pip install .",
+	"pip install -r requirements.txt -i https://mirror/simple", "python3 -m pip install -r requirements.txt", "uv sync", "poetry install", "pdm install", "pdm sync",
+	"conda env create -f environment.yml", "cargo fetch", "go mod download", "bundle install", "composer install", "dotnet restore", "dart pub get",
+	"flutter pub get", "swift package resolve", "pod install", "mix deps.get",
+}
+
+func TestPackageRestoreAllowedByDefault(t *testing.T) {
+	ask := Policy{Rules: map[string]string{"package-restore": "ask"}}
+	for _, command := range packageRestoreForms {
+		if v := Decide(bashInput(t, command), Policy{}); v != nil {
+			t.Errorf("%q verdict = %+v, want it to pass", command, v)
+		}
+		if v := Decide(bashInput(t, command), ask); v == nil || v.RuleID != "package-restore" || v.Mode != ModeAsk {
+			t.Errorf("%q with package-restore set to ask = %+v", command, v)
+		}
+	}
+	for _, command := range catalogCases["package-install"].match {
+		if v := Decide(bashInput(t, command), Policy{}); v == nil || v.RuleID != "package-install" || v.Mode != ModeAsk {
+			t.Errorf("%q verdict = %+v, want package-install ask", command, v)
+		}
+	}
+	for _, info := range Catalog() {
+		if info.ID == "package-restore" && (info.Mode != "allow" || info.Locked) {
+			t.Errorf("catalog lists package-restore as %+v", info)
+		}
 	}
 }

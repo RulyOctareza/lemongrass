@@ -12,6 +12,8 @@ type rule struct {
 	// Locked rules protect lemongrass itself and cannot be changed by a policy.
 	Locked bool
 	Forms  []form
+	// Except exempts a call that one of the forms matched, such as a package restore inside package-install.
+	Except func(call shellCall) bool
 	// WritePaths are paths whose write the rule catches, from any tool, redirect or write tool. "~/x" is under the home directory, a trailing slash means everything inside, and an entry without ~ matches as a path suffix anywhere, such as ".git/hooks/".
 	WritePaths []string
 }
