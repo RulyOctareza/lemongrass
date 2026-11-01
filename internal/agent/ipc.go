@@ -143,6 +143,9 @@ func handleConn(svc *Service, queryLimiter *vault.FailureLimiter, conn net.Conn)
 	if req.Op == opWebCommand {
 		conn.SetDeadline(time.Now().Add(web.Timeout))
 	}
+	if req.Op == opWaitAsk {
+		conn.SetDeadline(time.Now().Add(vault.AskMaxWait + waitAskSlack))
+	}
 	if req.Op == opRequestHTTPDownload {
 		serveDownload(svc, conn, req)
 		return
@@ -151,6 +154,9 @@ func handleConn(svc *Service, queryLimiter *vault.FailureLimiter, conn net.Conn)
 }
 
 func dispatch(svc *Service, queryLimiter *vault.FailureLimiter, req request) response {
+	if resp, ok := dispatchAsk(svc, req); ok {
+		return resp
+	}
 	switch req.Op {
 	case opRegisterChannel:
 		var p registerChannelPayload

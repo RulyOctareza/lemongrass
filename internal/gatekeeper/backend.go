@@ -19,6 +19,9 @@ type Backend struct {
 	*vault.Service
 	DB   *dbgate.Gate
 	HTTP *restergate.Gate
+	// Asks holds the models' asks in memory only; a daemon restart drops them and kills their running commands.
+	Asks *vault.AskStore
+	runs *askRuns
 }
 
 // NewBackend opens the vault under dir, attaches both gates to it, and opens the shared
@@ -46,5 +49,5 @@ func NewBackend(dir string) (*Backend, error) {
 
 // NewBackendFor attaches both gates to an already-open vault.
 func NewBackendFor(svc *vault.Service) *Backend {
-	return &Backend{Service: svc, DB: dbgate.New(svc), HTTP: restergate.New(svc)}
+	return &Backend{Service: svc, DB: dbgate.New(svc), HTTP: restergate.New(svc), Asks: vault.NewAskStore(), runs: newAskRuns()}
 }

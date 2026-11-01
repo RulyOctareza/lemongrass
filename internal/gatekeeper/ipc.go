@@ -82,7 +82,9 @@ type putCredentialPayload struct {
 }
 
 type createChannelPayload struct {
-	RootSecret string      `json:"root_secret"`
+	RootSecret string `json:"root_secret"`
+	// AskID, when set, creates the channel for that waiting db ask.
+	AskID      string      `json:"ask_id,omitempty"`
 	Name       string      `json:"name"`
 	DBName     string      `json:"db_name"`
 	Scope      vault.Scope `json:"scope"`
@@ -213,7 +215,9 @@ func testResterLoginResult(err error) testResterLoginResultPayload {
 }
 
 type createHTTPChannelPayload struct {
-	RootSecret  string          `json:"root_secret"`
+	RootSecret string `json:"root_secret"`
+	// AskID, when set, creates the channel for that waiting rester ask.
+	AskID       string          `json:"ask_id,omitempty"`
 	Name        string          `json:"name"`
 	Rester      string          `json:"rester"`
 	Environment string          `json:"environment"`
@@ -355,6 +359,10 @@ func handleConn(svc *Backend, adminLimiter *vault.FailureLimiter, conn net.Conn)
 		serveHumanDownload(svc, adminLimiter, conn, req)
 		return
 	}
+	if req.Op == opWaitAsk {
+		serveWaitAsk(svc, conn, req)
+		return
+	}
 	json.NewEncoder(conn).Encode(dispatch(svc, adminLimiter, req))
 }
 
@@ -362,10 +370,13 @@ func handleConn(svc *Backend, adminLimiter *vault.FailureLimiter, conn net.Conn)
 // issues, as opposed to Electron's admin ops -- Electron's own binary path isn't fixed yet,
 // so those ops stay at UID-only verification.
 func requiresPeerBinaryCheck(op string) bool {
-	return op == opCurrentPolicy || op == opQuery || op == opExecute || op == opChannelScope || op == opRequestHTTP || op == opRequestHTTPDownload || op == opHTTPChannelScope || op == opHTTPChannelInfo || op == opHTTPChannelUsers || op == opFlushHTTPTokens || op == opAppLogin
+	return op == opCurrentPolicy || op == opQuery || op == opExecute || op == opChannelScope || op == opRequestHTTP || op == opRequestHTTPDownload || op == opHTTPChannelScope || op == opHTTPChannelInfo || op == opHTTPChannelUsers || op == opFlushHTTPTokens || op == opAppLogin || op == opCreateAsk || op == opWaitAsk || op == opAskResult || op == opAckAsk
 }
 
 func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) response {
+	if resp, ok := dispatchAsk(svc, adminLimiter, req); ok {
+		return resp
+	}
 	switch req.Op {
 	case opPutCredential:
 		var p putCredentialPayload
@@ -382,7 +393,12 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			c, err := svc.CreateChannel(p.RootSecret, p.Name, p.DBName, p.Scope, time.Duration(p.TTLSeconds)*time.Second)
+			ttl := time.Duration(p.TTLSeconds) * time.Second
+			if p.AskID != "" {
+				c, err := svc.CreateChannelForAsk(p.AskID, p.RootSecret, p.Name, p.DBName, p.Scope, ttl)
+				return payloadResponse(channelPayload{Channel: c}), err
+			}
+			c, err := svc.CreateChannel(p.RootSecret, p.Name, p.DBName, p.Scope, ttl)
 			return payloadResponse(channelPayload{Channel: c}), err
 		})
 
@@ -591,7 +607,12 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 			return errResponse(err)
 		}
 		return adminOp(adminLimiter, func() (response, error) {
-			c, err := svc.CreateHTTPChannel(p.RootSecret, p.Name, p.Rester, p.Environment, p.Type, p.Scope, p.WebScope, time.Duration(p.TTLSeconds)*time.Second)
+			ttl := time.Duration(p.TTLSeconds) * time.Second
+			if p.AskID != "" {
+				c, err := svc.CreateHTTPChannelForAsk(p.AskID, p.RootSecret, p.Name, p.Rester, p.Environment, p.Type, p.Scope, p.WebScope, ttl)
+				return payloadResponse(httpChannelPayload{Channel: c}), err
+			}
+			c, err := svc.CreateHTTPChannel(p.RootSecret, p.Name, p.Rester, p.Environment, p.Type, p.Scope, p.WebScope, ttl)
 			return payloadResponse(httpChannelPayload{Channel: c}), err
 		})
 

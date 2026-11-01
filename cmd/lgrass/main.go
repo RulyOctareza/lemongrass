@@ -49,6 +49,8 @@ func main() {
 		cmdFlutter(os.Args[2:])
 	case "git":
 		cmdGit(os.Args[2:])
+	case "ask":
+		cmdAsk(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		usage()
@@ -105,6 +107,11 @@ COMMANDS
                                      id, time, sessions that wrote them, paths. A path is a file or folder relative
                                      to biblio and is followed back across moves such as archiving
   biblio show <rev> <path>          Prints a file as it was at a change id from biblio log, using the path it had then
+
+  ask <path-to-ask.yaml>            Asks the human for a db channel, a rester channel or a command run, from a YAML file
+                                     with type and its fields (see the lgrass-ask skill); waits up to 30 minutes and prints
+                                     the answer. Exit 0 answered, 2 declined or expired, 3 no answer yet
+  ask show <ask-id>                 Prints an ask's answer once it arrives, after the wait ended or the hook filed it
 
   session list                      Other tabs open in this project, with short tab id, vendor and shell title
   session tabs list                 Tab id to session id map for this project, as JSON

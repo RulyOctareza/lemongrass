@@ -77,7 +77,7 @@ func Run(args []string, tabID string) {
 	if err != nil {
 		if event == "PreToolUse" && payload.TabID != "" {
 			if verdict := dangerDecision(payload); verdict != nil {
-				adapter.emit(newHookResult("PreToolUse", "deny", []string{verdict.Message()}))
+				adapter.emit(newHookResult("PreToolUse", "deny", []string{dangerMessage(payload, *verdict)}))
 			}
 		}
 		os.Exit(0)
@@ -196,7 +196,7 @@ func hookPreToolUse(store *session.Store, payload hookEvent, projectPath string)
 
 	if payload.TabID != "" {
 		if verdict := dangerDecision(payload); verdict != nil {
-			return newHookResult("PreToolUse", "deny", []string{verdict.Message()})
+			return newHookResult("PreToolUse", "deny", []string{dangerMessage(payload, *verdict)})
 		}
 	}
 

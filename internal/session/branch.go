@@ -99,6 +99,8 @@ func formatEvent(e PendingEvent) string {
 	switch e.Source {
 	case SourceBranch:
 		return formatBranchChange(e.Ref)
+	case SourceAsk:
+		return formatAskAnswered(e.Ref)
 	}
 	return fmt.Sprintf("%s a %s notification arrived.", Prefix, e.Source)
 }

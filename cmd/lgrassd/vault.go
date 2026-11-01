@@ -63,6 +63,7 @@ func cmdVaultRun() {
 		os.Exit(1)
 	}
 	limiter := vault.NewFailureLimiter(vaultAdminMaxFailures, vaultAdminWindow, vaultAdminLockout)
+	wireAsks(svc.Asks)
 
 	fmt.Printf("lgrassd vault: listening on %s\n", sockPath)
 	if err := gatekeeper.Serve(svc, l, limiter); err != nil {
