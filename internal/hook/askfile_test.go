@@ -78,6 +78,26 @@ func TestDenyModeAndFileToolsKeepTheGuardMessage(t *testing.T) {
 	}
 }
 
+func TestCompoundAskModeCallIsNotFiled(t *testing.T) {
+	client := startVault(t)
+	if err := client.SetPassphrase("pw"); err != nil {
+		t.Fatal(err)
+	}
+	command := "go vet ./... && git commit -m wip"
+	payload := bashEvent(t, "tab-1", command)
+	verdict := verdictFor(t, payload, command)
+	if verdict.Mode == guard.ModeDeny {
+		t.Fatalf("expected an ask-mode verdict, got %+v", verdict)
+	}
+	msg := dangerMessageWith(client.SocketPath, payload, verdict)
+	if !strings.Contains(msg, "no request was sent") || !strings.Contains(msg, "Run the guarded command alone") || !strings.Contains(msg, "several commands chained") {
+		t.Fatalf("message = %q", msg)
+	}
+	if asks, err := client.ListAsks("pw"); err != nil || len(asks) != 0 {
+		t.Fatalf("a compound call was filed: %+v, %v", asks, err)
+	}
+}
+
 func TestAskFilingFailureTellsTheModelToAsk(t *testing.T) {
 	payload := bashEvent(t, "tab-1", "git commit -m wip")
 	verdict := verdictFor(t, payload, "git commit -m wip")

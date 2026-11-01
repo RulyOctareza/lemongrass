@@ -27,6 +27,9 @@ func dangerMessageWith(socketPath string, payload hookEvent, verdict guard.Verdi
 	if !ok {
 		return verdict.Message()
 	}
+	if holds, simple := simpleCommand(command); !simple {
+		return askNotFiledMessage(verdict, holds)
+	}
 	client := &gatekeeper.Client{SocketPath: socketPath, Timeout: askFileTimeout}
 	ask, err := client.CreateAsk(gatekeeper.AskRequest{
 		Type: vault.AskCommand, TabID: payload.TabID, Cwd: payload.Cwd, Path: os.Getenv("PATH"),
@@ -56,6 +59,14 @@ func ruleLabel(verdict guard.Verdict) string {
 
 func askFiledMessage(verdict guard.Verdict, askID string) string {
 	msg := "lgrass: " + ruleLabel(verdict) + " needs the user's decision, so lemongrass sent the user a request to run this exact command, ask " + askID + ". Do not retry the call and do not file another ask for it. The user executes it or declines, and the answer arrives as a notification; read it then with lgrass ask show " + askID + "."
+	if verdict.Detail != "" {
+		msg += " " + verdict.Detail
+	}
+	return msg + " Run lgrass how ask request for how asks work."
+}
+
+func askNotFiledMessage(verdict guard.Verdict, holds string) string {
+	msg := "lgrass: " + ruleLabel(verdict) + " needs the user's decision. lemongrass sends the user a request only for one simple command on its own, and this call holds " + holds + ", so no request was sent. Run the guarded command alone, as its own call with nothing chained around it, and the request is filed then; run the rest of the work as separate calls."
 	if verdict.Detail != "" {
 		msg += " " + verdict.Detail
 	}
