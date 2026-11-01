@@ -5,7 +5,7 @@
 // The modal for one ask, opened from the OS notification or the Decisions section over whatever view
 // is showing. A locked vault is unlocked in place first, which unlocks it for the whole app. The ask's
 // texts are model output, so they are only ever interpolated as text.
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import '../../vault.css'
 import type { Ask } from '../../../../preload/types'
 import { askState, closeAsk } from '../../asks'
@@ -77,16 +77,32 @@ function onHttpCreated(result: { channel: { ID: string }; shortId: string }): vo
 }
 
 const note = ref('')
+// Decline is a second step: the note field shows only once the human means to decline. The form
+// stays mounted behind it, so Back returns to what was already filled in.
+const declineStep = ref(false)
 const declining = ref(false)
 const declineError = ref('')
+const noteInput = ref<InstanceType<typeof AppTextarea> | null>(null)
 
 watch(
   () => askState.openId,
   () => {
     note.value = ''
+    declineStep.value = false
     declineError.value = ''
   }
 )
+
+function startDecline(): void {
+  declineStep.value = true
+  declineError.value = ''
+  void nextTick(() => noteInput.value?.focus())
+}
+
+function cancelDecline(): void {
+  declineStep.value = false
+  declineError.value = ''
+}
 
 async function declineChannel(): Promise<void> {
   if (!ask.value || declining.value) return
@@ -186,44 +202,49 @@ const outcome = computed(() => {
             <p v-if="outcome" class="hint">{{ outcome }}</p>
 
             <template v-else-if="ask.state === 'waiting'">
-              <p class="hint">
-                You set the permissions and how long the channel stays open. Creating it answers the
-                agent with the channel.
-              </p>
-              <template v-if="ask.type === 'db'">
-                <p v-if="connections.length === 0" class="hint">
-                  Add a database connection in the Vault first.
+              <div v-show="!declineStep" class="channel-step">
+                <p class="hint">
+                  You set the permissions and how long the channel stays open. Creating it answers
+                  the agent with the channel.
                 </p>
-                <DbChannelForm
-                  v-else
-                  :key="ask.id"
-                  title="Channel for this request"
-                  :connections="connections"
-                  :requested-tables="ask.tables ?? []"
-                  :ask-id="ask.id"
-                  @created="onDbCreated"
-                  @cancel="closeAsk"
-                />
-              </template>
-              <template v-else>
-                <p v-if="resters.length === 0" class="hint">Add a rester in the Vault first.</p>
-                <HttpChannelForm
-                  v-else
-                  :key="ask.id"
-                  title="Channel for this request"
-                  :resters="resters"
-                  :ask-id="ask.id"
-                  @created="onHttpCreated"
-                  @cancel="closeAsk"
-                />
-              </template>
+                <template v-if="ask.type === 'db'">
+                  <p v-if="connections.length === 0" class="hint">
+                    Add a database connection in the Vault first.
+                  </p>
+                  <DbChannelForm
+                    v-else
+                    :key="ask.id"
+                    title="Channel for this request"
+                    :connections="connections"
+                    :requested-tables="ask.tables ?? []"
+                    :ask-id="ask.id"
+                    @created="onDbCreated"
+                    @cancel="closeAsk"
+                  />
+                </template>
+                <template v-else>
+                  <p v-if="resters.length === 0" class="hint">Add a rester in the Vault first.</p>
+                  <HttpChannelForm
+                    v-else
+                    :key="ask.id"
+                    title="Channel for this request"
+                    :resters="resters"
+                    :ask-id="ask.id"
+                    @created="onHttpCreated"
+                    @cancel="closeAsk"
+                  />
+                </template>
 
-              <div class="field-block decline-block">
-                <label class="field-label" for="ask-channel-note">
-                  Note for the agent if you decline
-                </label>
+                <div class="create-actions decline-block">
+                  <AppButton @click="startDecline">Decline this request</AppButton>
+                </div>
+              </div>
+
+              <div v-if="declineStep" class="field-block">
+                <label class="field-label" for="ask-channel-note">Note for the agent</label>
                 <AppTextarea
                   id="ask-channel-note"
+                  ref="noteInput"
                   v-model="note"
                   size="sm"
                   :rows="2"
@@ -231,7 +252,10 @@ const outcome = computed(() => {
                 />
                 <p v-if="declineError" class="error-text">{{ declineError }}</p>
                 <div class="create-actions">
-                  <AppButton :disabled="declining" @click="declineChannel">Decline</AppButton>
+                  <AppButton :disabled="declining" @click="cancelDecline">Back</AppButton>
+                  <AppButton variant="primary" :disabled="declining" @click="declineChannel">
+                    {{ declining ? 'Declining...' : 'Send decline' }}
+                  </AppButton>
                 </div>
               </div>
             </template>
@@ -299,6 +323,12 @@ const outcome = computed(() => {
   font-size: var(--text-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.channel-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .decline-block {

@@ -4,7 +4,7 @@
 <script setup lang="ts">
 // The card for a command ask. Execute runs the command in the vault daemon as the user, in the
 // ask's folder; the daemon refuses anything on its never-execute list whatever this card shows.
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import type { Ask } from '../../../../preload/types'
 import { describeError, vaultSession } from '../../vaultSession'
 import AppButton from '../AppButton.vue'
@@ -32,6 +32,20 @@ const timeoutSeconds = ref(600)
 const note = ref('')
 const busy = ref(false)
 const error = ref('')
+// Decline is a second step, so the note field shows only once the human means to decline.
+const declining = ref(false)
+const noteInput = ref<InstanceType<typeof AppTextarea> | null>(null)
+
+function startDecline(): void {
+  declining.value = true
+  error.value = ''
+  void nextTick(() => noteInput.value?.focus())
+}
+
+function cancelDecline(): void {
+  declining.value = false
+  error.value = ''
+}
 
 const waiting = computed(() => props.ask.state === 'waiting')
 const running = computed(() => props.ask.state === 'running')
@@ -107,40 +121,53 @@ async function decline(): Promise<void> {
     </p>
 
     <template v-if="waiting">
-      <p v-if="ask.never_execute" class="error-text">
-        Lemongrass never runs this command. {{ ask.never_execute_reason }}
-      </p>
-      <div v-else class="field-block">
-        <span id="ask-timeout-label" class="field-label">Stop it after</span>
-        <AppSegmented
-          v-model="timeoutSeconds"
-          aria-labelledby="ask-timeout-label"
-          :options="timeoutOptions"
-        />
-      </div>
-      <div class="field-block">
-        <label class="field-label" for="ask-decline-note">Note for the agent if you decline</label>
-        <AppTextarea
-          id="ask-decline-note"
-          v-model="note"
-          size="sm"
-          :rows="2"
-          placeholder="Why you decline, or what to do instead"
-        />
-      </div>
-      <p v-if="error" class="error-text">{{ error }}</p>
-      <div class="create-actions">
-        <AppButton :disabled="busy" @click="decline">Decline</AppButton>
-        <AppConfirmButton
-          v-if="!ask.never_execute"
-          variant="primary"
-          tone="jade"
-          :disabled="busy"
-          @confirm="execute"
-        >
-          {{ busy ? 'Starting...' : 'Execute' }}
-        </AppConfirmButton>
-      </div>
+      <template v-if="!declining">
+        <p v-if="ask.never_execute" class="error-text">
+          Lemongrass never runs this command. {{ ask.never_execute_reason }}
+        </p>
+        <div v-else class="field-block">
+          <span id="ask-timeout-label" class="field-label">Stop it after</span>
+          <AppSegmented
+            v-model="timeoutSeconds"
+            aria-labelledby="ask-timeout-label"
+            :options="timeoutOptions"
+          />
+        </div>
+        <p v-if="error" class="error-text">{{ error }}</p>
+        <div class="create-actions">
+          <AppButton :disabled="busy" @click="startDecline">Decline</AppButton>
+          <AppConfirmButton
+            v-if="!ask.never_execute"
+            variant="primary"
+            tone="jade"
+            :disabled="busy"
+            @confirm="execute"
+          >
+            {{ busy ? 'Starting...' : 'Execute' }}
+          </AppConfirmButton>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="field-block">
+          <label class="field-label" for="ask-decline-note">Note for the agent</label>
+          <AppTextarea
+            id="ask-decline-note"
+            ref="noteInput"
+            v-model="note"
+            size="sm"
+            :rows="2"
+            placeholder="Why you decline, or what to do instead"
+          />
+        </div>
+        <p v-if="error" class="error-text">{{ error }}</p>
+        <div class="create-actions">
+          <AppButton :disabled="busy" @click="cancelDecline">Back</AppButton>
+          <AppButton variant="primary" :disabled="busy" @click="decline">
+            {{ busy ? 'Declining...' : 'Send decline' }}
+          </AppButton>
+        </div>
+      </template>
     </template>
 
     <template v-else-if="running">
