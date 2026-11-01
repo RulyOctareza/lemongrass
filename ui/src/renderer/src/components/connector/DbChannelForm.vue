@@ -24,6 +24,8 @@ const props = defineProps<{
   seed?: DbChannelSeed
   // A db ask's tables: kept selected across connection changes, and Create waits until the chosen connection has them all.
   requestedTables?: string[]
+  // Set when the channel answers a model's ask; the main process answers the ask with the short id.
+  askId?: string
 }>()
 
 const emit = defineEmits<{
@@ -121,7 +123,8 @@ async function submitCreate(): Promise<void> {
       newDbName.value.trim(),
       // IPC structured clone cannot clone a Vue reactive Proxy, so the arrays are spread first.
       { Tables: [...newTables.value], Operations: [...newOperations.value] },
-      Math.round(newTtlMinutes.value * 60)
+      Math.round(newTtlMinutes.value * 60),
+      props.askId
     )
     emit('created', result)
   } catch (err) {

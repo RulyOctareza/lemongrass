@@ -92,11 +92,13 @@ async function confirmReset(): Promise<void> {
         </h4>
         <p class="hint">
           <template v-if="unlockMode === 'set'">
-            This becomes your vault's passphrase. Use the same one every time.
+            The vault is more than a place for credentials. It guards the parts of lemongrass that
+            agents can't reach. This becomes its passphrase. Use the same one every time.
           </template>
           <template v-else>
-            Unlocks your connections and channel actions for this session. Auto-locks after 5
-            minutes idle.
+            The vault is more than a place for credentials. It is where you run the parts of
+            lemongrass that agents can't reach: connections, channel actions, safety rules and
+            approvals. Enter your passphrase to access it. Auto-locks after 5 minutes idle.
           </template>
         </p>
         <div class="unlock-row">

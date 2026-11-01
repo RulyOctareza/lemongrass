@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import { askState } from '../asks'
 import { vaultSession } from '../vaultSession'
 
 const emit = defineEmits<{
@@ -28,6 +29,17 @@ const emit = defineEmits<{
       </svg>
       <span class="vault-label">Vault</span>
       <span class="vault-state">{{ vaultSession.unlocked ? 'Unlocked' : 'Locked' }}</span>
+      <span
+        v-if="askState.count.waiting > 0"
+        class="vault-count"
+        :title="
+          askState.count.waiting === 1
+            ? 'A decision is waiting for you'
+            : `${askState.count.waiting} decisions are waiting for you`
+        "
+      >
+        {{ askState.count.waiting }}
+      </span>
     </button>
   </div>
 </template>
@@ -69,6 +81,19 @@ const emit = defineEmits<{
 
 .vault-label {
   flex-shrink: 0;
+}
+
+.vault-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-amber);
+  color: var(--color-black);
+  font-size: 11px;
+  font-weight: var(--weight-regular);
+  line-height: 18px;
+  text-align: center;
 }
 
 .vault-state {

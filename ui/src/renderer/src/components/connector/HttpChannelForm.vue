@@ -26,6 +26,8 @@ const props = defineProps<{
   // The channel a Copy starts from.
   seed?: VaultHTTPChannel
   copiedFrom?: string
+  // Set when the channel answers a model's ask; the main process answers the ask with the short id.
+  askId?: string
 }>()
 
 const emit = defineEmits<{
@@ -188,7 +190,8 @@ async function submitHTTPCreate(): Promise<void> {
       newHTTPType.value,
       scope,
       webScope,
-      Math.round(newHTTPTtlMinutes.value * 60)
+      Math.round(newHTTPTtlMinutes.value * 60),
+      props.askId
     )
     emit('created', result)
   } catch (err) {

@@ -10,6 +10,7 @@ import WorkspaceView from './components/WorkspaceView.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import GuideModal from './components/GuideModal.vue'
 import WorkgroupApprovalModal from './components/WorkgroupApprovalModal.vue'
+import AskModal from './components/decisions/AskModal.vue'
 import WorkgroupJoinModal from './components/WorkgroupJoinModal.vue'
 import ProjectTrustModal from './components/ProjectTrustModal.vue'
 import ZoomIndicator from './components/ZoomIndicator.vue'
@@ -216,6 +217,7 @@ onBeforeUnmount(() => {
     />
     <GuideModal v-if="guideOpen" @close="guideOpen = false" />
     <WorkgroupApprovalModal />
+    <AskModal />
     <WorkgroupJoinModal />
     <ZoomIndicator />
     <SetupLayer />

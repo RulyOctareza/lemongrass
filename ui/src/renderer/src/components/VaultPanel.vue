@@ -11,12 +11,14 @@ import ResterList from './connector/rester/ResterList.vue'
 import HttpChannelsSection from './connector/HttpChannelsSection.vue'
 import AppButton from './AppButton.vue'
 import VaultUnlockGate from './VaultUnlockGate.vue'
+import DecisionsSection from './decisions/DecisionsSection.vue'
+import { askState } from '../asks'
 
 const props = defineProps<{
   active: boolean
 }>()
 
-const activeKind = ref<'database' | 'http'>('database')
+const activeKind = ref<'decisions' | 'database' | 'http'>('decisions')
 const activeDbTab = ref<'connections' | 'channels'>('connections')
 const activeHttpTab = ref<'resters' | 'httpChannels'>('resters')
 
@@ -35,6 +37,30 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
 
       <template v-else>
         <nav class="vault-nav">
+          <button
+            class="nav-item"
+            :class="{ active: activeKind === 'decisions' }"
+            @click="activeKind = 'decisions'"
+          >
+            <svg
+              class="nav-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M2.5 2.5h9v6.5h-5l-2.5 2.5v-2.5h-1.5z" />
+              <path d="M5 5.5l1.4 1.4L9 4.3" />
+            </svg>
+            Decisions
+            <span v-if="askState.count.waiting > 0" class="nav-count">
+              {{ askState.count.waiting }}
+            </span>
+          </button>
           <span class="nav-group-label">Connector</span>
           <button
             class="nav-item"
@@ -90,6 +116,10 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
 
         <div class="vault-main">
           <div class="vault-content">
+            <div v-show="activeKind === 'decisions'" class="kind-pane">
+              <DecisionsSection :visible="active && activeKind === 'decisions'" />
+            </div>
+
             <div v-show="activeKind === 'database'" class="kind-pane">
               <div class="tab-row">
                 <button

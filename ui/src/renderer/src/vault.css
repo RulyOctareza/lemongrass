@@ -67,6 +67,20 @@
   flex-shrink: 0;
 }
 
+/* Same pill as the sidebar's Workgroup and Vault counts. */
+.vault-nav .nav-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-amber);
+  color: var(--color-black);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
 .vault-nav .nav-group-label {
   padding: var(--space-1) var(--space-3);
   color: var(--color-fg-muted);

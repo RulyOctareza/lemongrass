@@ -1,0 +1,309 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 The Lemongrass Authors -->
+
+<script setup lang="ts">
+// The modal for one ask, opened from the OS notification or the Decisions section over whatever view
+// is showing. A locked vault is unlocked in place first, which unlocks it for the whole app. The ask's
+// texts are model output, so they are only ever interpolated as text.
+import { computed, ref, watch } from 'vue'
+import '../../vault.css'
+import type { Ask } from '../../../../preload/types'
+import { askState, closeAsk } from '../../asks'
+import { describeError, noteVaultActivity, vaultSession } from '../../vaultSession'
+import AppButton from '../AppButton.vue'
+import AppModal from '../AppModal.vue'
+import AppTextarea from '../AppTextarea.vue'
+import VaultUnlockGate from '../VaultUnlockGate.vue'
+import DbChannelForm from '../connector/DbChannelForm.vue'
+import HttpChannelForm from '../connector/HttpChannelForm.vue'
+import AskCommandCard from './AskCommandCard.vue'
+import { askStateLabel, askTypeLabel } from './askLabels'
+
+const ask = ref<Ask | null>(null)
+const loadError = ref('')
+const connections = ref<string[]>([])
+const resters = ref<string[]>([])
+let loadSeq = 0
+
+const title = computed(() => (ask.value ? askTypeLabel(ask.value.type) : 'Decision'))
+
+async function load(quiet: boolean): Promise<void> {
+  const id = askState.openId
+  if (!id || !vaultSession.unlocked) return
+  const seq = ++loadSeq
+  if (!quiet) {
+    ask.value = null
+    loadError.value = ''
+  }
+  try {
+    const next = await window.api.ask.get(vaultSession.passphrase, id)
+    if (seq !== loadSeq) return
+    ask.value = next
+    loadError.value = ''
+    if (next.state !== 'waiting') return
+    if (next.type === 'db') connections.value = await window.api.vault.listConnections()
+    if (next.type === 'rester') resters.value = await window.api.vault.listResters()
+  } catch (err) {
+    if (seq === loadSeq) loadError.value = describeError(err)
+  }
+}
+
+watch(
+  () => [askState.openId, vaultSession.unlocked] as const,
+  ([id, unlocked]) => {
+    if (!id) ask.value = null
+    else if (unlocked) void load(false)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => askState.version,
+  () => void load(true)
+)
+
+function onCommandChanged(next?: Ask): void {
+  if (next) ask.value = next
+  else void load(true)
+}
+
+function onDbCreated(result: { channel: { ID: string }; shortId: string }): void {
+  vaultSession.shortIdByChannel[result.channel.ID] = result.shortId
+  closeAsk()
+}
+
+function onHttpCreated(result: { channel: { ID: string }; shortId: string }): void {
+  vaultSession.shortIdByHTTPChannel[result.channel.ID] = result.shortId
+  closeAsk()
+}
+
+const note = ref('')
+const declining = ref(false)
+const declineError = ref('')
+
+watch(
+  () => askState.openId,
+  () => {
+    note.value = ''
+    declineError.value = ''
+  }
+)
+
+async function declineChannel(): Promise<void> {
+  if (!ask.value || declining.value) return
+  declining.value = true
+  declineError.value = ''
+  try {
+    await window.api.ask.decline(vaultSession.passphrase, ask.value.id, note.value.trim())
+    closeAsk()
+  } catch (err) {
+    declineError.value = describeError(err)
+  } finally {
+    declining.value = false
+  }
+}
+
+function askedAt(iso: string): string {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return ''
+  return at.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const outcome = computed(() => {
+  const a = ask.value
+  if (!a || a.type === 'command') return ''
+  if (a.state === 'answered')
+    return a.short_id ? `Answered with channel ${a.short_id}.` : 'Answered.'
+  if (a.state === 'declined') return 'Declined.'
+  if (a.state === 'expired') return 'This request expired before it was answered.'
+  return ''
+})
+</script>
+
+<template>
+  <AppModal v-if="askState.openId" scope="app" size="lg" :title="title" @close="closeAsk">
+    <div
+      class="vault-tab ask-body"
+      @click.capture="noteVaultActivity"
+      @keydown.capture="noteVaultActivity"
+    >
+      <VaultUnlockGate v-if="!vaultSession.unlocked" />
+
+      <template v-else>
+        <p v-if="loadError" class="error-text">{{ loadError }}</p>
+        <p v-else-if="!ask" class="empty">Loading...</p>
+
+        <template v-else>
+          <dl class="ask-facts">
+            <div class="ask-fact">
+              <dt>Status</dt>
+              <dd>{{ askStateLabel(ask.state) }}</dd>
+            </div>
+            <div class="ask-fact">
+              <dt>Asked</dt>
+              <dd>{{ askedAt(ask.created_at) }}</dd>
+            </div>
+            <div class="ask-fact">
+              <dt>Tab</dt>
+              <dd class="mono">{{ ask.tab_id.slice(0, 8) }}</dd>
+            </div>
+            <div class="ask-fact ask-fact--wide">
+              <dt>Folder</dt>
+              <dd class="mono" :title="ask.cwd">{{ ask.cwd }}</dd>
+            </div>
+          </dl>
+
+          <AskCommandCard
+            v-if="ask.type === 'command'"
+            :key="ask.id"
+            :ask="ask"
+            @changed="onCommandChanged"
+            @done="closeAsk"
+          />
+
+          <template v-else>
+            <div v-if="ask.type === 'db'" class="field-block">
+              <span class="field-label">Tables asked for</span>
+              <div class="capsule-row">
+                <span v-for="table in ask.tables ?? []" :key="table" class="value-capsule">
+                  {{ table }}
+                </span>
+              </div>
+            </div>
+            <div v-if="ask.type === 'rester'" class="field-block">
+              <span class="field-label">Message</span>
+              <pre class="untrusted">{{ ask.message }}</pre>
+            </div>
+            <div v-if="ask.reason" class="field-block">
+              <span class="field-label">Reason</span>
+              <pre class="untrusted">{{ ask.reason }}</pre>
+            </div>
+
+            <p v-if="outcome" class="hint">{{ outcome }}</p>
+
+            <template v-else-if="ask.state === 'waiting'">
+              <p class="hint">
+                You set the permissions and how long the channel stays open. Creating it answers the
+                agent with the channel.
+              </p>
+              <template v-if="ask.type === 'db'">
+                <p v-if="connections.length === 0" class="hint">
+                  Add a database connection in the Vault first.
+                </p>
+                <DbChannelForm
+                  v-else
+                  :key="ask.id"
+                  title="Channel for this request"
+                  :connections="connections"
+                  :requested-tables="ask.tables ?? []"
+                  :ask-id="ask.id"
+                  @created="onDbCreated"
+                  @cancel="closeAsk"
+                />
+              </template>
+              <template v-else>
+                <p v-if="resters.length === 0" class="hint">Add a rester in the Vault first.</p>
+                <HttpChannelForm
+                  v-else
+                  :key="ask.id"
+                  title="Channel for this request"
+                  :resters="resters"
+                  :ask-id="ask.id"
+                  @created="onHttpCreated"
+                  @cancel="closeAsk"
+                />
+              </template>
+
+              <div class="field-block decline-block">
+                <label class="field-label" for="ask-channel-note">
+                  Note for the agent if you decline
+                </label>
+                <AppTextarea
+                  id="ask-channel-note"
+                  v-model="note"
+                  size="sm"
+                  :rows="2"
+                  placeholder="Why you decline, or what to do instead"
+                />
+                <p v-if="declineError" class="error-text">{{ declineError }}</p>
+                <div class="create-actions">
+                  <AppButton :disabled="declining" @click="declineChannel">Decline</AppButton>
+                </div>
+              </div>
+            </template>
+          </template>
+        </template>
+      </template>
+    </div>
+  </AppModal>
+</template>
+
+<style>
+.vault-tab.ask-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow: visible;
+}
+
+.vault-tab.ask-body .vault-gate {
+  padding: var(--space-4) 0;
+}
+
+.vault-tab .untrusted {
+  max-height: 240px;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow: auto;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-fg-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vault-tab .untrusted.mono,
+.vault-tab .ask-facts .mono {
+  font-family: var(--font-mono);
+}
+</style>
+
+<style scoped>
+.ask-facts {
+  display: grid;
+  grid-template-columns: repeat(3, auto) 1fr;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.ask-fact {
+  min-width: 0;
+}
+
+.ask-fact dt {
+  color: var(--color-fg-secondary);
+  font-size: var(--text-xs);
+}
+
+.ask-fact dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-fg-primary);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decline-block {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-default);
+}
+</style>
