@@ -16,17 +16,23 @@ type Mode int
 
 const (
 	ModeDeny Mode = iota
-	ModeApproval
+	// ModeAsk is a call that runs only once the human approves it.
+	ModeAsk
 )
 
+// ModeApproval is the earlier name of ModeAsk.
+const ModeApproval = ModeAsk
+
 const (
-	overrideAllow    = "allow"
-	overrideDeny     = "deny"
+	overrideAllow = "allow"
+	overrideDeny  = "deny"
+	overrideAsk   = "ask"
+	// overrideApproval is how policies stored before ask mode name it; it is read as ask.
 	overrideApproval = "approval"
 )
 
 const (
-	maxPolicyRules    = 200
+	maxPolicyRules    = 500
 	maxPolicyBinaries = 200
 	maxPolicyPaths    = 200
 )
@@ -61,10 +67,26 @@ func ParsePolicy(data []byte) (Policy, error) {
 	if err := policy.Validate(); err != nil {
 		return Policy{}, err
 	}
+	for id, value := range policy.Rules {
+		if value == overrideApproval {
+			policy.Rules[id] = overrideAsk
+		}
+	}
 	return policy, nil
 }
 
+// Marshal writes the policy with every approval mode renamed to ask.
 func (p Policy) Marshal() ([]byte, error) {
+	if len(p.Rules) > 0 {
+		rules := make(map[string]string, len(p.Rules))
+		for id, value := range p.Rules {
+			if value == overrideApproval {
+				value = overrideAsk
+			}
+			rules[id] = value
+		}
+		p.Rules = rules
+	}
 	return json.Marshal(p)
 }
 
@@ -126,8 +148,8 @@ func (p Policy) Validate() error {
 		if info.Locked {
 			return fmt.Errorf("%w: rule %q protects lemongrass and cannot be changed", ErrInvalidPolicy, id)
 		}
-		if value != overrideAllow && value != overrideDeny && value != overrideApproval {
-			return fmt.Errorf("%w: rule %q has mode %q, want allow, deny or approval", ErrInvalidPolicy, id, value)
+		if value != overrideAllow && value != overrideDeny && value != overrideAsk && value != overrideApproval {
+			return fmt.Errorf("%w: rule %q has mode %q, want allow, deny or ask", ErrInvalidPolicy, id, value)
 		}
 	}
 	for _, name := range p.ExcludeBinaries {
@@ -199,25 +221,8 @@ func expandHomePattern(pattern, home string) string {
 }
 
 func modeName(mode Mode) string {
-	if mode == ModeApproval {
-		return overrideApproval
+	if mode == ModeAsk {
+		return overrideAsk
 	}
 	return overrideDeny
-}
-
-// Catalog lists every rule the user can see, catalog and engine rules alike, at its built-in mode.
-func Catalog() []RuleInfo {
-	var infos []RuleInfo
-	for _, rule := range dangerCatalog("") {
-		infos = append(infos, RuleInfo{ID: rule.ID, Category: categoryOf(rule.ID), Description: rule.Description, Mode: modeName(rule.Mode), Locked: lockedRules[rule.ID]})
-	}
-	return append(infos, engineRules...)
-}
-
-func knownRules() map[string]RuleInfo {
-	known := map[string]RuleInfo{}
-	for _, info := range Catalog() {
-		known[info.ID] = info
-	}
-	return known
 }

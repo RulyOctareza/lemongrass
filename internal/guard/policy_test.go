@@ -141,7 +141,7 @@ func TestCatalogListing(t *testing.T) {
 		if info.Category == "Other" || info.Description == "" {
 			t.Errorf("rule %q has category %q and description %q", info.ID, info.Category, info.Description)
 		}
-		if info.Mode != "deny" && info.Mode != "approval" {
+		if info.Mode != "deny" && info.Mode != "ask" {
 			t.Errorf("rule %q has mode %q", info.ID, info.Mode)
 		}
 	}

@@ -23,24 +23,38 @@ type Input struct {
 
 type Verdict struct {
 	RuleID      string
+	Category    string
 	Description string
 	Mode        Mode
-	// Detail says why a deletion was not exempt and what would pass.
+	// Detail says what in the command matched the rule, or for a deletion why it was not exempt and what would pass.
 	Detail string
 }
 
+const (
+	bangPrefixLine = " If the user really wants it, ask them to run it themselves with the ! prefix in the prompt."
+	commandAskLine = " The model may file a command ask instead: run lgrass how ask request."
+)
+
 func (v Verdict) Message() string {
+	detail := ""
 	if v.Detail != "" {
+		detail = " " + v.Detail
+	}
+	if deletionScopeRules[v.RuleID] && v.Detail != "" {
 		subject := "rm"
 		if v.RuleID == "find-delete" {
 			subject = "find -delete"
 		}
-		return "lgrass: " + subject + " blocked (rule " + v.RuleID + "). " + v.Detail + " If the user really wants it, ask them to run it themselves with the ! prefix in the prompt."
+		message := "lgrass: " + subject + " blocked (rule " + v.RuleID + ")." + detail + bangPrefixLine
+		if v.Mode == ModeDeny {
+			message += commandAskLine
+		}
+		return message
 	}
-	if v.Mode == ModeApproval {
-		return "lgrass: rule " + v.RuleID + " (" + v.Description + ") needs the user's approval, and approval is not available yet. Ask the user to run it themselves with the ! prefix in the prompt."
+	if v.Mode == ModeAsk {
+		return "lgrass: rule " + v.RuleID + " (" + v.Description + ") needs the user's approval, and approval is not available yet." + detail + " Ask the user to run it themselves with the ! prefix in the prompt."
 	}
-	return "lgrass: this call is blocked by rule " + v.RuleID + " (" + v.Description + "). It is not allowed in a lemongrass session, whatever the permission mode. If the user really wants it, ask them to run it themselves with the ! prefix in the prompt."
+	return "lgrass: this call is blocked by rule " + v.RuleID + " (" + v.Description + ")." + detail + " It is not allowed in a lemongrass session, whatever the permission mode." + bangPrefixLine + commandAskLine
 }
 
 var secretComponents = map[string]bool{".ssh": true, ".aws": true, ".gnupg": true, ".kube": true, ".lemongrass": true, ".netrc": true}
@@ -83,34 +97,36 @@ func (c checker) bash() *Verdict {
 	}
 	script, err := parseShell(c.in.Command)
 	if err != nil {
-		return c.pick([]Verdict{{RuleID: "unparseable-command", Description: "the shell command could not be parsed, so it cannot be checked", Mode: ModeDeny}})
+		return c.pick([]Verdict{ruleVerdict("unparseable-command", "")})
 	}
 	var found []Verdict
 	if c.in.Cwd != "" && hasSecretComponent(c.in.Cwd) {
 		found = append(found, secretVerdict())
 	}
-	catalog := dangerCatalog(c.in.Home)
+	return c.pick(append(found, c.scriptVerdicts(script)...))
+}
+
+// scriptVerdicts judges one parsed script: every call against the catalog and the engine checks, its redirects and its pipelines. A script read at judge time, such as a shell file run by an interpreter, is judged through it too.
+func (c checker) scriptVerdicts(script shellScript) []Verdict {
+	var found []Verdict
+	env := matchEnv{Home: c.in.Home}
 	dirs, scopeReason := c.deletionDirs(script)
 	for _, call := range script.Calls {
 		if call.Dynamic {
-			found = append(found, Verdict{RuleID: "dynamic-command", Description: "the command name is computed at runtime, so it cannot be checked", Mode: ModeDeny})
+			found = append(found, ruleVerdict("dynamic-command", ""))
 			continue
 		}
-		for _, rule := range catalog {
-			if !rule.Match(call) {
-				continue
-			}
-			verdict := Verdict{RuleID: rule.ID, Description: rule.Description, Mode: rule.Mode}
-			if deletionScopeRules[rule.ID] {
+		for _, verdict := range matchCall(call, env) {
+			if deletionScopeRules[verdict.RuleID] {
 				verdict.Detail = scopeReason
 				if verdict.Detail == "" {
 					verdict.Detail = c.deletionCheck(call, dirs)
 				}
 				if verdict.Detail == "" {
-					if c.policy.Rules[rule.ID] != overrideDeny {
+					if c.policy.Rules[verdict.RuleID] != overrideDeny {
 						continue
 					}
-					verdict.Detail = "The user's Safety policy sets " + rule.ID + " to deny."
+					verdict.Detail = "The user's Safety policy sets " + verdict.RuleID + " to deny."
 				}
 			}
 			found = append(found, verdict)
@@ -123,7 +139,8 @@ func (c checker) bash() *Verdict {
 	}
 	found = append(found, c.redirectVerdicts(script)...)
 	found = append(found, downloadExecVerdicts(script)...)
-	return c.pick(found)
+	found = append(found, c.interpreterVerdicts(script)...)
+	return found
 }
 
 func (c checker) toolPaths() *Verdict {
@@ -155,7 +172,7 @@ func (c checker) redirectVerdicts(script shellScript) []Verdict {
 	var found []Verdict
 	for _, redirect := range script.Redirects {
 		if strings.HasPrefix(redirect.Path, "/dev/tcp/") || strings.HasPrefix(redirect.Path, "/dev/udp/") {
-			found = append(found, Verdict{RuleID: "raw-network", Description: "opening a raw network connection", Mode: ModeDeny})
+			found = append(found, ruleVerdict("raw-network", "Matched: a redirect to "+redirect.Path+"."))
 		}
 		for _, candidate := range c.pathCandidates(redirect.Path) {
 			found = append(found, c.pathChecks(candidate, redirect.Write)...)
@@ -164,7 +181,7 @@ func (c checker) redirectVerdicts(script shellScript) []Verdict {
 			}
 			for _, prefix := range deviceRedirectPrefixes {
 				if strings.HasPrefix(candidate, prefix) {
-					found = append(found, Verdict{RuleID: "raw-device-write", Description: "writing to a raw disk device", Mode: ModeDeny})
+					found = append(found, ruleVerdict("raw-device-write", "Matched: a redirect to "+candidate+"."))
 				}
 			}
 		}
@@ -183,6 +200,9 @@ func (c checker) pathChecks(candidate string, guardApplies bool) []Verdict {
 	}
 	if guardApplies && mentionsGuard(candidate, resolved) {
 		found = append(found, guardVerdict())
+	}
+	if guardApplies {
+		found = append(found, writePathVerdicts(candidate, resolved, c.in.Home)...)
 	}
 	return found
 }
@@ -213,8 +233,8 @@ func (c checker) pick(found []Verdict) *Verdict {
 				continue
 			case overrideDeny:
 				verdict.Mode = ModeDeny
-			case overrideApproval:
-				verdict.Mode = ModeApproval
+			case overrideAsk, overrideApproval:
+				verdict.Mode = ModeAsk
 			}
 		}
 		if verdict.Mode == ModeDeny {
@@ -263,7 +283,7 @@ func patternArgIndexes(call shellCall) map[int]bool {
 }
 
 func downloadExecVerdicts(script shellScript) []Verdict {
-	verdict := Verdict{RuleID: "download-exec", Description: "running downloaded code", Mode: ModeDeny}
+	verdict := ruleVerdict("download-exec", "Matched: a download piped or substituted into an interpreter.")
 	for _, names := range script.Pipelines {
 		seenDownloader := false
 		for _, name := range names {
@@ -298,11 +318,11 @@ func downloadExecVerdicts(script shellScript) []Verdict {
 }
 
 func secretVerdict() Verdict {
-	return Verdict{RuleID: "secret-path", Description: "access to credentials or lemongrass private state", Mode: ModeDeny}
+	return ruleVerdict("secret-path", "")
 }
 
 func guardVerdict() Verdict {
-	return Verdict{RuleID: "guard-config", Description: "changing the agent settings, hooks or the lgrass binaries", Mode: ModeDeny}
+	return ruleVerdict("guard-config", "")
 }
 
 func readOnlyCall(call shellCall) bool {
