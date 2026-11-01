@@ -1,0 +1,31 @@
+# The Linux package build environment. Its glibc is the oldest glibc the packages run on: native code compiled here
+# (node-pty's pty.node, the cgo-linked Go binaries) links against these symbol versions, and a user's newer glibc
+# still provides them. AlmaLinux 8 ships glibc 2.28, the floor named in glibc-floor beside this file; raising the base
+# image raises the floor, so both change together. scripts/check-glibc-floor.sh enforces the floor on the output.
+FROM docker.io/library/almalinux:8
+
+# gcc-toolset gives a current GCC whose output still links only against the base system's glibc and libstdc++, so
+# the compiler can move forward without moving the floor. Python 3.11 is for node-gyp, which needs 3.8 or newer.
+RUN dnf -y install gcc-toolset-13 make python3.11 git rpm-build binutils curl tar xz findutils which \
+    && dnf clean all
+
+ENV PATH=/opt/rh/gcc-toolset-13/root/usr/bin:/usr/local/go/bin:/usr/local/node/bin:$PATH \
+    CC=gcc CXX=g++ PYTHON=/usr/bin/python3.11
+
+# Node 24's official Linux build itself needs glibc 2.28, which is why the floor cannot go lower without a custom
+# Node. Callers pass GO_VERSION from go.mod so the image never disagrees with the module.
+ARG NODE_VERSION=24.22.2
+ARG GO_VERSION=1.26.8
+RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz \
+    && mkdir -p /usr/local/node \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local/node --strip-components=1 \
+    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz \
+    && tar -xzf /tmp/go.tar.gz -C /usr/local \
+    && rm /tmp/node.tar.xz /tmp/go.tar.gz
+
+# The checkout is mounted at /src, and git refuses a repository owned by another user than the one running it,
+# which is the case whenever the container runs as root over a checkout the host user owns.
+RUN git config --system --add safe.directory /src \
+    && git config --system --add safe.directory /src/internal/bibliothek/repo
+
+WORKDIR /src

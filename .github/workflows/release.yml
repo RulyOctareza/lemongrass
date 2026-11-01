@@ -1,11 +1,13 @@
 # Builds the x86_64 rpm for a pushed v<version> tag, versioned from the tag, and publishes it with its SHA256SUMS as
-# a GitHub Release.
+# a GitHub Release. A manual run (Run workflow) builds and checks the rpm from the chosen branch and attaches it to the
+# run as an artifact, publishing nothing.
 # The in-app updater reads the latest release and verifies the rpm against SHA256SUMS, so both asset names are fixed.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -19,43 +21,51 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
+      # The package is built inside this image, never on the runner's own OS, because the image's glibc is the oldest
+      # glibc the rpm starts on (build/rpm/Containerfile). A runner image upgrade then changes nothing in the package.
+      - name: Build the package image
+        run: docker build -t lemongrass-rpm-build --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)" build/rpm
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: ui/package-lock.json
-
-      # The tag is the only source of the version. main keeps 0.0.0-dev in ui/package.json, and this step writes the
+      # The tag is the only source of the version. main keeps 0.0.0-dev in ui/package.json, and a tag run writes the
       # tag's version into the CI checkout only, where the Makefile and electron-builder both read it. npm rejects a
-      # tag that is not valid semver.
-      - name: Stamp version from tag
-        run: npm --prefix ui version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
-
-      - name: Install rpm tooling
-        run: sudo apt-get update && sudo apt-get install -y rpm
-
-      - name: Install UI dependencies
-        run: npm --prefix ui ci
-
-      - name: Build Go binaries
-        run: make dist-linux
-
+      # tag that is not valid semver. A manual run keeps 0.0.0-dev.
       # --publish never stops electron-builder from publishing on its own when it sees a tag on CI.
-      - name: Build rpm
-        run: npm --prefix ui run build:rpm -- --x64 --publish never
+      # The glibc check fails the job when any native file in the package needs a newer glibc than the floor.
+      # The container runs as the runner's user so the checkout and the build output stay writable for the later
+      # steps; HOME points at /tmp because that user has no home in the image.
+      - name: Build rpm in the package image
+        env:
+          STAMP: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -e STAMP -e CI lemongrass-rpm-build sh -euc '
+            if [ -n "$STAMP" ]; then
+              npm --prefix ui version "${STAMP#v}" --no-git-tag-version --allow-same-version
+            fi
+            npm --prefix ui ci
+            make dist-linux
+            npm --prefix ui run build:rpm -- --x64 --publish never
+            scripts/check-glibc-floor.sh ui/dist/linux-unpacked
+          '
 
       - name: Write SHA256SUMS
         working-directory: ui/dist
         run: sha256sum lemongrass-*.x86_64.rpm > SHA256SUMS
 
+      - name: Attach rpm to the run
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lemongrass-rpm
+          path: |
+            ui/dist/lemongrass-*.x86_64.rpm
+            ui/dist/SHA256SUMS
+          if-no-files-found: error
+
       # Uploads into the tag's release when one already exists and creates it otherwise, so a re-run or a release
       # GitHub made for the tag does not fail the job. A tag with a prerelease part, such as v0.2.0-rc.1, is published
       # as a prerelease, which GitHub's latest release endpoint skips, so installed apps are never offered one.
       - name: Publish release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
           files: |
