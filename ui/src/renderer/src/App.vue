@@ -13,9 +13,11 @@ import WorkgroupApprovalModal from './components/WorkgroupApprovalModal.vue'
 import WorkgroupJoinModal from './components/WorkgroupJoinModal.vue'
 import ProjectTrustModal from './components/ProjectTrustModal.vue'
 import ZoomIndicator from './components/ZoomIndicator.vue'
+import SetupLayer from './components/deps/SetupLayer.vue'
 import ProjectSelector from './components/ProjectSelector.vue'
 import { loadAccounts } from './accounts'
 import { startContextFeed, startUsagePolling } from './usage'
+import { startDepsFeed } from './deps'
 import { restoreZoom, setZoom, stepZoom } from './zoom'
 import {
   cancelShellPicker,
@@ -140,6 +142,7 @@ onMounted(() => {
   void loadAccounts()
   startUsagePolling()
   startContextFeed()
+  startDepsFeed()
   window.addEventListener('keydown', onKeydown, { capture: true })
   unsubscribeBiblio = window.api.biblio.onChanged(onBiblioChanged)
   unsubscribeClosing = window.api.windowControls.onClosing(() => (closing.value = true))
@@ -215,6 +218,7 @@ onBeforeUnmount(() => {
     <WorkgroupApprovalModal />
     <WorkgroupJoinModal />
     <ZoomIndicator />
+    <SetupLayer />
     <ProjectTrustModal
       v-if="trustPrompt"
       :project="trustPrompt"

@@ -148,12 +148,7 @@ func TestWatcherPicksUpProjectsOnPass(t *testing.T) {
 }
 
 func TestWatcherStaysOffWithoutGit(t *testing.T) {
-	old := systemGit
-	systemGit = fakeSystem{goos: "linux"}.lookup
-	gitMu.Lock()
-	gitFound = ""
-	gitMu.Unlock()
-	t.Cleanup(func() { systemGit = old })
+	withoutGit(t)
 
 	f := newWatchFixture(t)
 	biblio := f.addProject("p1")

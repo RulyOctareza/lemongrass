@@ -11,6 +11,7 @@ import type {
   UsageReport,
   StatusLineChainState,
   UpdateState,
+  DepsState,
   CreditsResult,
   DeviceEnd,
   DeviceListResult,
@@ -562,6 +563,18 @@ const update = {
   }
 }
 
+const deps = {
+  state: (): Promise<DepsState> => ipcRenderer.invoke('deps:state'),
+  check: (): Promise<DepsState> => ipcRenderer.invoke('deps:check'),
+  install: (name: string): Promise<void> => ipcRenderer.invoke('deps:install', name),
+  setupDone: (): Promise<void> => ipcRenderer.invoke('deps:setupDone'),
+  onState: (callback: (state: DepsState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: DepsState): void => callback(state)
+    ipcRenderer.on('deps:state-changed', listener)
+    return () => ipcRenderer.removeListener('deps:state-changed', listener)
+  }
+}
+
 const credits = {
   list: (): Promise<CreditsResult> => ipcRenderer.invoke('credits:list'),
   openChromiumLicenses: (): Promise<string> => ipcRenderer.invoke('credits:openChromiumLicenses')
@@ -586,6 +599,7 @@ const api = {
   accounts,
   usage,
   update,
+  deps,
   credits,
   projects,
   workspaceLayouts,

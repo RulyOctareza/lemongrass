@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/faizalv/lemongrass/internal/osdeps"
 )
 
 const commandTimeout = 30 * time.Second
@@ -28,36 +30,14 @@ type Device struct {
 	Model string
 }
 
-// toolDirs lists where adb is installed besides PATH, since an agent's shell may not have
-// platform-tools on its PATH.
-func toolDirs() []string {
-	home, _ := os.UserHomeDir()
-	var dirs []string
-	for _, env := range []string{"ANDROID_HOME", "ANDROID_SDK_ROOT"} {
-		if dir := os.Getenv(env); dir != "" {
-			dirs = append(dirs, filepath.Join(dir, "platform-tools"))
-		}
-	}
-	return append(dirs,
-		filepath.Join(home, "Library", "Android", "sdk", "platform-tools"),
-		filepath.Join(home, "Android", "Sdk", "platform-tools"),
-		"/opt/homebrew/bin",
-		"/usr/local/bin",
-	)
-}
-
-// FindTool returns the path of an executable, from PATH first and then the usual install places.
+// FindTool returns the path of an executable where the dependency check finds it, which includes the Android SDK's
+// platform-tools that an agent's shell may not have on its PATH.
 func FindTool(name string) (string, error) {
-	if path, err := exec.LookPath(name); err == nil {
-		return path, nil
+	path, err := osdeps.Path(name)
+	if err != nil {
+		return "", fmt.Errorf("android: %s is not installed or not on PATH", name)
 	}
-	for _, dir := range toolDirs() {
-		candidate := filepath.Join(dir, name)
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
-			return candidate, nil
-		}
-	}
-	return "", fmt.Errorf("android: %s is not installed or not on PATH", name)
+	return path, nil
 }
 
 // ParseDevices reads the output of adb devices -l.

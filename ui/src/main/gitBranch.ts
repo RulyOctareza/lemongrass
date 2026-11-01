@@ -28,6 +28,7 @@ import {
   updateRemote
 } from './gitBranchOps'
 import { forecastRebase } from './gitForecast'
+import { checkedDep } from './deps'
 import { createNoticeQueue, type BranchNotice, type BranchNoticeQueue } from './gitNotice'
 import { parseTrack } from './gitParse'
 import type {
@@ -161,6 +162,9 @@ async function rebase(projectPath: string, name: string): Promise<GitActionResul
 async function rebaseForecast(projectPath: string, name: string): Promise<GitForecast> {
   const root = await repoRoot(projectPath)
   if (!root) return { status: 'unavailable', error: notARepo }
+  // The replay passes trees to merge-tree --merge-base, which git takes only from its floor version.
+  const git = await checkedDep('git')
+  if (git && git.status !== 'ok') return { status: 'needsDependency', dep: 'git' }
   return forecastRebase(runner(root), name)
 }
 

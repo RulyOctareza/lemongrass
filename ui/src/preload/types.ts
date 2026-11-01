@@ -409,10 +409,12 @@ export interface GitForecastStop {
 }
 
 // What a merge or a rebase would do, worked out in memory before it runs. stop is null for a merge.
+// needsDependency: the forecast cannot run because the named dependency is missing or too old.
 export type GitForecast =
   | { status: 'clean' }
   | { status: 'conflict'; paths: string[]; stop: GitForecastStop | null }
   | { status: 'unavailable'; error: string }
+  | { status: 'needsDependency'; dep: string }
 
 // The switch to main made before deleting the checked-out branch. It stands even when the delete
 // itself then fails.
@@ -597,7 +599,9 @@ export interface DeviceInfo {
   model: string
 }
 
-export type DeviceListResult = { ok: true; devices: DeviceInfo[] } | { ok: false; error: string }
+// dep names the dependency whose absence caused the failure, so the view can offer to install it.
+export type DeviceListResult =
+  { ok: true; devices: DeviceInfo[] } | { ok: false; error: string; dep?: string }
 
 // The renderer picks the session id so it can listen for packets before the stream starts.
 export interface DeviceStartRequest {
@@ -607,7 +611,7 @@ export interface DeviceStartRequest {
 
 export type DeviceStartResult =
   | { ok: true; name: string; codec: string; width: number; height: number }
-  | { ok: false; error: string }
+  | { ok: false; error: string; dep?: string }
 
 // One H.264 unit from scrcpy, Annex B. A config packet holds SPS and PPS and must be
 // decoded together with the frame that follows it.
@@ -1024,4 +1028,63 @@ export interface CreditsResult {
   entries: CreditEntry[]
   // Set when licenses.json is absent, as under `npm run dev`, which never runs the generator.
   missing: boolean
+}
+
+// One OS dependency as `lgrassd deps check --json` reports it. belowFloor and unknownVersion only
+// occur for a dependency with a floor; floor is "" when there is none.
+export type DepStatus = 'ok' | 'missing' | 'belowFloor' | 'unknownVersion'
+
+// unknown is reported on an OS family whose origin probe is not built yet.
+export type DepOrigin =
+  { kind: 'package'; package: string } | { kind: 'manual' } | { kind: 'none' } | { kind: 'unknown' }
+
+export interface DepOffer {
+  action: 'install' | 'upgrade'
+  package: string
+  route: 'helper' | 'winget' | 'brew'
+}
+
+export interface DepEntry {
+  name: string
+  required: boolean
+  // camelCase feature ids, mapped to their own copy in the renderer.
+  features: string[]
+  floor: string
+  path: string
+  version: string
+  origin: DepOrigin
+  status: DepStatus
+  offer: DepOffer | null
+  // Set only when no route reaches a usable version.
+  message: string
+}
+
+export interface DepsReport {
+  os: { family: string; id: string; version: string }
+  deps: DepEntry[]
+}
+
+export interface DepInstall {
+  name: string
+  action: 'install' | 'upgrade'
+  package: string
+  // The newest lines of the package manager's output.
+  lines: string[]
+}
+
+export interface DepOutcome {
+  ok: boolean
+  text: string
+}
+
+// failed: the check could not run, and message says why. unsupported is set when this build cannot
+// install anything, such as a source build. setupDue: the startup layer has not completed for this version.
+export interface DepsState {
+  phase: 'checking' | 'ready' | 'failed'
+  report: DepsReport | null
+  message: string | null
+  installing: DepInstall | null
+  outcomes: Record<string, DepOutcome>
+  unsupported: string | null
+  setupDue: boolean
 }

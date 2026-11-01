@@ -5,9 +5,9 @@ import { ipcMain, type WebContents } from 'electron'
 import { execFile, spawn, type ChildProcess } from 'child_process'
 import { accessSync, constants, realpathSync } from 'fs'
 import { createServer, connect, type Socket } from 'net'
-import { homedir } from 'os'
-import { delimiter, dirname, join } from 'path'
+import { dirname, join } from 'path'
 import { ScrcpyVideoParser } from './scrcpyStream'
+import { checkedDep, knownDep } from './deps'
 import type {
   DeviceEnd,
   DeviceInfo,
@@ -35,30 +35,27 @@ interface Session {
 
 const sessions = new Map<string, Session>()
 
-// PATH already holds the login shell's entries (main/loginPath.ts); the Android SDK's
-// platform-tools come first because Android Studio installs adb there without touching PATH.
-function toolDirs(): string[] {
-  const sdk = [
-    process.env.ANDROID_HOME,
-    process.env.ANDROID_SDK_ROOT,
-    join(homedir(), 'Library', 'Android', 'sdk')
-  ]
-    .filter((dir): dir is string => !!dir)
-    .map((dir) => join(dir, 'platform-tools'))
-  return [...sdk, ...(process.env.PATH ?? '').split(delimiter)].filter((dir) => dir.length > 0)
+interface MissingTool {
+  error: string
+  dep: string
 }
 
-function findTool(name: string): string | null {
-  for (const dir of toolDirs()) {
-    const candidate = join(dir, name)
-    try {
-      accessSync(candidate, constants.X_OK)
-      return candidate
-    } catch {
-      // Not installed in this directory.
+// adb and scrcpy are the paths the dependency check resolved, which also searches the Android SDK's
+// platform-tools, where Android Studio installs adb without touching PATH.
+async function toolPath(name: 'adb' | 'scrcpy'): Promise<string | MissingTool> {
+  const dep = await checkedDep(name)
+  if (dep?.path) return dep.path
+  if (!dep) {
+    return {
+      error: `The dependency check has not run, so ${name} cannot be found. Settings, under Dependencies, checks again.`,
+      dep: name
     }
   }
-  return null
+  return { error: dep.message || `${name} is not installed.`, dep: name }
+}
+
+function knownAdb(): string | null {
+  return knownDep('adb')?.path || null
 }
 
 function run(file: string, args: string[]): Promise<{ ok: boolean; out: string }> {
@@ -76,9 +73,9 @@ interface ScrcpyServer {
 
 // The server must be started with the exact version of the scrcpy install it ships with,
 // so both come from the installed scrcpy rather than a bundled copy.
-async function findScrcpyServer(): Promise<ScrcpyServer | string> {
-  const scrcpy = findTool('scrcpy')
-  if (!scrcpy) return 'scrcpy is not installed. Install it with "brew install scrcpy".'
+async function findScrcpyServer(): Promise<ScrcpyServer | MissingTool | string> {
+  const scrcpy = await toolPath('scrcpy')
+  if (typeof scrcpy !== 'string') return scrcpy
   const version = /^scrcpy (\S+)/m.exec((await run(scrcpy, ['--version'])).out)?.[1]
   if (!version) return 'Could not read the scrcpy version.'
   const candidates = [
@@ -115,8 +112,8 @@ export function parseAdbDevices(output: string): DeviceInfo[] {
 }
 
 async function listDevices(): Promise<DeviceListResult> {
-  const adb = findTool('adb')
-  if (!adb) return { ok: false, error: 'adb is not installed. Install Android platform-tools.' }
+  const adb = await toolPath('adb')
+  if (typeof adb !== 'string') return { ok: false, ...adb }
   const result = await run(adb, ['devices', '-l'])
   if (!result.ok) return { ok: false, error: result.out.trim() }
   return { ok: true, devices: parseAdbDevices(result.out) }
@@ -183,7 +180,7 @@ function stopSession(id: string, adb: string | null): void {
 }
 
 export function stopAllDevices(): void {
-  const adb = findTool('adb')
+  const adb = knownAdb()
   for (const id of [...sessions.keys()]) stopSession(id, adb)
 }
 
@@ -191,14 +188,19 @@ async function startSession(
   request: DeviceStartRequest,
   getContents: () => WebContents | undefined
 ): Promise<DeviceStartResult> {
-  const adb = findTool('adb')
-  if (!adb) return { ok: false, error: 'adb is not installed. Install Android platform-tools.' }
-
   const { id, serial } = request
   // Registered before the first await, so a stop that arrives while adb is still pushing or
   // forwarding cancels this start instead of leaving an unowned server on the phone.
   const session: Session = { serial, ended: false }
   sessions.set(id, session)
+  const stopped: DeviceStartResult = { ok: false, error: 'The device session was stopped.' }
+
+  const adb = await toolPath('adb')
+  if (session.ended) return stopped
+  if (typeof adb !== 'string') {
+    stopSession(id, null)
+    return { ok: false, ...adb }
+  }
   // One mirror per phone: a second Device tab or a remounted pane takes the phone over.
   for (const [other, existing] of sessions) {
     if (other === id || existing.serial !== serial) continue
@@ -206,7 +208,6 @@ async function startSession(
     const replaced: DeviceEnd = { id: other, replaced: true }
     getContents()?.send('device:end', replaced)
   }
-  const stopped: DeviceStartResult = { ok: false, error: 'The device session was stopped.' }
   const failed = (error: string): DeviceStartResult => {
     stopSession(id, adb)
     return { ok: false, error }
@@ -215,6 +216,10 @@ async function startSession(
   const server = await findScrcpyServer()
   if (session.ended) return stopped
   if (typeof server === 'string') return failed(server)
+  if ('dep' in server) {
+    stopSession(id, adb)
+    return { ok: false, ...server }
+  }
 
   const remote = `/data/local/tmp/lemongrass-scrcpy-${server.version}.jar`
   const pushed = await run(adb, ['-s', serial, 'push', server.path, remote])
@@ -308,7 +313,7 @@ export function registerDeviceHandlers(getContents: () => WebContents | undefine
   ipcMain.handle('device:start', (_event, request: DeviceStartRequest) =>
     startSession(request, getContents)
   )
-  ipcMain.on('device:stop', (_event, id: string) => stopSession(id, findTool('adb')))
+  ipcMain.on('device:stop', (_event, id: string) => stopSession(id, knownAdb()))
   // The renderer encodes control messages; main only forwards them to the session's socket.
   ipcMain.on('device:control', (_event, id: string, message: Uint8Array) => {
     const control = sessions.get(id)?.control

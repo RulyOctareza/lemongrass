@@ -21,6 +21,10 @@ export interface UiState {
   zoomFactor?: number
   startup?: 'lastProject' | 'projectSelector'
   window?: WindowState
+  // The app version the "Optimizing lemongrass" layer last completed for. Main alone writes it, through deps:setupDone.
+  setupVersion?: string
+  // The last status of each required dependency; one that was ok and no longer is reopens the layer.
+  setupSeen?: Record<string, string>
 }
 
 const STORE_DIR = join(homedir(), '.lemongrass')

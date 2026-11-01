@@ -3,6 +3,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import DepRow from './deps/DepRow.vue'
+import { depsStore } from '../deps'
 import type { GitForecast } from '../../../preload/types'
 
 // null while the forecast is still running.
@@ -10,6 +12,21 @@ const props = defineProps<{
   forecast: GitForecast | null
   kind: 'merge' | 'rebase'
 }>()
+
+// Read from the live dependency state, so the row follows an install started from it.
+const needed = computed(() => {
+  const forecast = props.forecast
+  if (forecast?.status !== 'needsDependency') return null
+  return depsStore.state?.report?.deps.find((dep) => dep.name === forecast.dep) ?? null
+})
+
+const neededText = computed(() => {
+  const forecast = props.forecast
+  if (forecast?.status !== 'needsDependency') return ''
+  const floor = needed.value?.floor
+  const want = floor ? `${forecast.dep} ${floor} or newer` : forecast.dep
+  return `Conflicts cannot be checked ahead of time. This check needs ${want}.`
+})
 
 const conflict = computed(() => (props.forecast?.status === 'conflict' ? props.forecast : null))
 
@@ -43,6 +60,12 @@ const heading = computed(() => {
   <p v-else-if="forecast.status === 'unavailable'" class="forecast-note" :title="forecast.error">
     Could not check for conflicts.
   </p>
+  <div v-else-if="forecast.status === 'needsDependency'" class="forecast-dependency">
+    <p class="forecast-note">{{ neededText }}</p>
+    <ul v-if="needed && depsStore.state" class="settings-rows">
+      <DepRow :dep="needed" :state="depsStore.state" />
+    </ul>
+  </div>
   <div v-else-if="conflict" class="forecast-conflict">
     <p>{{ heading }}</p>
     <ul class="forecast-paths">
@@ -58,6 +81,12 @@ const heading = computed(() => {
 </template>
 
 <style scoped>
+.forecast-dependency {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .forecast-note {
   color: var(--color-fg-muted);
   font-size: var(--text-sm);

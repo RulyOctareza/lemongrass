@@ -72,6 +72,11 @@ linux:
       to: "bin/linux-amd64/lgrassconf"
     - from: "../dist/linux-arm64/lgrassconf"
       to: "bin/linux-arm64/lgrassconf"
+    # The root helper. Its path is named by the polkit action in build/polkit, so it moves only together with that file.
+    - from: "../dist/linux-amd64/lgrassroot"
+      to: "bin/linux-amd64/lgrassroot"
+    - from: "../dist/linux-arm64/lgrassroot"
+      to: "bin/linux-arm64/lgrassroot"
 # git backs the biblio history in lgrassd. Passed to fpm rather than set as depends, which would replace
 # electron-builder's default dependency list instead of adding to it.
 deb:
@@ -81,9 +86,18 @@ deb:
 # No custom scriptlets: setting afterInstall or afterRemove replaces electron-builder's defaults, which create
 # /usr/bin/lemongrass and set the chrome-sandbox mode. The keeper unit is per-user, written by `lgrassconf install`.
 # The in-app updater finds the release asset by this fixed name.
+# The polkit action and rule go in as fpm src=dst inputs, the way electron-builder ships the icon and .desktop file,
+# so they need no scriptlet: polkitd picks them up by itself. Sources are relative to ui/, where fpm runs. polkit
+# provides pkexec, which the app runs the helper through.
 rpm:
   artifactName: ${name}-${version}.x86_64.${ext}
-  fpm: ['--depends', 'git']
+  fpm:
+    - '--depends'
+    - 'git'
+    - '--depends'
+    - 'polkit'
+    - 'build/polkit/com.lemongrass.app.lgrassroot.policy=/usr/share/polkit-1/actions/com.lemongrass.app.lgrassroot.policy'
+    - 'build/polkit/com.lemongrass.app.lgrassroot.rules=/usr/share/polkit-1/rules.d/com.lemongrass.app.lgrassroot.rules'
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false

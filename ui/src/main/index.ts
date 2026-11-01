@@ -17,6 +17,7 @@ import { registerTabSessionHandlers } from './tabSessions'
 import { registerAccountHandlers } from './accounts'
 import { registerUsageHandlers } from './usage'
 import { registerUpdateHandlers } from './updater'
+import { registerDepsHandlers } from './deps'
 import { registerCreditsHandlers } from './credits'
 import { registerProjectHandlers } from './projects'
 import { setTrustBinary } from './projectTrust'
@@ -126,6 +127,7 @@ app.whenReady().then(async () => {
   registerAccountHandlers(lgrassdPath)
   registerUsageHandlers(lgrassdPath, () => mainWindow?.webContents)
   registerUpdateHandlers(() => mainWindow)
+  registerDepsHandlers(lgrassdPath, () => mainWindow)
   registerCreditsHandlers()
   setTrustBinary(lgrassdPath)
   registerProjectHandlers(() => mainWindow)

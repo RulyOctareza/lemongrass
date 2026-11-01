@@ -10,6 +10,7 @@ import type {
   UsageReport,
   StatusLineChainState,
   UpdateState,
+  DepsState,
   CreditsResult,
   DeviceEnd,
   DeviceListResult,
@@ -131,6 +132,13 @@ interface Api {
     install: () => Promise<void>
     restart: () => Promise<void>
     onState: (callback: (state: UpdateState) => void) => () => void
+  }
+  deps: {
+    state: () => Promise<DepsState>
+    check: () => Promise<DepsState>
+    install: (name: string) => Promise<void>
+    setupDone: () => Promise<void>
+    onState: (callback: (state: DepsState) => void) => () => void
   }
   credits: {
     list: () => Promise<CreditsResult>

@@ -4,6 +4,8 @@ BIN_DIR := $(HOME)/.local/bin
 D_BIN_DIR := $(HOME)/.lemongrass/bin
 LDFLAGS := -ldflags "-X github.com/faizalv/lemongrass/cmd/lgrass/version.Version=$(VERSION)"
 BINARIES := lgrass lgrassd lgrassconf
+# lgrassroot is the Linux root helper run through pkexec, so only the Linux packages carry it.
+LINUX_BINARIES := $(BINARIES) lgrassroot
 
 .PHONY: build-linux build-rpm build-mac dist dist-linux dist-darwin dev install verify clean submodules bibliothek-update license license-check
 
@@ -21,7 +23,7 @@ bibliothek-update: submodules
 dist-linux: submodules
 	rm -rf $(DIST)/linux-amd64 $(DIST)/linux-arm64
 	mkdir -p $(DIST)/linux-amd64 $(DIST)/linux-arm64
-	for bin in $(BINARIES); do \
+	for bin in $(LINUX_BINARIES); do \
 		GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/linux-amd64/$$bin ./cmd/$$bin || exit 1; \
 		GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(DIST)/linux-arm64/$$bin ./cmd/$$bin || exit 1; \
 	done

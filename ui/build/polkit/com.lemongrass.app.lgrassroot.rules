@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 The Lemongrass Authors
+
+// Lets an admin in an active local session run lemongrass's package helper without a password. This says YES to any
+// process of that user, a model tab included, so the helper's allowlist (osdeps.HelperPackages) is the only guarantee:
+// the worst a caller can do is install or upgrade one of those packages. Anyone else gets the action's password
+// prompt. wheel is the admin group on the Fedora family, sudo on the Debian family.
+polkit.addRule(function (action, subject) {
+    if ((action.id == "com.lemongrass.app.lgrassroot" || action.id == "com.lemongrass.app.lgrassroot.arm64") &&
+        subject.active && subject.local &&
+        (subject.isInGroup("wheel") || subject.isInGroup("sudo"))) {
+        return polkit.Result.YES;
+    }
+});

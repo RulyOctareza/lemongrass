@@ -2,8 +2,10 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppButton from './AppButton.vue'
+import DepRow from './deps/DepRow.vue'
+import { depsStore } from '../deps'
 import { avcCodecString, concatBytes } from '../h264'
 import {
   AndroidKey,
@@ -31,6 +33,11 @@ const phase = ref<Phase>('picking')
 const devices = ref<DeviceInfo[]>([])
 const listError = ref('')
 const streamError = ref('')
+// The dependency whose absence stopped the list or the mirror; its row offers the install in place.
+const missingDep = ref('')
+const missingEntry = computed(
+  () => depsStore.state?.report?.deps.find((dep) => dep.name === missingDep.value) ?? null
+)
 const current = ref<DeviceInfo | null>(null)
 const canvasEl = ref<HTMLCanvasElement>()
 const screenEl = ref<HTMLDivElement>()
@@ -52,10 +59,12 @@ async function refresh(): Promise<void> {
   const result = await window.api.device.list()
   if (!result.ok) {
     listError.value = result.error
+    missingDep.value = result.dep ?? ''
     devices.value = []
     return
   }
   listError.value = ''
+  missingDep.value = ''
   devices.value = result.devices
 }
 
@@ -114,6 +123,7 @@ function teardown(): void {
 
 function fail(message: string): void {
   teardown()
+  missingDep.value = ''
   reconnecting = false
   streamError.value = message
   phase.value = 'ended'
@@ -165,6 +175,11 @@ async function start(device: DeviceInfo): Promise<void> {
   })
   const result = await window.api.device.start({ id, serial: device.serial })
   if (sessionId !== id) return
+  if (!result.ok && result.dep) {
+    fail(result.error)
+    missingDep.value = result.dep
+    return
+  }
   if (!result.ok) return reconnecting ? reconnect(device, result.error) : fail(result.error)
   reconnecting = false
   phase.value = 'live'
@@ -291,6 +306,9 @@ onBeforeUnmount(teardown)
 
     <div v-if="phase === 'picking'" class="picker">
       <p v-if="listError" class="error">{{ listError }}</p>
+      <ul v-if="missingEntry && depsStore.state" class="settings-rows dep-place">
+        <DepRow :dep="missingEntry" :state="depsStore.state" />
+      </ul>
       <p v-else-if="devices.length === 0" class="hint">
         No Android device found. Connect a phone over USB with USB debugging on.
       </p>
@@ -334,6 +352,9 @@ onBeforeUnmount(teardown)
       </div>
       <div v-if="phase === 'ended'" class="ended">
         <p class="error">{{ streamError }}</p>
+        <ul v-if="missingEntry && depsStore.state" class="settings-rows dep-place">
+          <DepRow :dep="missingEntry" :state="depsStore.state" />
+        </ul>
         <AppButton v-if="current" variant="primary" @click="start(current)">Reconnect</AppButton>
       </div>
     </div>
@@ -341,6 +362,11 @@ onBeforeUnmount(teardown)
 </template>
 
 <style scoped>
+.dep-place {
+  width: 100%;
+  max-width: 32rem;
+}
+
 .device-view {
   display: flex;
   flex-direction: column;

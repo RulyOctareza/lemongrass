@@ -9,6 +9,15 @@ export const READ_TIMEOUT_MS = 15_000
 export const WRITE_TIMEOUT_MS = 120_000
 export const MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 
+// The git the dependency check resolved, set by deps.ts after each check. Plain git, found on PATH,
+// stands in until the first check returns. Kept here rather than imported from deps.ts so this file
+// stays loadable by node --test.
+let gitPath = 'git'
+
+export function setGitPath(path: string): void {
+  gitPath = path || 'git'
+}
+
 export interface RunResult {
   code: number | null
   stdout: string
@@ -26,7 +35,7 @@ export interface RunOptions {
 export function run(cwd: string, args: string[], options: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolvePromise) => {
     const child = execFile(
-      'git',
+      gitPath,
       args,
       {
         cwd,

@@ -48,6 +48,8 @@ func main() {
 		cmdStatusLineChain(os.Args[2:])
 	case "usage":
 		cmdUsage(os.Args[2:])
+	case "deps":
+		cmdDeps(os.Args[2:])
 	case "hook":
 		hook.Run(os.Args[2:], os.Getenv(tabIDEnv))
 	default:
@@ -92,6 +94,8 @@ COMMANDS
                                      Codex as JSON
   usage context                     Prints each Claude tab's context window use by tab id, and the directory
                                      the records live in, as JSON
+  deps check --json [--fresh]       Checks the tools lemongrass needs from the OS and prints each one's path,
+                                     version, origin and install offer as JSON; --fresh ignores the cache
 
   version                           Print version
 `)

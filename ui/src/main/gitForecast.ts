@@ -14,7 +14,9 @@ function errorText(result: RunResult): string {
   return result.stderr.trim() || result.stdout.trim() || 'git failed without a message.'
 }
 
-type MergeStep = Exclude<GitForecast, { status: 'clean' }> | { status: 'clean'; tree: string }
+type MergeStep =
+  | Exclude<GitForecast, { status: 'clean' } | { status: 'needsDependency' }>
+  | { status: 'clean'; tree: string }
 
 // With -z, --name-only and --no-messages the output is the tree id, then each conflicted path once,
 // all NUL terminated. Exit 1 means conflicts, anything above it an error.

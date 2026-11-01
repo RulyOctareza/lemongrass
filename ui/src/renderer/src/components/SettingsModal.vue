@@ -15,6 +15,7 @@ import AppButton from './AppButton.vue'
 import AppConfirmButton from './AppConfirmButton.vue'
 import PolicySection from './safety/PolicySection.vue'
 import UpdatesSection from './updates/UpdatesSection.vue'
+import DepsSection from './deps/DepsSection.vue'
 import CreditsSection from './credits/CreditsSection.vue'
 import GeneralSection from './general/GeneralSection.vue'
 import UsageMeters from './UsageMeters.vue'
@@ -31,7 +32,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-type Section = 'general' | 'claude' | 'codex' | 'safety' | 'updates' | 'credits'
+type Section = 'general' | 'claude' | 'codex' | 'safety' | 'updates' | 'dependencies' | 'credits'
 
 const section = ref<Section>('general')
 
@@ -139,6 +140,14 @@ async function onRemove(name: string): Promise<void> {
         <button
           type="button"
           class="settings-nav-item"
+          :class="{ selected: section === 'dependencies' }"
+          @click="section = 'dependencies'"
+        >
+          Dependencies
+        </button>
+        <button
+          type="button"
+          class="settings-nav-item"
           :class="{ selected: section === 'credits' }"
           @click="section = 'credits'"
         >
@@ -159,6 +168,11 @@ async function onRemove(name: string): Promise<void> {
       <section v-else-if="section === 'updates'" class="settings-section">
         <h4 class="settings-title">Updates</h4>
         <UpdatesSection />
+      </section>
+
+      <section v-else-if="section === 'dependencies'" class="settings-section">
+        <h4 class="settings-title">Dependencies</h4>
+        <DepsSection />
       </section>
 
       <section v-else-if="section === 'credits'" class="settings-section">
