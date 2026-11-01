@@ -18,6 +18,8 @@ type shellCall struct {
 	Path    string
 	Dynamic bool
 	Args    []string
+	// ArgDynamic marks each argument holding a parameter expansion or substitution, parallel to Args; nil when the arguments came from text the parser did not see as words.
+	ArgDynamic []bool
 	// Indirect marks a call whose arguments or working directory come from xargs, find -exec or env --chdir at run time.
 	Indirect bool
 }
@@ -31,6 +33,19 @@ type shellScript struct {
 	Calls     []shellCall
 	Redirects []shellRedirect
 	Pipelines [][]string
+	Programs  []shellProgram
+	// Depth counts the script files this script was read through, bounding a script that runs itself.
+	Depth int
+}
+
+// shellProgram is code the command hands to an interpreter: inline, from stdin, or a script file read when the command is judged.
+type shellProgram struct {
+	// Lang is python, node, php, perl, ruby, deno or sh, or "" for a path-named command whose shebang decides.
+	Lang string
+	Code string
+	File string
+	// At is how many calls precede the program, so the literal cd calls before it give its working directory.
+	At int
 }
 
 type shellWrapper struct {
@@ -92,6 +107,7 @@ func (s *shellScript) add(command string, depth int) error {
 		case *syntax.BinaryCmd:
 			if n.Op == syntax.Pipe || n.Op == syntax.PipeAll {
 				s.Pipelines = append(s.Pipelines, pipelineNames(n))
+				walkErr = s.addPipe(n, depth)
 			}
 		case *syntax.Stmt:
 			walkErr = s.addRedirects(n, depth)
@@ -107,23 +123,26 @@ func (s *shellScript) addCallExpr(call *syntax.CallExpr, depth int) error {
 	}
 	name, dynamic := wordText(call.Args[0])
 	args := make([]string, 0, len(call.Args)-1)
+	argDynamic := make([]bool, 0, len(call.Args)-1)
 	for _, word := range call.Args[1:] {
-		text, _ := wordText(word)
+		text, wordDynamic := wordText(word)
 		args = append(args, text)
+		argDynamic = append(argDynamic, wordDynamic)
 	}
-	return s.addCall(name, dynamic, args, false, depth)
+	return s.addCall(name, dynamic, args, argDynamic, false, depth)
 }
 
-func (s *shellScript) addCall(name string, dynamic bool, args []string, indirect bool, depth int) error {
+func (s *shellScript) addCall(name string, dynamic bool, args []string, argDynamic []bool, indirect bool, depth int) error {
 	base := filepath.Base(name)
-	s.Calls = append(s.Calls, shellCall{Name: base, Path: name, Dynamic: dynamic, Args: args, Indirect: indirect})
+	s.Calls = append(s.Calls, shellCall{Name: base, Path: name, Dynamic: dynamic, Args: args, ArgDynamic: argDynamic, Indirect: indirect})
 	if dynamic {
 		return nil
 	}
 	if wrapper, ok := shellWrappers[base]; ok {
 		if inner := unwrapArgs(wrapper, args); len(inner) > 0 {
 			innerIndirect := indirect || base == "xargs" || (base == "env" && changesDirectory(args))
-			return s.addCall(inner[0], false, inner[1:], innerIndirect, depth+1)
+			offset := len(args) - len(inner)
+			return s.addCall(inner[0], false, inner[1:], sliceFlags(argDynamic, offset+1, len(args)), innerIndirect, depth+1)
 		}
 		return nil
 	}
@@ -131,6 +150,14 @@ func (s *shellScript) addCall(name string, dynamic bool, args []string, indirect
 		if script, ok := commandStringArg(args); ok {
 			return s.add(script, depth+1)
 		}
+		if file := shellScriptFile(args); file != "" {
+			s.addProgram("sh", "", file, depth)
+		}
+		return nil
+	}
+	if lang := interpreterLanguage(base); lang != "" {
+		run := parseInterpreterArgs(lang, args)
+		s.addProgram(lang, run.Code, run.File, depth)
 		return nil
 	}
 	switch base {
@@ -138,8 +165,30 @@ func (s *shellScript) addCall(name string, dynamic bool, args []string, indirect
 		return s.add(strings.Join(args, " "), depth+1)
 	case "find":
 		return s.addFindExec(args, depth)
+	case "source", ".":
+		if len(args) > 0 {
+			s.addProgram("sh", "", args[0], depth)
+		}
+		return nil
+	}
+	if strings.Contains(name, "/") {
+		s.addProgram("", "", name, depth)
 	}
 	return nil
+}
+
+func (s *shellScript) addProgram(lang, code, file string, depth int) {
+	if code == "" && file == "" {
+		return
+	}
+	s.Programs = append(s.Programs, shellProgram{Lang: lang, Code: code, File: file, At: len(s.Calls)})
+	if code == "" || lang == "sh" {
+		return
+	}
+	for _, command := range subprocessCommands(lang, code) {
+		// A command found by text matching may not be valid shell; it is judged when it parses and skipped when it does not.
+		_ = s.add(command, depth+1)
+	}
 }
 
 func (s *shellScript) addFindExec(args []string, depth int) error {
@@ -151,7 +200,7 @@ func (s *shellScript) addFindExec(args []string, depth int) error {
 				end++
 			}
 			if end > i+1 {
-				if err := s.addCall(args[i+1], false, args[i+2:end], true, depth+1); err != nil {
+				if err := s.addCall(args[i+1], false, args[i+2:end], nil, true, depth+1); err != nil {
 					return err
 				}
 			}
@@ -162,26 +211,21 @@ func (s *shellScript) addFindExec(args []string, depth int) error {
 }
 
 func (s *shellScript) addRedirects(stmt *syntax.Stmt, depth int) error {
-	interpreter := false
-	if call, ok := stmt.Cmd.(*syntax.CallExpr); ok && len(call.Args) > 0 {
-		name, dynamic := wordText(call.Args[0])
-		interpreter = !dynamic && shellInterpreters[filepath.Base(name)]
-	}
+	base, args, _ := stmtCommand(stmt)
+	interpreter := shellInterpreters[base]
+	lang := stdinLanguage(base, args)
 	for _, redirect := range stmt.Redirs {
 		switch redirect.Op {
-		case syntax.Hdoc, syntax.DashHdoc:
-			if interpreter && redirect.Hdoc != nil {
-				text, _ := wordText(redirect.Hdoc)
+		case syntax.Hdoc, syntax.DashHdoc, syntax.WordHdoc:
+			text, ok := heredocText(redirect)
+			switch {
+			case !ok:
+			case interpreter:
 				if err := s.add(text, depth+1); err != nil {
 					return err
 				}
-			}
-		case syntax.WordHdoc:
-			if interpreter && redirect.Word != nil {
-				text, _ := wordText(redirect.Word)
-				if err := s.add(text, depth+1); err != nil {
-					return err
-				}
+			case lang != "":
+				s.addProgram(lang, text, "", depth)
 			}
 		default:
 			if redirect.Word == nil {
@@ -189,9 +233,24 @@ func (s *shellScript) addRedirects(stmt *syntax.Stmt, depth int) error {
 			}
 			text, _ := wordText(redirect.Word)
 			s.Redirects = append(s.Redirects, shellRedirect{Path: text, Write: redirectWrites(redirect.Op)})
+			if redirect.Op == syntax.RdrIn && lang != "" {
+				s.addProgram(lang, "", text, depth)
+			}
 		}
 	}
 	return nil
+}
+
+func heredocText(redirect *syntax.Redirect) (string, bool) {
+	word := redirect.Hdoc
+	if redirect.Op == syntax.WordHdoc {
+		word = redirect.Word
+	}
+	if word == nil {
+		return "", false
+	}
+	text, _ := wordText(word)
+	return text, true
 }
 
 func redirectWrites(op syntax.RedirOperator) bool {
@@ -280,6 +339,17 @@ func commandStringArg(args []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func dynamicAt(flags []bool, i int) bool {
+	return i >= 0 && i < len(flags) && flags[i]
+}
+
+func sliceFlags(flags []bool, from, to int) []bool {
+	if flags == nil || from > to || to > len(flags) {
+		return nil
+	}
+	return flags[from:to]
 }
 
 func wordText(word *syntax.Word) (string, bool) {
