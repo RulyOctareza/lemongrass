@@ -218,6 +218,19 @@ export function isTabOpen(projectId: string, tabId: string): boolean {
   return workspaces[projectId] ? tabsOf(projectId).some((tab) => tab.id === tabId) : false
 }
 
+// The open shell tab with this id in any loaded project, for asks and events that name a tab only by its id.
+export function shellTabById(tabId: string): { project: ProjectRef; tab: ShellTab } | null {
+  for (const [projectId, workspace] of Object.entries(workspaces)) {
+    const project = projectRefs.get(projectId)
+    if (!project) continue
+    for (const leaf of tree.allLeaves(workspace.layout.root)) {
+      const tab = leaf.tabs.find((t) => t.id === tabId)
+      if (tab?.kind === 'shell') return { project, tab }
+    }
+  }
+  return null
+}
+
 export function focusTab(project: ProjectRef, tabId: string): void {
   const root = workspaces[project.id]?.layout.root ?? null
   const leaf = tree.findLeafByTab(root, tabId)

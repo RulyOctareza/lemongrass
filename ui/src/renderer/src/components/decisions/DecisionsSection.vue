@@ -8,7 +8,8 @@ import { onMounted, ref, watch } from 'vue'
 import type { Ask } from '../../../../preload/types'
 import { askState, openAsk } from '../../asks'
 import { describeError, vaultSession } from '../../vaultSession'
-import { askStateLabel, askSummary, askTypeLabel } from './askLabels'
+import { askStateLabel, askSummary } from './askLabels'
+import { askSentence, loadAskProjects } from './askOrigin'
 
 const props = defineProps<{
   visible: boolean
@@ -31,10 +32,6 @@ async function refresh(): Promise<void> {
   }
 }
 
-function folder(path: string): string {
-  return path.split('/').filter(Boolean).pop() ?? path
-}
-
 function age(iso: string): string {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
   if (!Number.isFinite(minutes) || minutes < 1) return 'just now'
@@ -42,7 +39,10 @@ function age(iso: string): string {
   return `${Math.floor(minutes / 60)} h ago`
 }
 
-onMounted(refresh)
+onMounted(() => {
+  loadAskProjects()
+  void refresh()
+})
 
 watch(
   () => [props.visible, askState.version] as const,
@@ -56,7 +56,7 @@ watch(
   <div class="section">
     <div class="section-toolbar">
       <p class="hint">
-        Requests from agents that only you can answer. Each one opens with what was asked and why.
+        Requests from agents that only you can answer. Open one to see what the agent wants and why.
       </p>
     </div>
 
@@ -73,9 +73,9 @@ watch(
         @click="openAsk(ask.id)"
       >
         <span class="channel-info">
-          <span class="channel-name">{{ askTypeLabel(ask.type) }}</span>
-          <span class="decision-summary">{{ askSummary(ask) }}</span>
-          <span class="channel-db">{{ folder(ask.cwd) }}, {{ age(ask.created_at) }}</span>
+          <span class="channel-name">{{ askSentence(ask) }}</span>
+          <span v-if="ask.type !== 'db'" class="decision-summary">{{ askSummary(ask) }}</span>
+          <span class="channel-db">Asked {{ age(ask.created_at) }}</span>
         </span>
         <span
           class="status-capsule"

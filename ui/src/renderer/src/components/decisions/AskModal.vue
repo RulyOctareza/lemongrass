@@ -18,6 +18,7 @@ import DbChannelForm from '../connector/DbChannelForm.vue'
 import HttpChannelForm from '../connector/HttpChannelForm.vue'
 import AskCommandCard from './AskCommandCard.vue'
 import { askStateLabel, askTypeLabel } from './askLabels'
+import { askOrigin, askSentence, capitalize, loadAskProjects } from './askOrigin'
 
 const ask = ref<Ask | null>(null)
 const loadError = ref('')
@@ -26,6 +27,9 @@ const resters = ref<string[]>([])
 let loadSeq = 0
 
 const title = computed(() => (ask.value ? askTypeLabel(ask.value.type) : 'Decision'))
+const who = computed(() => (ask.value ? askOrigin(ask.value).who : 'the agent'))
+
+loadAskProjects()
 
 async function load(quiet: boolean): Promise<void> {
   const id = askState.openId
@@ -129,19 +133,27 @@ function askedAt(iso: string): string {
   })
 }
 
+const metaLine = computed(() => {
+  const a = ask.value
+  if (!a) return ''
+  const asked = `Asked ${askedAt(a.created_at)}.`
+  return a.state === 'waiting' ? asked : `${asked} ${askStateLabel(a.state)}.`
+})
+
 const outcome = computed(() => {
   const a = ask.value
   if (!a || a.type === 'command') return ''
+  const agent = capitalize(who.value)
   if (a.state === 'answered')
-    return a.short_id ? `Answered with channel ${a.short_id}.` : 'Answered.'
-  if (a.state === 'declined') return 'Declined.'
-  if (a.state === 'expired') return 'This request expired before it was answered.'
+    return a.short_id ? `${agent} has channel ${a.short_id}.` : `${agent} has the channel.`
+  if (a.state === 'declined') return `${agent} has your decline and its note.`
+  if (a.state === 'expired') return `The ask from ${who.value} expired with no answer.`
   return ''
 })
 </script>
 
 <template>
-  <AppModal v-if="askState.openId" scope="app" size="lg" :title="title" @close="closeAsk">
+  <AppModal v-if="askState.openId" scope="app" size="md" :title="title" @close="closeAsk">
     <div
       class="vault-tab ask-body"
       @click.capture="noteVaultActivity"
@@ -154,42 +166,21 @@ const outcome = computed(() => {
         <p v-else-if="!ask" class="empty">Loading...</p>
 
         <template v-else>
-          <dl class="ask-facts">
-            <div class="ask-fact">
-              <dt>Status</dt>
-              <dd>{{ askStateLabel(ask.state) }}</dd>
-            </div>
-            <div class="ask-fact">
-              <dt>Asked</dt>
-              <dd>{{ askedAt(ask.created_at) }}</dd>
-            </div>
-            <div class="ask-fact">
-              <dt>Tab</dt>
-              <dd class="mono">{{ ask.tab_id.slice(0, 8) }}</dd>
-            </div>
-            <div class="ask-fact ask-fact--wide">
-              <dt>Folder</dt>
-              <dd class="mono" :title="ask.cwd">{{ ask.cwd }}</dd>
-            </div>
-          </dl>
+          <div class="ask-head">
+            <p class="ask-lead">{{ askSentence(ask) }}</p>
+            <p class="ask-meta" :title="ask.cwd">{{ metaLine }}</p>
+          </div>
 
           <AskCommandCard
             v-if="ask.type === 'command'"
             :key="ask.id"
             :ask="ask"
+            :who="who"
             @changed="onCommandChanged"
             @done="closeAsk"
           />
 
           <template v-else>
-            <div v-if="ask.type === 'db'" class="field-block">
-              <span class="field-label">Tables asked for</span>
-              <div class="capsule-row">
-                <span v-for="table in ask.tables ?? []" :key="table" class="value-capsule">
-                  {{ table }}
-                </span>
-              </div>
-            </div>
             <div v-if="ask.type === 'rester'" class="field-block">
               <span class="field-label">Message</span>
               <pre class="untrusted">{{ ask.message }}</pre>
@@ -204,8 +195,8 @@ const outcome = computed(() => {
             <template v-else-if="ask.state === 'waiting'">
               <div v-show="!declineStep" class="channel-step">
                 <p class="hint">
-                  You set the permissions and how long the channel stays open. Creating it answers
-                  the agent with the channel.
+                  You set the permissions and how long the channel stays open. Creating the channel
+                  sends its short id to {{ who }}.
                 </p>
                 <template v-if="ask.type === 'db'">
                   <p v-if="connections.length === 0" class="hint">
@@ -214,7 +205,7 @@ const outcome = computed(() => {
                   <DbChannelForm
                     v-else
                     :key="ask.id"
-                    title="Channel for this request"
+                    title="New database channel"
                     :connections="connections"
                     :requested-tables="ask.tables ?? []"
                     :ask-id="ask.id"
@@ -227,7 +218,7 @@ const outcome = computed(() => {
                   <HttpChannelForm
                     v-else
                     :key="ask.id"
-                    title="Channel for this request"
+                    title="New rester channel"
                     :resters="resters"
                     :ask-id="ask.id"
                     @created="onHttpCreated"
@@ -236,12 +227,12 @@ const outcome = computed(() => {
                 </template>
 
                 <div class="create-actions decline-block">
-                  <AppButton @click="startDecline">Decline this request</AppButton>
+                  <AppButton @click="startDecline">Decline</AppButton>
                 </div>
               </div>
 
               <div v-if="declineStep" class="field-block">
-                <label class="field-label" for="ask-channel-note">Note for the agent</label>
+                <label class="field-label" for="ask-channel-note">Note for {{ who }}</label>
                 <AppTextarea
                   id="ask-channel-note"
                   ref="noteInput"
@@ -293,36 +284,29 @@ const outcome = computed(() => {
   overflow-wrap: anywhere;
 }
 
-.vault-tab .untrusted.mono,
-.vault-tab .ask-facts .mono {
+.vault-tab .untrusted.mono {
   font-family: var(--font-mono);
 }
 </style>
 
 <style scoped>
-.ask-facts {
-  display: grid;
-  grid-template-columns: repeat(3, auto) 1fr;
-  gap: var(--space-4);
+.ask-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ask-lead {
   margin: 0;
+  color: var(--color-fg-primary);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
 }
 
-.ask-fact {
-  min-width: 0;
-}
-
-.ask-fact dt {
+.ask-meta {
+  margin: 0;
   color: var(--color-fg-secondary);
   font-size: var(--text-xs);
-}
-
-.ask-fact dd {
-  margin: 0;
-  overflow: hidden;
-  color: var(--color-fg-primary);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .channel-step {

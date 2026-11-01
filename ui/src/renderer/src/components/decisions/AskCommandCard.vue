@@ -11,9 +11,12 @@ import AppButton from '../AppButton.vue'
 import AppConfirmButton from '../AppConfirmButton.vue'
 import AppSegmented from '../AppSegmented.vue'
 import AppTextarea from '../AppTextarea.vue'
+import { capitalize } from './askOrigin'
 
 const props = defineProps<{
   ask: Ask
+  // Who asked, such as "Claude in Fix login".
+  who: string
 }>()
 
 const emit = defineEmits<{
@@ -58,12 +61,16 @@ function clock(iso: string | undefined): string {
   return at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-const verdictText = computed(() => {
+const guardText = computed(() => {
   const verdict = props.ask.verdict
-  if (!verdict) return 'No guard rule matches this command.'
-  const mode = verdict.mode === 'deny' ? 'deny' : 'ask'
-  const what = verdict.description ? ` (${verdict.description})` : ''
-  return `Matches the guard rule ${verdict.rule}${what}, set to ${mode}.`
+  if (!verdict)
+    return `No guard rule matches the command. ${capitalize(props.who)} asked on its own.`
+  const what = verdict.description || `guarded by ${verdict.rule}`
+  const rule =
+    verdict.mode === 'deny'
+      ? `The command is ${what}, which the guard denies to agents (rule ${verdict.rule}).`
+      : `The command is ${what}, which the guard leaves to you (rule ${verdict.rule}).`
+  return props.ask.rule ? `${rule} The guard refused it and sent it to you.` : rule
 })
 
 const resultText = computed(() => {
@@ -116,17 +123,16 @@ async function decline(): Promise<void> {
       <pre class="untrusted">{{ ask.reason }}</pre>
     </div>
     <p class="hint">
-      {{ verdictText }}
-      <template v-if="ask.rule">The guard filed this request when it refused the call.</template>
+      {{ guardText }}
     </p>
 
     <template v-if="waiting">
       <template v-if="!declining">
         <p v-if="ask.never_execute" class="error-text">
-          Lemongrass never runs this command. {{ ask.never_execute_reason }}
+          Lemongrass never runs the command. {{ ask.never_execute_reason }}
         </p>
         <div v-else class="field-block">
-          <span id="ask-timeout-label" class="field-label">Stop it after</span>
+          <span id="ask-timeout-label" class="field-label">Stop the command after</span>
           <AppSegmented
             v-model="timeoutSeconds"
             aria-labelledby="ask-timeout-label"
@@ -150,7 +156,7 @@ async function decline(): Promise<void> {
 
       <template v-else>
         <div class="field-block">
-          <label class="field-label" for="ask-decline-note">Note for the agent</label>
+          <label class="field-label" for="ask-decline-note">Note for {{ who }}</label>
           <AppTextarea
             id="ask-decline-note"
             ref="noteInput"
@@ -179,7 +185,7 @@ async function decline(): Promise<void> {
     </template>
 
     <template v-else-if="result">
-      <p class="hint">{{ resultText }} The agent has the result.</p>
+      <p class="hint">{{ resultText }} {{ capitalize(who) }} has the result.</p>
       <div class="field-block">
         <span class="field-label">Last lines of output</span>
         <pre class="untrusted mono">{{ result.output_tail || 'No output.' }}</pre>
