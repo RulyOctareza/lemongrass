@@ -17,7 +17,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  changed: [ask?: Ask]
+  changed: []
   done: []
 }>()
 
@@ -48,7 +48,8 @@ const verdictText = computed(() => {
   const verdict = props.ask.verdict
   if (!verdict) return 'No guard rule matches this command.'
   const mode = verdict.mode === 'deny' ? 'deny' : 'ask'
-  return `Matches the guard rule ${verdict.rule}, set to ${mode}.`
+  const what = verdict.description ? ` (${verdict.description})` : ''
+  return `Matches the guard rule ${verdict.rule}${what}, set to ${mode}.`
 })
 
 const resultText = computed(() => {
@@ -59,13 +60,14 @@ const resultText = computed(() => {
   return `Exited with code ${r.exit_code} at ${clock(r.ended_at)}.`
 })
 
-async function run(action: () => Promise<Ask | void>): Promise<void> {
+// The parent refetches after each action, so the card only ever shows the daemon's own record.
+async function run(action: () => Promise<unknown>): Promise<void> {
   if (busy.value) return
   busy.value = true
   error.value = ''
   try {
-    const next = await action()
-    emit('changed', next ?? undefined)
+    await action()
+    emit('changed')
   } catch (err) {
     error.value = describeError(err)
   } finally {

@@ -62,9 +62,8 @@ watch(
   () => void load(true)
 )
 
-function onCommandChanged(next?: Ask): void {
-  if (next) ask.value = next
-  else void load(true)
+function onCommandChanged(): void {
+  void load(true)
 }
 
 function onDbCreated(result: { channel: { ID: string }; shortId: string }): void {

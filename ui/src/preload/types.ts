@@ -1096,6 +1096,7 @@ export type AskState = 'waiting' | 'running' | 'answered' | 'declined' | 'expire
 
 export interface AskVerdict {
   rule: string
+  description?: string
   mode: 'ask' | 'deny'
 }
 
@@ -1105,6 +1106,7 @@ export interface AskResult {
   timed_out: boolean
   stopped: boolean
   started_at: string
+  // A zero time while the command still runs.
   ended_at?: string
 }
 
