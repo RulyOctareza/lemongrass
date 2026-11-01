@@ -3,6 +3,7 @@
 
 import { app, BrowserWindow, Notification } from 'electron'
 import { basename } from 'path'
+import { recordNotice } from './notifications'
 
 // Electron drops a notification's click listener once the object is garbage collected, which on Linux can happen before the click.
 const live = new Set<Notification>()
@@ -27,6 +28,7 @@ function reveal(window: BrowserWindow, notice: AppNotice): void {
 
 // Where notifications are not supported, a taskbar flash stands in and the sidebar badges carry the rest.
 export function notify(window: BrowserWindow, notice: AppNotice): void {
+  recordNotice(notice)
   if (window.isDestroyed()) return
   if (!Notification.isSupported()) {
     window.flashFrame(true)

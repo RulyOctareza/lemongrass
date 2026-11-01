@@ -17,6 +17,7 @@ import VaultUnlockGate from '../VaultUnlockGate.vue'
 import DbChannelForm from '../connector/DbChannelForm.vue'
 import HttpChannelForm from '../connector/HttpChannelForm.vue'
 import AskCommandCard from './AskCommandCard.vue'
+import { noteAskAnswered } from '../../notifications'
 import { askStateLabel, askTypeLabel } from './askLabels'
 import { askOrigin, askSentence, capitalize, loadAskProjects } from './askOrigin'
 
@@ -72,11 +73,13 @@ function onCommandChanged(): void {
 
 function onDbCreated(result: { channel: { ID: string }; shortId: string }): void {
   vaultSession.shortIdByChannel[result.channel.ID] = result.shortId
+  if (ask.value) noteAskAnswered(ask.value, 'granted')
   closeAsk()
 }
 
 function onHttpCreated(result: { channel: { ID: string }; shortId: string }): void {
   vaultSession.shortIdByHTTPChannel[result.channel.ID] = result.shortId
+  if (ask.value) noteAskAnswered(ask.value, 'granted')
   closeAsk()
 }
 
@@ -114,6 +117,7 @@ async function declineChannel(): Promise<void> {
   declineError.value = ''
   try {
     await window.api.ask.decline(vaultSession.passphrase, ask.value.id, note.value.trim())
+    noteAskAnswered(ask.value, 'declined')
     closeAsk()
   } catch (err) {
     declineError.value = describeError(err)

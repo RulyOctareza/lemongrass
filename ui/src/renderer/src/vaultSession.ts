@@ -60,5 +60,8 @@ export function unlockVaultSession(passphrase: string): void {
 export function noteVaultActivity(): void {
   if (!vaultSession.unlocked) return
   clearIdleTimer()
-  idleTimer = setTimeout(lockVaultSession, AUTO_LOCK_MS)
+  idleTimer = setTimeout(() => {
+    lockVaultSession()
+    void window.api.notifications.add({ event: 'vault-locked', key: 'vault-locked' })
+  }, AUTO_LOCK_MS)
 }

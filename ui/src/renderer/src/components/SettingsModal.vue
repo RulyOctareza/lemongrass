@@ -26,6 +26,8 @@ import type { Project, StatusLineChainState } from '../../../preload/types'
 const props = defineProps<{
   projects: Project[]
   activeProjectId: string | null
+  // The section shown on open, such as Updates when the notification center opens Settings.
+  initialSection?: 'updates' | 'dependencies'
 }>()
 
 const emit = defineEmits<{
@@ -34,7 +36,7 @@ const emit = defineEmits<{
 
 type Section = 'general' | 'claude' | 'codex' | 'safety' | 'updates' | 'dependencies' | 'credits'
 
-const section = ref<Section>('general')
+const section = ref<Section>(props.initialSection ?? 'general')
 
 // lgrassconf applies the switch a moment after lgrassd writes it, so the saved commands are read again after that.
 const KEEPER_SETTLE_MS = 1500

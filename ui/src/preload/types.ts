@@ -1138,3 +1138,46 @@ export interface AskCount {
   blocking: number
   newestId: string
 }
+
+// A notification center item. Main stores structured fields only; the renderer composes the
+// sentence, naming the tab by its live title. Tab titles and group names are model-written, so
+// they are shown inside the app as text and never reach an OS popup.
+export type NoticeKind = 'history' | 'agent' | 'app'
+export type NoticeEvent =
+  | 'approval-answered'
+  | 'ask-answered'
+  | 'turn-ended'
+  | 'tab-prompting'
+  | 'conflict-submitted'
+  | 'update-available'
+  | 'dep-problem'
+  | 'vault-locked'
+  | 'git-failed'
+  | 'popup'
+
+export interface NoticeInput {
+  event: NoticeEvent
+  // Items with the same key are one item: a repeat moves it to the top and marks it unread.
+  key?: string
+  projectPath?: string
+  tabId?: string
+  // The tab's title when the event happened, shown once the tab is closed.
+  tabTitle?: string
+  // A group name, dependency name, version, git error line, or a popup's title.
+  subject?: string
+  // An ask type, a git operation, a turn length in minutes, or a popup's body.
+  detail?: string
+  // approved, declined, withdrawn for approvals; ran, declined, granted for asks.
+  outcome?: string
+  // Lands already read, such as an event about the tab the human is looking at.
+  read?: boolean
+  // With a key: recorded only when no item has that key yet, instead of moving it to the top.
+  once?: boolean
+}
+
+export interface Notice extends NoticeInput {
+  id: string
+  kind: NoticeKind
+  createdAt: number
+  read: boolean
+}

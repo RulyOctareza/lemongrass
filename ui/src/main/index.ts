@@ -17,6 +17,7 @@ import { registerTabSessionHandlers } from './tabSessions'
 import { registerAccountHandlers } from './accounts'
 import { registerUsageHandlers } from './usage'
 import { registerUpdateHandlers } from './updater'
+import { registerNotificationHandlers } from './notifications'
 import { registerDepsHandlers } from './deps'
 import { registerCreditsHandlers } from './credits'
 import { registerProjectHandlers } from './projects'
@@ -123,6 +124,7 @@ app.whenReady().then(async () => {
     void ensureDaemonsRunning(lgrassdPath)
   }
 
+  registerNotificationHandlers(() => mainWindow)
   registerPtyHandlers(() => mainWindow?.webContents)
   registerAccountHandlers(lgrassdPath)
   registerUsageHandlers(lgrassdPath, () => mainWindow?.webContents)

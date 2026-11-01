@@ -19,6 +19,7 @@ import ProjectSelector from './components/ProjectSelector.vue'
 import { loadAccounts } from './accounts'
 import { startContextFeed, startUsagePolling } from './usage'
 import { startDepsFeed } from './deps'
+import { registerCenterHost, type SettingsSection } from './notifications'
 import { restoreZoom, setZoom, stepZoom } from './zoom'
 import {
   cancelShellPicker,
@@ -39,6 +40,7 @@ const loadedProjects = reactive<Record<string, boolean>>({})
 const sidebarCollapsed = ref(false)
 const closing = ref(false)
 const settingsOpen = ref(false)
+const settingsSection = ref<SettingsSection | undefined>()
 const guideOpen = ref(false)
 const trustPrompt = ref<Project | null>(null)
 const trustBusy = ref(false)
@@ -77,6 +79,15 @@ async function selectProject(id: string): Promise<void> {
   biblioByProject[id] = await window.api.biblio.tree(project.path)
   loadedProjects[id] = true
 }
+
+registerCenterHost({
+  activeProjectId: () => activeProjectId.value,
+  selectProject,
+  openSettings: (section) => {
+    settingsSection.value = section
+    settingsOpen.value = true
+  }
+})
 
 async function refreshBiblio(): Promise<void> {
   const id = activeProjectId.value
@@ -213,7 +224,8 @@ onBeforeUnmount(() => {
       v-if="settingsOpen"
       :projects="projects"
       :active-project-id="activeProjectId"
-      @close="settingsOpen = false"
+      :initial-section="settingsSection"
+      @close="((settingsOpen = false), (settingsSection = undefined))"
     />
     <GuideModal v-if="guideOpen" @close="guideOpen = false" />
     <WorkgroupApprovalModal />

@@ -7,6 +7,8 @@ import type {
   AccountAddResult,
   Ask,
   AskCount,
+  Notice,
+  NoticeInput,
   AccountInfo,
   AccountRemoveResult,
   ContextUsage,
@@ -555,6 +557,18 @@ const usage = {
   }
 }
 
+const notifications = {
+  list: (): Promise<Notice[]> => ipcRenderer.invoke('notifications:list'),
+  add: (input: NoticeInput): Promise<void> => ipcRenderer.invoke('notifications:add', input),
+  markRead: (ids?: string[]): Promise<void> => ipcRenderer.invoke('notifications:markRead', ids),
+  clear: (ids?: string[]): Promise<void> => ipcRenderer.invoke('notifications:clear', ids),
+  onChanged: (callback: (items: Notice[]) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, items: Notice[]): void => callback(items)
+    ipcRenderer.on('notifications:changed', listener)
+    return () => ipcRenderer.removeListener('notifications:changed', listener)
+  }
+}
+
 const update = {
   state: (): Promise<UpdateState> => ipcRenderer.invoke('update:state'),
   check: (): Promise<UpdateState> => ipcRenderer.invoke('update:check'),
@@ -629,6 +643,7 @@ const web = {
 
 const api = {
   ask,
+  notifications,
   pty,
   accounts,
   usage,

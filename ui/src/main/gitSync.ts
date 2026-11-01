@@ -16,6 +16,7 @@ import { applyResolution, pickSide, readConflict, saveWorking } from './gitConfl
 import { forecastMerge } from './gitForecast'
 import type { GitRunner } from './gitMove'
 import { endConflictThreadIfOver } from './conflictAgent'
+import { noteGitFailure } from './notifications'
 import type {
   GitActionResult,
   GitConflictChoice,
@@ -161,7 +162,9 @@ async function conflictPick(
 }
 
 export function registerGitSyncHandlers(): void {
-  ipcMain.handle('git:fetch', (_event, projectPath: string) => fetchAll(projectPath))
+  ipcMain.handle('git:fetch', async (_event, projectPath: string) =>
+    noteGitFailure(projectPath, 'fetch', await fetchAll(projectPath))
+  )
   ipcMain.handle('git:mergeCount', (_event, projectPath: string, source: string) =>
     mergeCount(projectPath, source)
   )

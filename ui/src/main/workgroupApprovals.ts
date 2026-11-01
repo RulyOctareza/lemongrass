@@ -7,6 +7,7 @@ import type { WorkgroupPending, WorkgroupPendingMember } from '../preload/types'
 import { cleanReason } from './workgroupReason'
 import { cleanThinkerAccounts } from './accountNames'
 import { notifyApprovalWaiting } from './appNotify'
+import { recordNotification } from './notifications'
 
 export interface ApprovalRequest {
   projectPath: string
@@ -88,6 +89,14 @@ export function requestApproval(
     const settle = (answer: ApprovalAnswer): void => {
       if (!entries.delete(requestId)) return
       signal.removeEventListener('abort', onAbort)
+      recordNotification({
+        event: 'approval-answered',
+        projectPath: request.projectPath,
+        tabId: request.leaderTabId,
+        subject: request.groupName,
+        detail: request.existingMembers ? 'add' : 'create',
+        outcome: answer.withdrawn ? 'withdrawn' : answer.approved ? 'approved' : 'declined'
+      })
       publish()
       resolve(answer)
     }

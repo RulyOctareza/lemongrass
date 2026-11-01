@@ -3,6 +3,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import NotificationBell from './NotificationBell.vue'
 
 // Aliased so the template can reach it -- a bare `window` identifier in
 // a Vue template resolves against the component instance, not globalThis.
@@ -61,6 +62,7 @@ onBeforeUnmount(() => unsubscribe?.())
       <slot name="actions" />
     </div>
     <div class="window-controls">
+      <NotificationBell />
       <button class="control" title="Guide" @click="emit('open-guide')">
         <svg
           width="15"

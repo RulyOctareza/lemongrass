@@ -22,6 +22,7 @@ import {
   type RunResult
 } from './gitRun'
 import type { GitActionResult, GitDiff, GitPushResult, GitStatus } from '../preload/types'
+import { noteGitFailure } from './notifications'
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 const PUSH_TIMEOUT_MS = 60_000
@@ -217,6 +218,8 @@ export function registerGitHandlers(lgrassdPath: string | null): void {
   ipcMain.handle('git:commit', (_event, projectPath: string, message: string, paths?: string[]) =>
     commit(projectPath, message, paths)
   )
-  ipcMain.handle('git:push', (_event, projectPath: string) => push(projectPath))
+  ipcMain.handle('git:push', async (_event, projectPath: string) =>
+    noteGitFailure(projectPath, 'push', await push(projectPath))
+  )
   ipcMain.handle('git:lastMessage', (_event, projectPath: string) => lastMessage(projectPath))
 }

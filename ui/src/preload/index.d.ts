@@ -6,6 +6,8 @@ import type {
   AccountAddResult,
   Ask,
   AskCount,
+  Notice,
+  NoticeInput,
   AccountInfo,
   AccountRemoveResult,
   ContextUsage,
@@ -138,6 +140,13 @@ interface Api {
     setStatusLine: (enabled: boolean) => Promise<StatusLineChainState | null>
     contexts: () => Promise<Record<string, ContextUsage> | null>
     onContexts: (callback: (tabs: Record<string, ContextUsage>) => void) => () => void
+  }
+  notifications: {
+    list: () => Promise<Notice[]>
+    add: (input: NoticeInput) => Promise<void>
+    markRead: (ids?: string[]) => Promise<void>
+    clear: (ids?: string[]) => Promise<void>
+    onChanged: (callback: (items: Notice[]) => void) => () => void
   }
   update: {
     state: () => Promise<UpdateState>

@@ -12,6 +12,7 @@ import AppConfirmButton from '../AppConfirmButton.vue'
 import AppSegmented from '../AppSegmented.vue'
 import AppTextarea from '../AppTextarea.vue'
 import { capitalize } from './askOrigin'
+import { noteAskAnswered } from '../../notifications'
 
 const props = defineProps<{
   ask: Ask
@@ -97,9 +98,10 @@ async function run(action: () => Promise<unknown>): Promise<void> {
 }
 
 function execute(): void {
-  void run(() =>
-    window.api.ask.execute(vaultSession.passphrase, props.ask.id, timeoutSeconds.value)
-  )
+  void run(async () => {
+    await window.api.ask.execute(vaultSession.passphrase, props.ask.id, timeoutSeconds.value)
+    noteAskAnswered(props.ask, 'ran')
+  })
 }
 
 function stop(): void {
@@ -107,7 +109,10 @@ function stop(): void {
 }
 
 async function decline(): Promise<void> {
-  await run(() => window.api.ask.decline(vaultSession.passphrase, props.ask.id, note.value.trim()))
+  await run(async () => {
+    await window.api.ask.decline(vaultSession.passphrase, props.ask.id, note.value.trim())
+    noteAskAnswered(props.ask, 'declined')
+  })
   if (!error.value) emit('done')
 }
 </script>
