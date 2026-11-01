@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 import type { WorkgroupPending, WorkgroupPendingMember } from '../preload/types'
 import { cleanReason } from './workgroupReason'
 import { cleanThinkerAccounts } from './accountNames'
-import { notifyApprovalWaiting } from './workgroupNotify'
+import { notifyApprovalWaiting } from './appNotify'
 
 export interface ApprovalRequest {
   projectPath: string

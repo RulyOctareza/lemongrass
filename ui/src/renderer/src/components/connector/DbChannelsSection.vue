@@ -2,11 +2,11 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
-import type { VaultChannel } from '../../../../preload/types'
+import type { VaultChannel, VaultChannelWithShortId } from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
-import AppMultiPicker from '../AppMultiPicker.vue'
+import DbChannelForm, { type DbChannelSeed } from './DbChannelForm.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -68,94 +68,29 @@ async function copyShortId(id: string): Promise<void> {
   }, 1500)
 }
 
-// Mirrors the operation strings dbgate.AllowStatement recognizes (dbgate/bouncer.go).
-const operationOptions = [
-  'select',
-  'explain',
-  'show',
-  'insert',
-  'update',
-  'delete',
-  'performance'
-] as const
-
 const showCreateForm = ref(false)
-const newChannelName = ref('')
-const newDbName = ref('')
-const newTables = ref<string[]>([])
-const newOperations = ref<string[]>([])
-const newTtlMinutes = ref(10)
-const creating = ref(false)
-const createError = ref('')
+const formKey = ref(0)
+const formSeed = ref<DbChannelSeed | undefined>(undefined)
 const copiedFrom = ref('')
 const rootEl = ref<HTMLElement | null>(null)
-// Tables carried over by Copy, applied when the connection watcher fires so it does not clear them.
-let copiedTables: string[] | null = null
-
-const availableTables = ref<string[]>([])
-const tablesLoading = ref(false)
-const tablesError = ref('')
-
-async function loadTablesFor(dbName: string): Promise<void> {
-  availableTables.value = []
-  tablesError.value = ''
-  if (!dbName || !vaultUnlocked.value) return
-  tablesLoading.value = true
-  try {
-    availableTables.value = await window.api.vault.listTables(sessionPassphrase.value, dbName)
-  } catch (err) {
-    tablesError.value = describeError(err)
-  } finally {
-    tablesLoading.value = false
-  }
-}
-
-watch(newDbName, (dbName) => {
-  newTables.value = copiedTables ?? []
-  copiedTables = null
-  loadTablesFor(dbName)
-})
-
-const tableGroups = computed(() => [
-  { items: availableTables.value.map((t) => ({ value: t, label: t })) }
-])
-
-const tablesSummaryLabel = computed(() => {
-  if (tablesLoading.value) return 'Loading tables...'
-  if (newTables.value.length === 0) return 'Select tables'
-  if (newTables.value.length === 1) return newTables.value[0]
-  return `${newTables.value.length} tables selected`
-})
-
-function removeSelectedTable(table: string): void {
-  newTables.value = newTables.value.filter((t) => t !== table)
-}
 
 function openCreateForm(): void {
   copiedFrom.value = ''
-  newChannelName.value = ''
-  newDbName.value = connections.value[0] ?? ''
-  newTables.value = []
-  newOperations.value = []
-  newTtlMinutes.value = 10
-  createError.value = ''
+  formSeed.value = undefined
+  formKey.value++
   showCreateForm.value = true
-  loadTablesFor(newDbName.value)
 }
 
 function openCopyForm(channel: VaultChannel): void {
-  const dbName = connections.value.includes(channel.DBName) ? channel.DBName : ''
-  const connectionChanged = dbName !== newDbName.value
   copiedFrom.value = channel.Name || 'channel'
-  newChannelName.value = `${copiedFrom.value} copy`
-  newTables.value = [...(channel.Scope.Tables ?? [])]
-  newOperations.value = [...(channel.Scope.Operations ?? [])]
-  newTtlMinutes.value = 10
-  createError.value = ''
-  copiedTables = connectionChanged ? [...newTables.value] : null
-  newDbName.value = dbName
+  formSeed.value = {
+    name: `${copiedFrom.value} copy`,
+    dbName: connections.value.includes(channel.DBName) ? channel.DBName : '',
+    tables: [...(channel.Scope.Tables ?? [])],
+    operations: [...(channel.Scope.Operations ?? [])]
+  }
+  formKey.value++
   showCreateForm.value = true
-  if (!connectionChanged) loadTablesFor(dbName)
   nextTick(() => rootEl.value?.closest('.vault-main')?.scrollTo({ top: 0, behavior: 'smooth' }))
 }
 
@@ -163,33 +98,10 @@ function cancelCreate(): void {
   showCreateForm.value = false
 }
 
-async function submitCreate(): Promise<void> {
-  if (
-    !newChannelName.value.trim() ||
-    !newDbName.value.trim() ||
-    !vaultUnlocked.value ||
-    creating.value
-  )
-    return
-  creating.value = true
-  createError.value = ''
-  try {
-    const { channel, shortId } = await window.api.vault.create(
-      sessionPassphrase.value,
-      newChannelName.value.trim(),
-      newDbName.value.trim(),
-      // IPC structured clone cannot clone a Vue reactive Proxy, so the arrays are spread first.
-      { Tables: [...newTables.value], Operations: [...newOperations.value] },
-      Math.round(newTtlMinutes.value * 60)
-    )
-    shortIdByChannel.value[channel.ID] = shortId
-    showCreateForm.value = false
-    await refresh()
-  } catch (err) {
-    createError.value = describeError(err)
-  } finally {
-    creating.value = false
-  }
+async function onCreated(result: VaultChannelWithShortId): Promise<void> {
+  shortIdByChannel.value[result.channel.ID] = result.shortId
+  showCreateForm.value = false
+  await refresh()
 }
 
 const activatingId = ref<string | null>(null)
@@ -278,102 +190,15 @@ onUnmounted(() => {
       </AppButton>
     </div>
 
-    <div v-if="showCreateForm" class="inline-section">
-      <h4 class="inline-section-title">
-        {{ copiedFrom ? `New channel from ${copiedFrom}` : 'New channel' }}
-      </h4>
-
-      <div class="form-columns">
-        <div class="form-column">
-          <div class="field-block">
-            <label class="field-label" for="new-channel-name">Name</label>
-            <input
-              id="new-channel-name"
-              v-model="newChannelName"
-              type="text"
-              placeholder="e.g. debug X"
-            />
-          </div>
-          <div class="field-block">
-            <label class="field-label" for="new-channel-db">Connection</label>
-            <select id="new-channel-db" v-model="newDbName">
-              <option v-for="name in connections" :key="name" :value="name">{{ name }}</option>
-            </select>
-          </div>
-          <div class="field-block">
-            <label class="field-label" for="new-channel-ttl">TTL</label>
-            <input
-              id="new-channel-ttl"
-              v-model.number="newTtlMinutes"
-              type="number"
-              min="1"
-              @keydown.enter="submitCreate"
-            />
-            <p class="hint">
-              Channel stays open for {{ newTtlMinutes }} minutes before it needs reactivating.
-            </p>
-          </div>
-        </div>
-        <div class="form-column">
-          <div class="field-block">
-            <label class="field-label">Tables</label>
-            <p v-if="!newDbName" class="hint">Choose a connection above first.</p>
-            <p v-else-if="tablesError" class="error-text">{{ tablesError }}</p>
-            <p v-else-if="!tablesLoading && availableTables.length === 0" class="hint">
-              No tables found in this database.
-            </p>
-            <AppMultiPicker
-              v-else
-              v-model="newTables"
-              :groups="tableGroups"
-              :summary="tablesSummaryLabel"
-              filter-placeholder="Filter tables..."
-              :disabled="tablesLoading"
-            >
-              <div v-if="newTables.length > 0" class="chip-row">
-                <span v-for="table in newTables" :key="table" class="chip">
-                  {{ table }}
-                  <button
-                    type="button"
-                    class="chip-remove"
-                    title="Remove"
-                    @click="removeSelectedTable(table)"
-                  >
-                    ×
-                  </button>
-                </span>
-              </div>
-            </AppMultiPicker>
-          </div>
-          <div class="field-block">
-            <label class="field-label">Operations</label>
-            <div class="checkbox-grid">
-              <label v-for="op in operationOptions" :key="op" class="checkbox-option">
-                <input v-model="newOperations" type="checkbox" :value="op" />
-                {{ op }}
-              </label>
-            </div>
-            <p v-if="newOperations.includes('performance')" class="hint">
-              Performance lets this channel read server-wide performance views (MySQL
-              performance_schema and sys, Postgres pg_stat views). They include activity from every
-              database on the server. Columns holding raw statement text are never returned.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <p v-if="createError" class="error-text">{{ createError }}</p>
-      <div class="create-actions">
-        <AppButton @click="cancelCreate">Cancel</AppButton>
-        <AppButton
-          variant="primary"
-          :disabled="!newChannelName.trim() || !newDbName.trim() || creating"
-          @click="submitCreate"
-        >
-          {{ creating ? 'Creating...' : 'Create' }}
-        </AppButton>
-      </div>
-    </div>
+    <DbChannelForm
+      v-if="showCreateForm"
+      :key="formKey"
+      :connections="connections"
+      :title="copiedFrom ? `New channel from ${copiedFrom}` : 'New channel'"
+      :seed="formSeed"
+      @created="onCreated"
+      @cancel="cancelCreate"
+    />
 
     <p v-if="listError" class="error-text">{{ listError }}</p>
     <p v-else-if="loading" class="empty">Loading...</p>
