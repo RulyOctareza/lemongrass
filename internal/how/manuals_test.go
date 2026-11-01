@@ -11,6 +11,7 @@ import (
 func TestManualsRender(t *testing.T) {
 	root := t.TempDir()
 	cases := map[string][]string{
+		"ask request":   {"lgrass ask <path>", "type: db", "type: rester", "type: command", "lgrass ask show <id>", "Do not ask again with a variation"},
 		"book write":    {"Split.", "never how it broke", "toc.md"},
 		"git resolve":   {"lgrass git conflict show", "lgrass git conflict note", "lgrass git conflict submit", "never stage"},
 		"laws write":    {"explicit yes", "biblio/laws/summary.md", "Never write a law to memory"},

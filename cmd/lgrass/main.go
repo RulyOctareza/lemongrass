@@ -109,7 +109,7 @@ COMMANDS
   biblio show <rev> <path>          Prints a file as it was at a change id from biblio log, using the path it had then
 
   ask <path-to-ask.yaml>            Asks the human for a db channel, a rester channel or a command run, from a YAML file
-                                     with type and its fields (see the lgrass-ask skill); waits up to 30 minutes and prints
+                                     with type and its fields (lgrass how ask request explains it); waits up to 30 minutes and prints
                                      the answer. Exit 0 answered, 2 declined or expired, 3 no answer yet
   ask show <ask-id>                 Prints an ask's answer once it arrives, after the wait ended or the hook filed it
 

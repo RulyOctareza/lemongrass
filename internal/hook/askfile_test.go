@@ -39,7 +39,7 @@ func TestAskModeRefusalFilesOneAsk(t *testing.T) {
 	}
 
 	msg := dangerMessageWith(client.SocketPath, payload, verdict)
-	if !strings.Contains(msg, "sent the user a request") || !strings.Contains(msg, "lgrass-ask") {
+	if !strings.Contains(msg, "sent the user a request") || !strings.Contains(msg, "lgrass how ask request") {
 		t.Fatalf("message = %q", msg)
 	}
 	asks, err := client.ListAsks("pw")

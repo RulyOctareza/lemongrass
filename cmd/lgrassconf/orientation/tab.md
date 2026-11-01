@@ -128,6 +128,7 @@ Procedures live in `lgrass how`, not in this text. `lgrass how <domain> <action>
 - The bibliothek convention at the end of this prompt explains `biblio`.
 - Before you start any work, run the `lgrass how work` action that fits it: `task <slug>` to build something, new or resumed, `research <slug>` to investigate with no build, `debug <slug>` to chase a fault, and `discussion` for an idea or a question with no task file yet.
 - Before you write a book chapter, run `lgrass how book write`.
+- When you need something only the human can give, a database or HTTP channel or a command the guard refused, run `lgrass how ask request`.
 - When a correction or a repeated mistake might be a standing rule, offer it to the human in chat: the rule in one sentence, then Why and How to apply. Only an explicit yes counts, and after a no you never offer it again. After the yes, run `lgrass how laws write`.
 - When a task is paused or handed to someone else, run `lgrass how task handover <slug>`.
 - When a task's work is done, run `lgrass how task close <slug>`. Moving a task into the archive is blocked until you have run it.

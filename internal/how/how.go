@@ -20,6 +20,9 @@ type action struct {
 }
 
 var domains = map[string]map[string]action{
+	"ask": {
+		"request": {summary: "Ask the human for a db or rester channel or a command run: `lgrass how ask request`", run: static("ask/request.md")},
+	},
 	"book": {
 		"write": {summary: "Decide where a chapter goes and how to write it: `lgrass how book write`", run: static("book/where.md", "book/rules.md")},
 	},

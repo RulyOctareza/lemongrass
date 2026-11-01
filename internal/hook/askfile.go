@@ -59,9 +59,9 @@ func askFiledMessage(verdict guard.Verdict, askID string) string {
 	if verdict.Detail != "" {
 		msg += " " + verdict.Detail
 	}
-	return msg + " See the lgrass-ask skill."
+	return msg + " Run lgrass how ask request for how asks work."
 }
 
 func askFailedMessage(verdict guard.Verdict, err error) string {
-	return "lgrass: " + ruleLabel(verdict) + " needs the user's decision, and sending the request failed (" + err.Error() + "). File it yourself with lgrass ask, see the lgrass-ask skill."
+	return "lgrass: " + ruleLabel(verdict) + " needs the user's decision, and sending the request failed (" + err.Error() + "). File it yourself with lgrass ask; run lgrass how ask request for how."
 }
