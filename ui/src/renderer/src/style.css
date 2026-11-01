@@ -24,6 +24,9 @@
   --color-coral-dim:    oklch(0.66 0.18 28);
   --color-coral-muted:  oklch(0.73 0.18 28 / 0.14);
 
+  /* Orange -- between amber and coral, for a level past a warning but short of an error */
+  --color-orange:       oklch(0.76 0.16 55);
+
   /* Jade */
   --color-jade:         oklch(0.78 0.155 155);
   --color-jade-dim:     oklch(0.71 0.155 155);

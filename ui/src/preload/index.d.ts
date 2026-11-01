@@ -6,6 +6,7 @@ import type {
   AccountAddResult,
   AccountInfo,
   AccountRemoveResult,
+  ContextUsage,
   UsageReport,
   StatusLineChainState,
   UpdateState,
@@ -121,6 +122,8 @@ interface Api {
     get: () => Promise<UsageReport | null>
     statusLine: () => Promise<StatusLineChainState | null>
     setStatusLine: (enabled: boolean) => Promise<StatusLineChainState | null>
+    contexts: () => Promise<Record<string, ContextUsage> | null>
+    onContexts: (callback: (tabs: Record<string, ContextUsage>) => void) => () => void
   }
   update: {
     state: () => Promise<UpdateState>

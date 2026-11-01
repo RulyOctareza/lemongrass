@@ -7,8 +7,9 @@ import AppConfirmButton from './AppConfirmButton.vue'
 import TabIcon from './TabIcon.vue'
 import StripIcon from './StripIcon.vue'
 import UsageMeters from './UsageMeters.vue'
+import ContextMeter from './ContextMeter.vue'
 import { accountLabel, accountStore } from '../accounts'
-import { claudeUsage, resetText, seenText, usageStore } from '../usage'
+import { claudeUsage, contextStore, resetText, seenText, usageStore } from '../usage'
 import {
   activateTab,
   addShell,
@@ -64,6 +65,12 @@ const shellAccount = computed(() => {
   if (active?.kind !== 'shell' || active.command !== 'claude') return null
   if (!active.account && accountStore.items.length === 0) return null
   return accountLabel(active.account)
+})
+
+const shellContext = computed(() => {
+  const active = props.leaf.tabs.find((tab) => tab.id === props.leaf.activeTabId)
+  if (active?.kind !== 'shell' || active.command !== 'claude') return null
+  return contextStore.tabs[active.id] ?? null
 })
 
 const shellUsage = computed(() => {
@@ -537,7 +544,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="shellGroup || shellAccount || shellUsage" class="group-strip">
+    <div v-if="shellGroup || shellAccount || shellUsage || shellContext" class="group-strip">
       <span v-if="shellAccount" class="strip-item" :title="`Account: ${shellAccount}`">
         <StripIcon name="account" />
         {{ shellAccount }}
@@ -558,6 +565,10 @@ onBeforeUnmount(() => {
       <span v-if="shellUsage" class="strip-item" :title="shellUsage.title">
         <StripIcon name="usage" />
         <UsageMeters :windows="shellUsage.windows" :seen-at="shellUsage.seenAt" compact />
+      </span>
+      <span v-if="shellContext" class="strip-item">
+        <StripIcon name="context" />
+        <ContextMeter :context="shellContext" />
       </span>
     </div>
 

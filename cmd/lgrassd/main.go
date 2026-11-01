@@ -90,6 +90,8 @@ COMMANDS
                                      on and off flip the human's switch, which lgrassconf applies
   usage                             Prints the last known rate-limit usage of every Claude account and of
                                      Codex as JSON
+  usage context                     Prints each Claude tab's context window use by tab id, and the directory
+                                     the records live in, as JSON
 
   version                           Print version
 `)

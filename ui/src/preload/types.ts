@@ -874,6 +874,13 @@ export interface StatusLineChainState {
   commands: Record<string, string>
 }
 
+// One Claude tab's context window use as of its latest response, from its statusline payload.
+export interface ContextUsage {
+  used_tokens: number
+  window_tokens: number
+  seen_at: number
+}
+
 export interface UsageReport {
   claude: AccountUsage[]
   codex: CodexUsage | null

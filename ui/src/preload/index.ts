@@ -7,6 +7,7 @@ import type {
   AccountAddResult,
   AccountInfo,
   AccountRemoveResult,
+  ContextUsage,
   UsageReport,
   StatusLineChainState,
   UpdateState,
@@ -536,7 +537,16 @@ const usage = {
   get: (): Promise<UsageReport | null> => ipcRenderer.invoke('usage:get'),
   statusLine: (): Promise<StatusLineChainState | null> => ipcRenderer.invoke('statusline:state'),
   setStatusLine: (enabled: boolean): Promise<StatusLineChainState | null> =>
-    ipcRenderer.invoke('statusline:set', enabled)
+    ipcRenderer.invoke('statusline:set', enabled),
+  contexts: (): Promise<Record<string, ContextUsage> | null> => ipcRenderer.invoke('usage:context'),
+  onContexts: (callback: (tabs: Record<string, ContextUsage>) => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      tabs: Record<string, ContextUsage>
+    ): void => callback(tabs)
+    ipcRenderer.on('usage:context-changed', listener)
+    return () => ipcRenderer.removeListener('usage:context-changed', listener)
+  }
 }
 
 const update = {

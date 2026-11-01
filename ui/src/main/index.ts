@@ -124,7 +124,7 @@ app.whenReady().then(async () => {
 
   registerPtyHandlers(() => mainWindow?.webContents)
   registerAccountHandlers(lgrassdPath)
-  registerUsageHandlers(lgrassdPath)
+  registerUsageHandlers(lgrassdPath, () => mainWindow?.webContents)
   registerUpdateHandlers(() => mainWindow)
   registerCreditsHandlers()
   setTrustBinary(lgrassdPath)

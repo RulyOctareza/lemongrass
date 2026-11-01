@@ -44,7 +44,12 @@ func cmdStatusline(args []string) {
 	recorded := make(chan struct{})
 	go func() {
 		defer close(recorded)
-		if err := agentusage.RecordClaude(home, account, payload, time.Now()); err != nil {
+		now := time.Now()
+		if err := agentusage.RecordClaude(home, account, payload, now); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		// Claude Code runs this command as its own child, so the tab id is the one lemongrass gave that Claude.
+		if err := agentusage.RecordContext(home, os.Getenv(tabIDEnv), payload, now); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}()

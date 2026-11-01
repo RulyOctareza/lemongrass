@@ -15,7 +15,7 @@ import ProjectTrustModal from './components/ProjectTrustModal.vue'
 import ZoomIndicator from './components/ZoomIndicator.vue'
 import ProjectSelector from './components/ProjectSelector.vue'
 import { loadAccounts } from './accounts'
-import { startUsagePolling } from './usage'
+import { startContextFeed, startUsagePolling } from './usage'
 import { restoreZoom, setZoom, stepZoom } from './zoom'
 import {
   cancelShellPicker,
@@ -139,6 +139,7 @@ onMounted(() => {
   void restoreUiState()
   void loadAccounts()
   startUsagePolling()
+  startContextFeed()
   window.addEventListener('keydown', onKeydown, { capture: true })
   unsubscribeBiblio = window.api.biblio.onChanged(onBiblioChanged)
   unsubscribeClosing = window.api.windowControls.onClosing(() => (closing.value = true))
