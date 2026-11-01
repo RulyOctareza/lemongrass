@@ -257,19 +257,28 @@ async function createChannel(
   name: string,
   dbName: string,
   scope: Scope,
-  ttlSeconds: number
+  ttlSeconds: number,
+  askId?: string
 ): Promise<ChannelWithShortId> {
   const { channel } = await vaultCall<{ channel: Channel }>('create_channel', {
     root_secret: passphrase,
     name,
     db_name: dbName,
     scope,
-    ttl_seconds: ttlSeconds
+    ttl_seconds: ttlSeconds,
+    ...(askId ? { ask_id: askId } : {})
   })
   const { short_id: shortId } = await agentCall<{ short_id: string }>('register_channel', {
     real_id: channel.ID
   })
+  if (askId) await answerAsk(passphrase, askId, shortId)
   return { channel, shortId }
+}
+
+// The vault links an ask to the channel created for it, but only the agent mints the short id, so
+// the ask is answered here, right after registering, and the model never sees the real channel id.
+async function answerAsk(passphrase: string, id: string, shortId: string): Promise<void> {
+  await vaultCall<void>('answer_ask', { root_secret: passphrase, id, short_id: shortId })
 }
 
 async function activateChannel(
@@ -423,7 +432,8 @@ async function createHTTPChannel(
   type: 'api' | 'web' | 'app',
   scope: HTTPScope,
   webScope: WebScope | null,
-  ttlSeconds: number
+  ttlSeconds: number,
+  askId?: string
 ): Promise<HTTPChannelWithShortId> {
   const { channel } = await vaultCall<{ channel: HTTPChannel }>('create_http_channel', {
     root_secret: passphrase,
@@ -433,11 +443,13 @@ async function createHTTPChannel(
     type,
     scope,
     web_scope: webScope,
-    ttl_seconds: ttlSeconds
+    ttl_seconds: ttlSeconds,
+    ...(askId ? { ask_id: askId } : {})
   })
   const { short_id: shortId } = await agentCall<{ short_id: string }>('register_channel', {
     real_id: channel.ID
   })
+  if (askId) await answerAsk(passphrase, askId, shortId)
   return { channel, shortId }
 }
 
@@ -540,8 +552,15 @@ export function registerVaultHandlers(): void {
   ipcMain.handle('vault:list', () => listChannels())
   ipcMain.handle(
     'vault:create',
-    (_event, passphrase: string, name: string, dbName: string, scope: Scope, ttlSeconds: number) =>
-      createChannel(passphrase, name, dbName, scope, ttlSeconds)
+    (
+      _event,
+      passphrase: string,
+      name: string,
+      dbName: string,
+      scope: Scope,
+      ttlSeconds: number,
+      askId?: string
+    ) => createChannel(passphrase, name, dbName, scope, ttlSeconds, askId)
   )
   ipcMain.handle('vault:activate', (_event, passphrase: string, id: string, ttlSeconds: number) =>
     activateChannel(passphrase, id, ttlSeconds)
@@ -611,8 +630,20 @@ export function registerVaultHandlers(): void {
       type: 'api' | 'web' | 'app',
       scope: HTTPScope,
       webScope: WebScope | null,
-      ttlSeconds: number
-    ) => createHTTPChannel(passphrase, name, rester, environment, type, scope, webScope, ttlSeconds)
+      ttlSeconds: number,
+      askId?: string
+    ) =>
+      createHTTPChannel(
+        passphrase,
+        name,
+        rester,
+        environment,
+        type,
+        scope,
+        webScope,
+        ttlSeconds,
+        askId
+      )
   )
   ipcMain.handle(
     'vault:activateHTTPChannel',

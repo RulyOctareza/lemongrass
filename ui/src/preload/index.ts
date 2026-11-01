@@ -5,6 +5,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AccountAddResult,
+  Ask,
+  AskCount,
   AccountInfo,
   AccountRemoveResult,
   ContextUsage,
@@ -378,9 +380,10 @@ const vault = {
     name: string,
     dbName: string,
     scope: VaultScope,
-    ttlSeconds: number
+    ttlSeconds: number,
+    askId?: string
   ): Promise<VaultChannelWithShortId> =>
-    ipcRenderer.invoke('vault:create', passphrase, name, dbName, scope, ttlSeconds),
+    ipcRenderer.invoke('vault:create', passphrase, name, dbName, scope, ttlSeconds, askId),
   activate: (
     passphrase: string,
     id: string,
@@ -437,7 +440,8 @@ const vault = {
     type: 'api' | 'web' | 'app',
     scope: VaultHTTPScope,
     webScope: VaultWebScope | null,
-    ttlSeconds: number
+    ttlSeconds: number,
+    askId?: string
   ): Promise<VaultHTTPChannelWithShortId> =>
     ipcRenderer.invoke(
       'vault:createHTTPChannel',
@@ -448,7 +452,8 @@ const vault = {
       type,
       scope,
       webScope,
-      ttlSeconds
+      ttlSeconds,
+      askId
     ),
   activateHTTPChannel: (
     passphrase: string,
@@ -580,6 +585,34 @@ const credits = {
   openChromiumLicenses: (): Promise<string> => ipcRenderer.invoke('credits:openChromiumLicenses')
 }
 
+const ask = {
+  count: (): Promise<AskCount> => ipcRenderer.invoke('ask:count'),
+  list: (passphrase: string): Promise<Ask[]> => ipcRenderer.invoke('ask:list', passphrase),
+  get: (passphrase: string, id: string): Promise<Ask> =>
+    ipcRenderer.invoke('ask:get', passphrase, id),
+  execute: (passphrase: string, id: string, timeoutSeconds: number): Promise<Ask> =>
+    ipcRenderer.invoke('ask:execute', passphrase, id, timeoutSeconds),
+  stop: (passphrase: string, id: string): Promise<void> =>
+    ipcRenderer.invoke('ask:stop', passphrase, id),
+  decline: (passphrase: string, id: string, note: string): Promise<void> =>
+    ipcRenderer.invoke('ask:decline', passphrase, id, note),
+  onCount: (callback: (count: AskCount) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, count: AskCount): void => callback(count)
+    ipcRenderer.on('ask:count', listener)
+    return () => ipcRenderer.removeListener('ask:count', listener)
+  },
+  onChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('ask:changed', listener)
+    return () => ipcRenderer.removeListener('ask:changed', listener)
+  },
+  onOpen: (callback: (id: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, id: string): void => callback(id)
+    ipcRenderer.on('ask:open', listener)
+    return () => ipcRenderer.removeListener('ask:open', listener)
+  }
+}
+
 const web = {
   attach: (tabId: string, bounds: WebBounds): Promise<void> =>
     ipcRenderer.invoke('web:attach', tabId, bounds),
@@ -595,6 +628,7 @@ const web = {
 }
 
 const api = {
+  ask,
   pty,
   accounts,
   usage,

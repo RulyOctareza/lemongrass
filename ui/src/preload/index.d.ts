@@ -4,6 +4,8 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   AccountAddResult,
+  Ask,
+  AskCount,
   AccountInfo,
   AccountRemoveResult,
   ContextUsage,
@@ -92,6 +94,17 @@ import type {
 } from './types'
 
 interface Api {
+  ask: {
+    count: () => Promise<AskCount>
+    list: (passphrase: string) => Promise<Ask[]>
+    get: (passphrase: string, id: string) => Promise<Ask>
+    execute: (passphrase: string, id: string, timeoutSeconds: number) => Promise<Ask>
+    stop: (passphrase: string, id: string) => Promise<void>
+    decline: (passphrase: string, id: string, note: string) => Promise<void>
+    onCount: (callback: (count: AskCount) => void) => () => void
+    onChanged: (callback: () => void) => () => void
+    onOpen: (callback: (id: string) => void) => () => void
+  }
   workgroup: {
     onSpawn: (callback: (request: WorkgroupSpawnRequest) => void) => () => void
     reportSpawn: (requestId: string, result: WorkgroupSpawnResult) => void
@@ -330,7 +343,8 @@ interface Api {
       name: string,
       dbName: string,
       scope: VaultScope,
-      ttlSeconds: number
+      ttlSeconds: number,
+      askId?: string
     ) => Promise<VaultChannelWithShortId>
     activate: (
       passphrase: string,
@@ -372,7 +386,8 @@ interface Api {
       type: 'api' | 'web' | 'app',
       scope: VaultHTTPScope,
       webScope: VaultWebScope | null,
-      ttlSeconds: number
+      ttlSeconds: number,
+      askId?: string
     ) => Promise<VaultHTTPChannelWithShortId>
     activateHTTPChannel: (
       passphrase: string,

@@ -8,6 +8,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import type { WorkgroupSpawnMember, WorkgroupSpawnResult } from '../preload/types'
+import { handleAskHint, startAsks, stopAsks } from './asks'
 import { handleConflictOp, isConflictOp, type ConflictOpRequest } from './conflictAgent'
 import { handleNudge } from './tabNudge'
 import { handleWebOp, registerWebHandlers } from './web'
@@ -17,7 +18,7 @@ import {
   type ApprovalAnswer
 } from './workgroupApprovals'
 
-// The socket `lgrass workgroup create` talks to. A proposal waits in the app for the human and,
+// The socket `lgrass workgroup create` talks to, and where the vault daemon sends its content-free ask hint. A proposal waits in the app for the human and,
 // once approved, returns a one-time token. Only that token spawns tabs, and it spawns exactly what was shown.
 
 // The composed prompt is lgrass's role header, up to about 3200 characters with the longest names, skills and commands, plus the config's 3000 character assignment.
@@ -380,6 +381,7 @@ async function respond(
     if (request.op === 'nudge')
       return await handleNudge(nudgeLgrassdPath, String(request.tab_id ?? ''))
     if (request.op === 'web') return await handleWebOp(request)
+    if (request.op === 'ask_hint') return await handleAskHint()
     if (isConflictOp(request.op))
       return await handleConflictOp(request as unknown as ConflictOpRequest)
     return { ok: false, error: `unknown op ${String(request.op)}` }
@@ -398,6 +400,7 @@ export function startWorkgroupBridge(
   nudgeLgrassdPath = lgrassdPath
   registerApprovalHandlers(getWindow)
   registerWebHandlers()
+  startAsks(getWindow)
   ipcMain.on(
     'workgroup:spawn-result',
     (_event, payload: WorkgroupSpawnResult & { requestId: string }) => {
@@ -427,6 +430,7 @@ export function startWorkgroupBridge(
 }
 
 export function stopWorkgroupBridge(): void {
+  stopAsks()
   server?.close()
   server = undefined
   rmSync(workgroupSocketPath(), { force: true })

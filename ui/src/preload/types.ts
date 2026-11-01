@@ -1088,3 +1088,50 @@ export interface DepsState {
   unsupported: string | null
   setupDue: boolean
 }
+
+// An ask is a model's request to the human, held in the vault daemon (biblio ask-ops seam). Every
+// text field but the ids is model output: render it as text, never as HTML.
+export type AskType = 'db' | 'rester' | 'command'
+export type AskState = 'waiting' | 'running' | 'answered' | 'declined' | 'expired'
+
+export interface AskVerdict {
+  rule: string
+  mode: 'ask' | 'deny'
+}
+
+export interface AskResult {
+  exit_code: number
+  output_tail: string
+  timed_out: boolean
+  stopped: boolean
+  started_at: string
+  ended_at?: string
+}
+
+export interface Ask {
+  id: string
+  type: AskType
+  tab_id: string
+  cwd: string
+  created_at: string
+  state: AskState
+  blocking: boolean
+  reason?: string
+  tables?: string[]
+  message?: string
+  command?: string
+  rule?: string
+  verdict?: AskVerdict | null
+  never_execute?: boolean
+  never_execute_reason?: string
+  short_id?: string
+  note?: string
+  result?: AskResult | null
+}
+
+// Numbers and an opaque id only, readable while the vault is locked.
+export interface AskCount {
+  waiting: number
+  blocking: number
+  newestId: string
+}
