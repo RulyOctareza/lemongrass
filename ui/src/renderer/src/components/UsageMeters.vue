@@ -9,6 +9,8 @@ import type { UsageWindow } from '../../../preload/types'
 const props = defineProps<{
   windows: UsageWindow[] | undefined
   seenAt: number | undefined
+  // Compact leaves the age out of the row; it stays in the hover title.
+  compact?: boolean
 }>()
 
 const title = computed(() =>
@@ -35,7 +37,7 @@ const title = computed(() =>
           w.reset ? 'reset' : `${Math.round(w.used_percent)}%`
         }}</span>
       </span>
-      <span v-if="seenAt" class="usage-meter-seen">{{ seenText(seenAt) }}</span>
+      <span v-if="seenAt && !compact" class="usage-meter-seen">{{ seenText(seenAt) }}</span>
     </template>
     <span v-else class="usage-meter-none">No usage yet</span>
   </span>

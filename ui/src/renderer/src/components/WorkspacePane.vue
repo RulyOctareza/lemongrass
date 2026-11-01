@@ -5,8 +5,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppConfirmButton from './AppConfirmButton.vue'
 import TabIcon from './TabIcon.vue'
+import StripIcon from './StripIcon.vue'
+import UsageMeters from './UsageMeters.vue'
 import { accountLabel, accountStore } from '../accounts'
-import { claudeUsage, resetText, seenText, usageLevel, usageStore, windowsSummary } from '../usage'
+import { claudeUsage, resetText, seenText, usageStore } from '../usage'
 import {
   activateTab,
   addShell,
@@ -79,8 +81,8 @@ const shellUsage = computed(() => {
   }
   if (!windows || windows.length === 0) return null
   return {
-    summary: windowsSummary(windows),
-    level: usageLevel(windows),
+    windows,
+    seenAt,
     title: [...windows.map((w) => resetText(w)), seenText(seenAt)].join('\n')
   }
 })
@@ -536,18 +538,27 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="shellGroup || shellAccount || shellUsage" class="group-strip">
-      <span v-if="shellGroup" class="strip-item">
-        <span class="group-strip-band" :style="{ background: shellGroup.color }" />
-        Workgroup: {{ shellGroup.groupName }}
+      <span v-if="shellAccount" class="strip-item" :title="`Account: ${shellAccount}`">
+        <StripIcon name="account" />
+        {{ shellAccount }}
       </span>
-      <span v-if="shellAccount" class="strip-item">Account: {{ shellAccount }}</span>
       <span
-        v-if="shellUsage"
-        class="strip-item strip-usage"
-        :class="`strip-usage-${shellUsage.level}`"
-        :title="shellUsage.title"
-        >{{ shellUsage.summary }}</span
+        v-if="shellGroup"
+        class="strip-item"
+        :title="`Workgroup: ${shellGroup.groupName}${shellGroup.leader ? ', leader' : ''}`"
       >
+        <StripIcon name="workgroup" />
+        <span class="strip-group" :style="{ '--group-color': shellGroup.color }">
+          <svg v-if="shellGroup.leader" class="strip-group-star" viewBox="0 0 14 14">
+            <path d="M7 1l1.8 3.9 4.2.5-3.1 2.9.8 4.2L7 10.4 3.3 12.5l.8-4.2L1 5.4l4.2-.5z" />
+          </svg>
+          {{ shellGroup.groupName }}
+        </span>
+      </span>
+      <span v-if="shellUsage" class="strip-item" :title="shellUsage.title">
+        <StripIcon name="usage" />
+        <UsageMeters :windows="shellUsage.windows" :seen-at="shellUsage.seenAt" compact />
+      </span>
     </div>
 
     <div
@@ -869,24 +880,11 @@ onBeforeUnmount(() => {
   height: 13px;
 }
 
-.strip-usage {
-  font-variant-numeric: tabular-nums;
-}
-
-.strip-usage-warn {
-  color: var(--color-warning);
-}
-
-.strip-usage-danger {
-  color: var(--color-error);
-  font-weight: 600;
-}
-
 .group-strip {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-6);
   padding: var(--space-1) var(--space-4);
   color: var(--color-fg-secondary);
   font-family: var(--font-body);
@@ -902,11 +900,21 @@ onBeforeUnmount(() => {
   gap: var(--space-2);
 }
 
-.group-strip-band {
-  flex-shrink: 0;
-  width: 3px;
-  height: 12px;
+.strip-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--group-color) 28%, transparent);
+  color: var(--color-fg-primary);
+}
+
+.strip-group-star {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  fill: var(--group-color);
 }
 
 .tab-label {

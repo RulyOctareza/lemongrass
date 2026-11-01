@@ -42,10 +42,6 @@ export function claudeUsage(account: string | undefined): AccountUsage | undefin
   return usageStore.claude[account ?? 'primary']
 }
 
-export function windowsSummary(windows: UsageWindow[]): string {
-  return windows.map((w) => `${w.label} ${Math.round(w.used_percent)}%`).join(' · ')
-}
-
 export function highestUse(windows: UsageWindow[]): number {
   return windows.reduce((max, w) => Math.max(max, w.used_percent), 0)
 }
