@@ -231,7 +231,8 @@ export interface VaultPolicyRule {
   id: string
   category: string
   description: string
-  mode: 'deny' | 'ask'
+  // The rule's default; a project's policy overrides it.
+  mode: 'allow' | 'deny' | 'ask'
   locked: boolean
 }
 

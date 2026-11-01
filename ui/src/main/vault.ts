@@ -493,13 +493,14 @@ export interface PolicyRule {
   id: string
   category: string
   description: string
-  mode: 'deny' | 'ask'
+  // The rule's default; a project's policy overrides it.
+  mode: PolicyMode
   locked: boolean
 }
 
 async function policyCatalog(): Promise<PolicyRule[]> {
   const { rules } = await vaultCall<{ rules: PolicyRule[] | null }>('policy_catalog')
-  return (rules ?? []).map((rule) => ({ ...rule, mode: readMode(rule.mode) as 'deny' | 'ask' }))
+  return (rules ?? []).map((rule) => ({ ...rule, mode: readMode(rule.mode) }))
 }
 
 export interface Policies {
