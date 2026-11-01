@@ -195,7 +195,7 @@ func matchCall(call shellCall, env matchEnv) []Verdict {
 	var found []Verdict
 	for i := range catalogRules {
 		r := &catalogRules[i]
-		if r.Except != nil && r.Except(call) {
+		if r.Except != nil && r.Except(call, env) {
 			continue
 		}
 		for _, f := range r.Forms {

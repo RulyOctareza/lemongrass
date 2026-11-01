@@ -4,6 +4,8 @@
 package guard
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -241,5 +243,39 @@ func TestPackageRestoreAllowedByDefault(t *testing.T) {
 		if info.ID == "package-restore" && (info.Mode != "allow" || info.Locked) {
 			t.Errorf("catalog lists package-restore as %+v", info)
 		}
+	}
+}
+
+func TestLocalToolRunPasses(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"node_modules/.bin", "node_modules/@biomejs/biome", "ui"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "node_modules/.bin/prettier"), nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	judge := func(command, cwd, project string) *Verdict {
+		return Decide(Input{Tool: "Bash", Command: command, Cwd: cwd, Home: t.TempDir(), ProjectRoot: project}, Policy{})
+	}
+	for _, command := range []string{"npx prettier --write src", "npx --yes prettier .", "npm exec -- prettier --check .", "npm x prettier", "pnpm exec prettier", "pnpx prettier", "bunx prettier", "bun x prettier", "yarn run prettier", "npx @biomejs/biome check"} {
+		if v := judge(command, root, ""); v != nil {
+			t.Errorf("%q from the root = %+v, want it to pass", command, v)
+		}
+		if v := judge(command, filepath.Join(root, "ui"), root); v != nil {
+			t.Errorf("%q from a subfolder of the project = %+v, want it to pass", command, v)
+		}
+	}
+	for _, command := range []string{"npx eslint .", "npx prettier@3 --write .", "npx -p prettier prettier .", "npx --package=prettier prettier", "npx @biomejs/biome@1 check", "npx @other/tool", "npx ./bin/x", "pnpm exec eslint", "bunx eslint"} {
+		if v := judge(command, root, root); v == nil || v.RuleID != "package-install" {
+			t.Errorf("%q = %+v, want package-install", command, v)
+		}
+	}
+	if v := judge("npx prettier .", t.TempDir(), ""); v == nil || v.RuleID != "package-install" {
+		t.Errorf("npx prettier outside any install = %+v, want package-install", v)
+	}
+	if v := Decide(Input{Tool: "Bash", Command: "npx prettier .", Cwd: root, Home: t.TempDir()}, Policy{Rules: map[string]string{"package-restore": "ask"}}); v == nil || v.RuleID != "package-restore" {
+		t.Errorf("npx prettier with package-restore set to ask = %+v", v)
 	}
 }

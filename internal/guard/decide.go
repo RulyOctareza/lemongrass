@@ -109,7 +109,7 @@ func (c checker) bash() *Verdict {
 // scriptVerdicts judges one parsed script: every call against the catalog and the engine checks, its redirects and its pipelines. A script read at judge time, such as a shell file run by an interpreter, is judged through it too.
 func (c checker) scriptVerdicts(script shellScript) []Verdict {
 	var found []Verdict
-	env := matchEnv{Home: c.in.Home}
+	env := matchEnv{Home: c.in.Home, Cwd: c.in.Cwd, ProjectRoot: c.in.ProjectRoot}
 	dirs, scopeReason := c.deletionDirs(script)
 	for _, call := range script.Calls {
 		if call.Dynamic {

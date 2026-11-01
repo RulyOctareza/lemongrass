@@ -13,7 +13,7 @@ type rule struct {
 	Locked bool
 	Forms  []form
 	// Except exempts a call that one of the forms matched, such as a package restore inside package-install.
-	Except func(call shellCall) bool
+	Except func(call shellCall, env matchEnv) bool
 	// WritePaths are paths whose write the rule catches, from any tool, redirect or write tool. "~/x" is under the home directory, a trailing slash means everything inside, and an entry without ~ matches as a path suffix anywhere, such as ".git/hooks/".
 	WritePaths []string
 }
@@ -40,6 +40,9 @@ type form struct {
 // matchEnv is what a predicate may need beyond the call itself.
 type matchEnv struct {
 	Home string
+	// Cwd and ProjectRoot are the shell's starting directory and the launch project, where a locally installed tool is looked up.
+	Cwd         string
+	ProjectRoot string
 }
 
 // Categories as the Safety section groups them.

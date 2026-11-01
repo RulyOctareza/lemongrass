@@ -22,8 +22,8 @@ var downloadRules = []rule{
 	}},
 	// package-restore allows, by default, fetching what a committed manifest or lockfile already declares: a human chose those dependencies when committing them.
 	{ID: "package-restore", Category: catDownload, Description: "restoring the dependencies a project already declares", Mode: ModeAllow, Forms: []form{
-		{Match: func(call shellCall, _ matchEnv) (string, bool) {
-			if !restoreCall(call) {
+		{Match: func(call shellCall, env matchEnv) (string, bool) {
+			if !restoreCall(call, env) {
 				return "", false
 			}
 			return "Matched: " + call.Name + " restoring declared dependencies.", true

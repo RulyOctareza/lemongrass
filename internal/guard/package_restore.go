@@ -3,14 +3,21 @@
 
 package guard
 
-import "strings"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
 
 var npmInstallAliases = map[string]bool{"install": true, "i": true, "in": true, "ins": true, "inst": true, "insta": true, "instal": true, "isnt": true, "isnta": true, "isntal": true, "isntall": true}
 
 var npmCleanInstallAliases = map[string]bool{"ci": true, "clean-install": true, "install-clean": true, "isntall-clean": true, "cit": true, "install-ci-test": true}
 
-// restoreCall reports a call that fetches only the dependencies the project's manifest or lockfile declares. Any package argument makes it an install.
-func restoreCall(call shellCall) bool {
+// restoreCall reports a call that fetches only the dependencies the project's manifest or lockfile declares, or runs a tool already installed in node_modules. Any package argument makes it an install.
+func restoreCall(call shellCall, env matchEnv) bool {
+	if args, ok := runnerArgs(call); ok {
+		return localToolRun(args, env)
+	}
 	words := positionals(call)
 	sub := ""
 	if len(words) > 0 {
@@ -119,4 +126,71 @@ func pipRestore(args []string) bool {
 
 func localPath(arg string) bool {
 	return strings.HasPrefix(arg, ".") || strings.HasPrefix(arg, "/")
+}
+
+// runnerArgs returns the arguments after a package runner such as npx or npm exec, and whether the call is one.
+func runnerArgs(call shellCall) ([]string, bool) {
+	switch call.Name {
+	case "npx", "pnpx", "bunx":
+		return call.Args, true
+	}
+	words := positionals(call)
+	if len(words) == 0 {
+		return nil, false
+	}
+	switch {
+	case call.Name == "npm" && (words[0] == "exec" || words[0] == "x"),
+		call.Name == "pnpm" && (words[0] == "exec"),
+		call.Name == "bun" && words[0] == "x",
+		call.Name == "yarn" && (words[0] == "run" || words[0] == "exec"):
+		return argsAfter(call, 1), true
+	}
+	return nil, false
+}
+
+var runnerPackageFlags = []string{"-p", "--package", "-c", "--call"}
+
+// localToolRun reports a runner call whose tool is installed in node_modules under the cwd or the launch project. A --package or --call option, a versioned name or a path names something to fetch.
+func localToolRun(args []string, env matchEnv) bool {
+	tool := ""
+	for i, arg := range args {
+		if arg == "--" {
+			if i+1 < len(args) {
+				tool = args[i+1]
+			}
+			break
+		}
+		if strings.HasPrefix(arg, "-") {
+			for _, flag := range runnerPackageFlags {
+				if arg == flag || strings.HasPrefix(arg, flag+"=") {
+					return false
+				}
+			}
+			continue
+		}
+		tool = arg
+		break
+	}
+	if tool == "" || strings.HasPrefix(tool, ".") || strings.HasPrefix(tool, "/") {
+		return false
+	}
+	installed := filepath.Join("node_modules", ".bin", tool)
+	if strings.HasPrefix(tool, "@") {
+		// A scoped package's bin name can differ from its package name, so the package directory counts.
+		if strings.Count(tool, "@") > 1 || strings.Count(tool, "/") != 1 {
+			return false
+		}
+		installed = filepath.Join("node_modules", tool)
+	} else if strings.ContainsAny(tool, "@/") {
+		return false
+	}
+	for _, dir := range []string{env.Cwd, env.ProjectRoot} {
+		if dir == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, installed)); err == nil {
+			return true
+		}
+	}
+	return false
 }
