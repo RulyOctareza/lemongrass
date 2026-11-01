@@ -9,6 +9,7 @@ import DocView from './components/DocView.vue'
 import HistoryView from './components/HistoryView.vue'
 import ResterClientView from './components/resterClient/ResterClientView.vue'
 import ShellView from './components/ShellView.vue'
+import { shellSized } from './shellRegistry'
 import VaultPanel from './components/VaultPanel.vue'
 import WebPane from './components/WebPane.vue'
 import WorkgroupPane from './components/WorkgroupPane.vue'
@@ -42,10 +43,10 @@ interface TabKind<T extends WorkspaceTab> {
   body: Component
   // A kept alive body stays mounted while its tab is in the background.
   keepAlive: boolean
-  // A background body stays laid out at the pane's size, invisible, instead of display: none. A
-  // terminal needs this: one that first gets its size when shown grows by rows under an agent
-  // that already drew, and xterm fills the growth with blank rows.
-  keepLayout?: boolean
+  // While true, a background body stays laid out at the pane's size, invisible, instead of
+  // display: none. A terminal needs this until its first fit, so its agent spawns at the pane's
+  // size instead of growing by rows on first show.
+  keepLayout?: (tab: T) => boolean
   bodyProps: (tab: T, ctx: TabContext) => Record<string, unknown>
 }
 
@@ -65,8 +66,9 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     title: shellLabel,
     body: ShellView,
     keepAlive: true,
-    keepLayout: true,
-    bodyProps: (tab) => ({
+    keepLayout: (tab) => !shellSized[tab.id],
+    bodyProps: (tab, ctx) => ({
+      active: ctx.active,
       spec: {
         id: tab.id,
         command: tab.command,

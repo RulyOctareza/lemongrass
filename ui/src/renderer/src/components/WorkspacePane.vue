@@ -526,8 +526,8 @@ onBeforeUnmount(() => {
         <component
           :is="tabKindOf(tab).body"
           v-if="tabKindOf(tab).keepAlive || tab.id === leaf.activeTabId"
-          v-show="tab.id === leaf.activeTabId || tabKindOf(tab).keepLayout"
-          :class="{ 'tab-behind': tabKindOf(tab).keepLayout && tab.id !== leaf.activeTabId }"
+          v-show="tab.id === leaf.activeTabId || tabKindOf(tab).keepLayout?.(tab)"
+          :class="{ 'tab-behind': tabKindOf(tab).keepLayout?.(tab) && tab.id !== leaf.activeTabId }"
           v-bind="tabKindOf(tab).bodyProps(tab, tabContext(tab))"
         />
       </template>
@@ -975,11 +975,15 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px var(--color-jade);
 }
 
+/* Keeps the pane's size for the fit but sits out of view. xterm pauses drawing only when its own
+   IntersectionObserver sees the terminal off screen, which visibility alone does not do. A
+   transform moves the box without changing the size the fit reads. */
 .pane-body > .tab-behind {
   position: absolute;
   inset: 0;
   visibility: hidden;
   pointer-events: none;
+  transform: translateX(-200vw);
 }
 
 .drop-overlay {

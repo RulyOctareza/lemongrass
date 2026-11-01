@@ -20,18 +20,19 @@ let dragIndex = -1
 let dragStartPos = 0
 let dragStartSizes: number[] = []
 
+// The gutter captures the pointer so the release always reaches it, even over a web view or
+// outside the window, and a drag can never stay stuck to the cursor.
 function onGutterDown(index: number, event: PointerEvent): void {
-  if (props.node.type !== 'split') return
+  if (props.node.type !== 'split' || event.button !== 0) return
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   dragIndex = index
   dragStartPos = props.node.direction === 'row' ? event.clientX : event.clientY
   dragStartSizes = [...props.node.sizes]
-  window.addEventListener('pointermove', onGutterMove)
-  window.addEventListener('pointerup', onGutterUp)
 }
 
 function onGutterMove(event: PointerEvent): void {
   const node = props.node
-  if (node.type !== 'split' || !containerEl.value) return
+  if (dragIndex < 0 || node.type !== 'split' || !containerEl.value) return
   const rect = containerEl.value.getBoundingClientRect()
   const total = node.direction === 'row' ? rect.width : rect.height
   const pos = node.direction === 'row' ? event.clientX : event.clientY
@@ -51,8 +52,6 @@ function onGutterMove(event: PointerEvent): void {
 
 function onGutterUp(): void {
   dragIndex = -1
-  window.removeEventListener('pointermove', onGutterMove)
-  window.removeEventListener('pointerup', onGutterUp)
 }
 </script>
 
@@ -74,6 +73,10 @@ function onGutterUp(): void {
         class="gutter"
         :class="node.direction"
         @pointerdown="onGutterDown(index, $event)"
+        @pointermove="onGutterMove"
+        @pointerup="onGutterUp"
+        @pointercancel="onGutterUp"
+        @lostpointercapture="onGutterUp"
       />
     </template>
   </div>

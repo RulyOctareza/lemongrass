@@ -4,6 +4,7 @@
 import { reactive } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebglAddon } from '@xterm/addon-webgl'
 import { accountIsDeleted, accountsSettled } from './accounts'
 import { isResumableCommand, spawnArgs } from './shellAgents'
 import '@xterm/xterm/css/xterm.css'
@@ -46,6 +47,17 @@ interface ShellSession {
   disposed: boolean
   shellId?: string
   resumeDeadline?: number
+  // The size the PTY was last told, so a refit that lands on the same cell grid sends nothing.
+  ptyCols?: number
+  ptyRows?: number
+  // Behind its pane's active tab. A sized hidden terminal is never fitted, see showShell.
+  hidden: boolean
+  webgl?: WebglAddon
+  webglUnavailable?: boolean
+  nudgeTimer?: ReturnType<typeof setTimeout>
+  ptyTimer?: ReturnType<typeof setTimeout>
+  showFrame?: number
+  showTimer?: ReturnType<typeof setTimeout>
 }
 
 const sessions = new Map<string, ShellSession>()
@@ -205,7 +217,8 @@ function createSession(spec: ShellSpec): ShellSession {
     host,
     opened: false,
     started: false,
-    disposed: false
+    disposed: false,
+    hidden: false
   }
 
   term.onTitleChange((title) => {
@@ -277,10 +290,12 @@ async function start(session: ShellSession): Promise<void> {
     return
   }
   session.shellId = id
+  session.ptyCols = cols
+  session.ptyRows = rows
   byShellId.set(id, session)
   // fitShell drops the PTY resize while shellId is unset, so a refit during the spawn would leave
   // the agent drawing for fewer rows than xterm shows.
-  if (term.cols !== cols || term.rows !== rows) window.api.pty.resize(id, term.cols, term.rows)
+  sendPtySize(session)
   for (const chunk of bufferedData.get(id) ?? []) term.write(chunk)
   bufferedData.delete(id)
   const earlyExitCode = earlyExits.get(id)
@@ -315,11 +330,160 @@ export function continueOnPrimary(tabId: string): void {
   void start(session)
 }
 
+function sendPtySize(session: ShellSession): void {
+  const { cols, rows } = session.term
+  if (!session.shellId || (session.ptyCols === cols && session.ptyRows === rows)) return
+  session.ptyCols = cols
+  session.ptyRows = rows
+  window.api.pty.resize(session.shellId, cols, rows)
+}
+
+const PTY_RESIZE_INTERVAL_MS = 50
+
+// Every PTY resize makes the agent repaint, and its CPU grows with the number of resizes, so a drag
+// tells the PTY at once, then at most every interval, and the final size when it stops.
+function throttlePtySize(session: ShellSession): void {
+  if (session.ptyTimer !== undefined) return
+  sendPtySize(session)
+  const tick = (): void => {
+    session.ptyTimer = undefined
+    if (session.disposed) return
+    const { cols, rows } = session.term
+    if (session.ptyCols === cols && session.ptyRows === rows) return
+    sendPtySize(session)
+    session.ptyTimer = setTimeout(tick, PTY_RESIZE_INTERVAL_MS)
+  }
+  session.ptyTimer = setTimeout(tick, PTY_RESIZE_INTERVAL_MS)
+}
+
+type RenderInternals = {
+  _core?: { _renderService?: { _renderDebouncer?: { _innerRefresh?: () => void } } }
+}
+
+// The WebGL renderer clears its canvas on resize and redraws on xterm's next animation frame, so a
+// resize would paint one blank frame. This runs that redraw now. It reaches into xterm 6 internals,
+// as the fit addon does, and if they move it only brings the blank frame back.
+function renderNow(term: Terminal): void {
+  ;(term as unknown as RenderInternals)._core?._renderService?._renderDebouncer?._innerRefresh?.()
+}
+
+// Fits and reports whether the cell grid changed.
+function fitTerm(session: ShellSession): boolean {
+  const { cols, rows } = session.term
+  session.fit.fit()
+  shellSized[session.spec.id] = true
+  const changed = session.term.cols !== cols || session.term.rows !== rows
+  if (changed) renderNow(session.term)
+  return changed
+}
+
+function fitsHost(session: ShellSession): boolean {
+  return session.host.clientWidth > 0 && session.host.clientHeight > 0
+}
+
+// Terminals fitted at least once. WorkspacePane keeps a hidden shell laid out only until then, so a
+// tab restored into the background spawns its agent at the pane's size.
+export const shellSized = reactive<Record<string, boolean>>({})
+
+// A hidden terminal that already has a size is skipped: resizing it would make its agent repaint
+// for a tab nobody sees. It catches up in showShell.
 export function fitShell(tabId: string): void {
   const session = sessions.get(tabId)
-  if (!session || session.host.clientWidth === 0 || session.host.clientHeight === 0) return
-  session.fit.fit()
-  if (session.shellId) window.api.pty.resize(session.shellId, session.term.cols, session.term.rows)
+  if (!session || !fitsHost(session) || (session.hidden && shellSized[tabId])) return
+  fitTerm(session)
+  throttlePtySize(session)
+}
+
+const NUDGE_MS = 60
+
+// xterm fills rows gained under an agent that already drew with blanks, and an inline agent
+// redraws only its live area when only the height changed. A one-column nudge makes it repaint
+// everything. An agent on the alternate screen, such as Claude, repaints on any resize. The two
+// sizes go out apart because an agent coalesces resizes sent back to back into none.
+function showShell(session: ShellSession): void {
+  if (!fitsHost(session)) return
+  const { cols, rows } = session.term
+  fitTerm(session)
+  const term = session.term
+  const rowsOnlyGrowth = term.cols === cols && term.rows > rows
+  if (session.shellId && rowsOnlyGrowth && term.buffer.active.type === 'normal' && cols > 1) {
+    session.ptyCols = cols - 1
+    session.ptyRows = term.rows
+    window.api.pty.resize(session.shellId, cols - 1, term.rows)
+    clearTimeout(session.nudgeTimer)
+    session.nudgeTimer = setTimeout(() => sendPtySize(session), NUDGE_MS)
+    return
+  }
+  sendPtySize(session)
+}
+
+const WEBGL_LIMIT = 10
+// Terminals holding a WebGL renderer, least recently shown first.
+const webglRecent: ShellSession[] = []
+
+// WebGL draws on the GPU. A hidden terminal keeps its renderer, which costs nothing while it is
+// display: none, so showing it again does not rebuild it. Only the most recently shown ones keep
+// one, under Chromium's cap on live WebGL contexts. Without WebGL the DOM renderer draws.
+function useWebgl(session: ShellSession): void {
+  if (!session.opened || session.webglUnavailable) return
+  const at = webglRecent.indexOf(session)
+  if (at >= 0) webglRecent.splice(at, 1)
+  if (!session.webgl) {
+    try {
+      const webgl = new WebglAddon()
+      webgl.onContextLoss(() => dropWebgl(session))
+      session.term.loadAddon(webgl)
+      session.webgl = webgl
+    } catch {
+      session.webglUnavailable = true
+      return
+    }
+  }
+  webglRecent.push(session)
+  while (webglRecent.length > WEBGL_LIMIT) {
+    const oldest = webglRecent.find((other) => other.hidden)
+    if (!oldest) break
+    dropWebgl(oldest)
+  }
+}
+
+function dropWebgl(session: ShellSession): void {
+  session.webgl?.dispose()
+  session.webgl = undefined
+  const at = webglRecent.indexOf(session)
+  if (at >= 0) webglRecent.splice(at, 1)
+}
+
+function cancelShow(session: ShellSession): void {
+  if (session.showFrame !== undefined) cancelAnimationFrame(session.showFrame)
+  clearTimeout(session.showTimer)
+  session.showFrame = undefined
+  session.showTimer = undefined
+}
+
+// A shown tab paints first and its terminal catches up right after, so a switch never waits on a
+// fit or a renderer. The terminal counts as hidden until then, so a ResizeObserver callback in
+// between does not fit it ahead of showShell.
+export function setShellActive(tabId: string, active: boolean): void {
+  const session = sessions.get(tabId)
+  if (!session) return
+  if (!active) {
+    cancelShow(session)
+    session.hidden = true
+    return
+  }
+  if (!session.hidden) return useWebgl(session)
+  if (session.showFrame !== undefined || session.showTimer !== undefined) return
+  session.showFrame = requestAnimationFrame(() => {
+    session.showFrame = undefined
+    session.showTimer = setTimeout(() => {
+      session.showTimer = undefined
+      if (session.disposed) return
+      session.hidden = false
+      useWebgl(session)
+      showShell(session)
+    })
+  })
 }
 
 export function shellHasSelection(tabId: string): boolean {
@@ -385,6 +549,11 @@ export function disposeShell(tabId: string): void {
   delete shellRestoreFailures[tabId]
   delete shellAccountGone[tabId]
   session.disposed = true
+  clearTimeout(session.nudgeTimer)
+  clearTimeout(session.ptyTimer)
+  cancelShow(session)
+  dropWebgl(session)
+  delete shellSized[tabId]
   if (session.shellId) {
     byShellId.delete(session.shellId)
     closedShellIds.add(session.shellId)

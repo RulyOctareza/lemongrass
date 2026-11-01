@@ -2,15 +2,16 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   attachShell,
   closeFailedShell,
   continueOnPrimary,
   copyShellSelection,
-  fitShell,
   focusShell,
+  fitShell,
   pasteIntoShell,
+  setShellActive,
   shellAccountGone,
   shellHasSelection,
   shellRestoreFailures,
@@ -23,6 +24,8 @@ import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
 
 const props = defineProps<{
   spec: ShellSpec
+  // False while the tab sits behind its pane's active tab.
+  active: boolean
 }>()
 
 const containerEl = ref<HTMLDivElement>()
@@ -53,9 +56,17 @@ onMounted(async () => {
   await terminalFontReady()
   if (unmounted || !containerEl.value) return
   attachShell(props.spec, containerEl.value)
+  setShellActive(props.spec.id, props.active)
   resizeObserver = new ResizeObserver(() => fitShell(props.spec.id))
   resizeObserver.observe(containerEl.value)
 })
+
+// Post flush, so the tab is already displayed when the fit reads its size.
+watch(
+  () => props.active,
+  (active) => setShellActive(props.spec.id, active),
+  { flush: 'post' }
+)
 
 onBeforeUnmount(() => {
   unmounted = true
