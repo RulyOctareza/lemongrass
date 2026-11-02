@@ -65,8 +65,10 @@ const emit = defineEmits<{
   box-shadow: var(--shadow-sm);
 }
 
+/* Inset, so the ring follows the pill's own edge whatever the track padding and the selected
+   pill's shadow. */
 .segmented button:focus-visible {
   outline: 1px solid var(--color-amber);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
 </style>

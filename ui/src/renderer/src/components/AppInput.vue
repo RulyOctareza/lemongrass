@@ -44,6 +44,21 @@ const rootStyle = computed(() => attrs.style as StyleValue)
 
 const element = ref<HTMLInputElement | null>(null)
 
+// A number input hides the browser's spinner and draws its own step buttons. Stepping goes through
+// the input's own stepUp and stepDown, so step, min and max hold, and the input event keeps
+// v-model in sync.
+const isNumber = computed(() => attrs.type === 'number')
+const isDisabled = computed(() => attrs.disabled !== undefined && attrs.disabled !== false)
+
+function step(direction: 1 | -1): void {
+  const input = element.value
+  if (!input || isDisabled.value) return
+  if (direction === 1) input.stepUp()
+  else input.stepDown()
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  input.focus()
+}
+
 defineExpose({
   focus: () => element.value?.focus(),
   select: () => element.value?.select(),
@@ -54,7 +69,7 @@ defineExpose({
 <template>
   <span
     class="app-input"
-    :class="[`app-input--${size}`, { mono, 'has-icon': icon }, attrs.class]"
+    :class="[`app-input--${size}`, { mono, 'has-icon': icon, 'is-number': isNumber }, attrs.class]"
     :style="rootStyle"
   >
     <svg
@@ -73,6 +88,50 @@ defineExpose({
       <path d="M10.5 10.5L14 14" />
     </svg>
     <input ref="element" v-model="model" class="app-input-field" v-bind="inputAttrs" />
+    <span v-if="isNumber" class="app-input-steps">
+      <button
+        type="button"
+        class="app-input-step"
+        tabindex="-1"
+        aria-label="Decrease"
+        :disabled="isDisabled"
+        @click="step(-1)"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M2 5H8" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="app-input-step"
+        tabindex="-1"
+        aria-label="Increase"
+        :disabled="isDisabled"
+        @click="step(1)"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M2 5H8M5 2V8" />
+        </svg>
+      </button>
+    </span>
   </span>
 </template>
 
@@ -143,5 +202,59 @@ defineExpose({
 .app-input-field:disabled {
   color: var(--color-fg-disabled);
   cursor: not-allowed;
+}
+
+.app-input.is-number .app-input-field {
+  padding-right: calc(var(--space-2) + 44px);
+  appearance: textfield;
+}
+
+.app-input.is-number .app-input-field::-webkit-inner-spin-button,
+.app-input.is-number .app-input-field::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.app-input-steps {
+  position: absolute;
+  right: var(--space-1);
+  display: flex;
+  gap: 2px;
+}
+
+.app-input-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.app-input-step:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  color: var(--color-fg-primary);
+}
+
+.app-input-step:disabled {
+  color: var(--color-fg-disabled);
+  cursor: not-allowed;
+}
+
+.app-input--sm .app-input-step {
+  width: 16px;
+  height: 16px;
+}
+
+.app-input--sm.is-number .app-input-field {
+  padding-right: calc(var(--space-1) + 36px);
 }
 </style>
