@@ -11,6 +11,8 @@ import { describeError, vaultSession } from '../../vaultSession'
 import { askStateLabel, askSummary } from './askLabels'
 import { askParts, askWhere, loadAskProjects } from './askOrigin'
 import MarkedText from '../MarkedText.vue'
+import AppEmptyState from '../AppEmptyState.vue'
+import { decisionsIcon } from '../../icons'
 
 const props = defineProps<{
   visible: boolean
@@ -62,8 +64,13 @@ watch(
     </div>
 
     <p v-if="listError" class="error-text">{{ listError }}</p>
-    <p v-else-if="loading" class="empty">Loading...</p>
-    <p v-else-if="asks.length === 0" class="empty">Nothing is waiting for your decision.</p>
+    <AppEmptyState v-else-if="loading" layout="fill" loading title="Loading..." />
+    <AppEmptyState
+      v-else-if="asks.length === 0"
+      layout="fill"
+      :icon="decisionsIcon"
+      title="Nothing is waiting for your decision."
+    />
 
     <div v-else class="channel-list">
       <button

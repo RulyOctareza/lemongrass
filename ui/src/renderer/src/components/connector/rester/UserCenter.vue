@@ -10,6 +10,7 @@ import AppCheckbox from '../../AppCheckbox.vue'
 import UserModal from './UserModal.vue'
 import type { CommitRester } from './resterDraft'
 import AppInput from '../../AppInput.vue'
+import AppEmptyState from '../../AppEmptyState.vue'
 
 const props = defineProps<{
   rester: VaultRester
@@ -78,8 +79,8 @@ async function toggleAssignment(user: VaultResterUser, env: string): Promise<voi
     </div>
 
     <p v-if="listError" class="error-text">{{ listError }}</p>
-    <p v-if="rester.Users.length === 0" class="empty">No users yet.</p>
-    <p v-else-if="visibleUsers.length === 0" class="empty">No user matches.</p>
+    <AppEmptyState v-if="rester.Users.length === 0" title="No users yet." />
+    <AppEmptyState v-else-if="visibleUsers.length === 0" title="No user matches." />
 
     <div v-for="user in visibleUsers" :key="user.Name" class="user-draft user-row">
       <button type="button" class="user-summary" @click="openUser(user)">

@@ -5,6 +5,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { openFile, type ProjectRef } from '../workspace'
 import type { BiblioNode } from '../../../preload/types'
+import AppEmptyState from './AppEmptyState.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -178,8 +179,8 @@ function openChapter(path: string): void {
 
 <template>
   <div ref="root" class="toc-viewer">
-    <p v-if="loading" class="empty">Loading...</p>
-    <p v-else-if="entries.length === 0" class="empty">Nothing in books/ yet.</p>
+    <AppEmptyState v-if="loading" layout="fill" loading title="Loading..." />
+    <AppEmptyState v-else-if="entries.length === 0" layout="fill" title="Nothing in books/ yet." />
     <template v-else>
       <template v-for="(entry, i) in entries" :key="i">
         <p v-if="entry.kind === 'text'" class="text-line">{{ entry.text }}</p>
@@ -237,11 +238,6 @@ function openChapter(path: string): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-}
-
-.empty {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
 }
 
 .text-line {

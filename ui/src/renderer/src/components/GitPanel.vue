@@ -34,6 +34,7 @@ import GitCounts from './GitCounts.vue'
 import GitDivergedModal from './GitDivergedModal.vue'
 import GitMergeModal from './GitMergeModal.vue'
 import GitStashSection from './GitStashSection.vue'
+import AppEmptyState from './AppEmptyState.vue'
 
 const POLL_MS = 5000
 
@@ -307,10 +308,10 @@ watch(() => props.project.id, refresh)
           >{{ checkedCount }} of {{ files.length }}</span
         >
       </div>
-      <p v-if="!status" class="git-empty">Loading...</p>
-      <p v-else-if="!status.isRepo" class="git-empty">Not a git repository.</p>
+      <AppEmptyState v-if="!status" size="sm" loading title="Loading..." />
+      <AppEmptyState v-else-if="!status.isRepo" size="sm" title="Not a git repository." />
       <template v-else>
-        <p v-if="files.length === 0" class="git-empty">No changes</p>
+        <AppEmptyState v-if="files.length === 0" size="sm" title="No changes" />
         <div v-else class="file-list">
           <section v-for="group in groups" :key="group.id" class="file-group">
             <button
@@ -618,12 +619,6 @@ watch(() => props.project.id, refresh)
   align-items: center;
   gap: 2px;
   padding-left: var(--space-2);
-}
-
-.git-empty {
-  padding: 0 var(--space-2);
-  color: var(--color-fg-muted);
-  font-size: var(--text-xs);
 }
 
 .file-list {

@@ -10,6 +10,7 @@ import DbChannelForm, { type DbChannelSeed } from './DbChannelForm.vue'
 import AppInput from '../AppInput.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 import { matchesQuery } from './listFilter'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -233,8 +234,8 @@ onUnmounted(() => {
     />
 
     <p v-if="listError" class="error-text">{{ listError }}</p>
-    <p v-else-if="loading" class="empty">Loading...</p>
-    <p v-else-if="channels.length === 0" class="empty">No channels yet.</p>
+    <AppEmptyState v-else-if="loading" loading title="Loading..." />
+    <AppEmptyState v-else-if="channels.length === 0" title="No channels yet." />
 
     <template v-else>
       <div class="list-filter">
@@ -256,7 +257,7 @@ onUnmounted(() => {
           placeholder="Filter by name, table or operation"
         />
       </div>
-      <p v-if="shownChannels.length === 0" class="empty">No channel matches.</p>
+      <AppEmptyState v-if="shownChannels.length === 0" title="No channel matches." />
     </template>
 
     <div v-if="shownChannels.length > 0 && !listError && !loading" class="channel-list">

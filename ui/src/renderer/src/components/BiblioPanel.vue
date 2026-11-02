@@ -16,6 +16,7 @@ import { activePath, closeUnder, openFile, type ProjectRef } from '../workspace'
 import type { BiblioTree } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import AppInput from './AppInput.vue'
+import AppEmptyState from './AppEmptyState.vue'
 
 const props = defineProps<{
   tree: BiblioTree | null
@@ -174,7 +175,7 @@ function onGutterUp(): void {
               @archive-scratchpad="archiveScratchpad"
             />
           </template>
-          <p v-else class="empty">Nothing in biblio/ yet.</p>
+          <AppEmptyState v-else class="tree-empty" size="sm" title="Nothing in biblio/ yet." />
         </div>
       </div>
 
@@ -286,9 +287,7 @@ function onGutterUp(): void {
   background: var(--color-amber);
 }
 
-.empty {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
-  padding: var(--space-4);
+.tree-empty {
+  margin: var(--space-2);
 }
 </style>

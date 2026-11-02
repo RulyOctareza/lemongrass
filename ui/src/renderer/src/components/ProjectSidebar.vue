@@ -5,6 +5,7 @@
 import BiblioPanel from './BiblioPanel.vue'
 import type { BiblioTree } from '../../../preload/types'
 import type { ProjectRef } from '../workspace'
+import AppEmptyState from './AppEmptyState.vue'
 
 defineProps<{
   collapsed: boolean
@@ -28,7 +29,7 @@ const emit = defineEmits<{
         @refresh="emit('refreshBiblio')"
         @open-vault="emit('openVault')"
       />
-      <p v-else class="empty">No project selected.</p>
+      <AppEmptyState v-else layout="fill" title="No project selected." />
     </div>
   </div>
 </template>
@@ -51,11 +52,5 @@ const emit = defineEmits<{
   flex: 1;
   min-height: 0;
   display: flex;
-}
-
-.empty {
-  padding: var(--space-4) var(--space-3);
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
 }
 </style>

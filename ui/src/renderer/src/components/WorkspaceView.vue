@@ -16,6 +16,7 @@ import {
 import { accountStore } from '../accounts'
 import { SHELL_AGENTS, shellAgentById } from '../shellAgents'
 import AppButton from './AppButton.vue'
+import AppEmptyState from './AppEmptyState.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -39,10 +40,11 @@ const showAccounts = computed(
         />
       </div>
     </template>
-    <div v-else class="empty-pane">
-      <p class="empty">Nothing open.</p>
-      <button class="pill-button" @click="addShell(project)">+ New shell</button>
-    </div>
+    <AppEmptyState v-else layout="fill" title="Nothing open.">
+      <template #action>
+        <AppButton variant="primary" @click="addShell(project)">+ New shell</AppButton>
+      </template>
+    </AppEmptyState>
 
     <AppModal v-if="shellPicker.open" title="New shell" @close="cancelShellPicker">
       <p class="card-text">Which agent should this pane run?</p>
@@ -116,40 +118,6 @@ const showAccounts = computed(
   flex: 1;
   min-height: 0;
   display: flex;
-}
-
-.empty-pane {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-}
-
-.empty {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
-  padding: var(--space-4);
-}
-
-.pill-button {
-  padding: var(--space-1) var(--space-3);
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-pill);
-  color: var(--color-fg-secondary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.pill-button:hover {
-  color: var(--color-fg-primary);
 }
 
 .card-text {

@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import AppButton from './AppButton.vue'
 import type { Project } from '../../../preload/types'
+import AppEmptyState from './AppEmptyState.vue'
 
 defineProps<{
   projects: Project[]
@@ -19,7 +20,7 @@ const emit = defineEmits<{
   <div class="selector">
     <div class="selector-card">
       <h2 class="selector-title">Open a project</h2>
-      <p v-if="projects.length === 0" class="selector-empty">Add a project to get started.</p>
+      <AppEmptyState v-if="projects.length === 0" title="Add a project to get started." />
       <ul v-else class="selector-list">
         <li v-for="project in projects" :key="project.id">
           <button type="button" class="selector-row" @click="emit('select', project.id)">
@@ -59,11 +60,6 @@ const emit = defineEmits<{
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-snug);
-}
-
-.selector-empty {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
 }
 
 .selector-list {

@@ -15,6 +15,7 @@ import ChannelTypeIcon from './ChannelTypeIcon.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 import { matchesQuery, resterDomains } from './listFilter'
 import AppInput from '../AppInput.vue'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -253,8 +254,8 @@ onUnmounted(() => {
     />
 
     <p v-if="httpChannelsListError" class="error-text">{{ httpChannelsListError }}</p>
-    <p v-else-if="httpChannelsLoading" class="empty">Loading...</p>
-    <p v-else-if="httpChannels.length === 0" class="empty">No HTTP channels yet.</p>
+    <AppEmptyState v-else-if="httpChannelsLoading" loading title="Loading..." />
+    <AppEmptyState v-else-if="httpChannels.length === 0" title="No HTTP channels yet." />
 
     <template v-else>
       <div class="list-filter">
@@ -277,7 +278,7 @@ onUnmounted(() => {
           placeholder="Filter by name, rester, method, type or domain"
         />
       </div>
-      <p v-if="shownChannels.length === 0" class="empty">No channel matches.</p>
+      <AppEmptyState v-if="shownChannels.length === 0" title="No channel matches." />
     </template>
 
     <div

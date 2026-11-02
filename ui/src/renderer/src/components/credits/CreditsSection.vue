@@ -5,6 +5,7 @@
 import { computed, onMounted, ref } from 'vue'
 import AppButton from '../AppButton.vue'
 import type { CreditEntry, CreditGroup, CreditsResult } from '../../../../preload/types'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const GROUPS: { id: CreditGroup; label: string }[] = [
   { id: 'fonts', label: 'Fonts' },
@@ -62,10 +63,11 @@ async function openChromium(): Promise<void> {
       Lemongrass is built on the work of the open source projects below. Thank you to everyone who
       writes and maintains them.
     </p>
-    <p v-if="credits.missing" class="settings-text">
-      This build has no credits list. It is generated when the app is built with make dev or
-      packaged.
-    </p>
+    <AppEmptyState
+      v-if="credits.missing"
+      title="This build has no credits list."
+      detail="It is generated when the app is built with make dev or packaged."
+    />
     <template v-else>
       <p class="settings-text">Select a component to read its full license.</p>
       <div v-for="group in groups" :key="group.id" class="settings-group">

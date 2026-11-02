@@ -22,6 +22,7 @@ import type {
   WorkgroupThreadMessage
 } from '../../../preload/types'
 import AppButton from './AppButton.vue'
+import AppEmptyState from './AppEmptyState.vue'
 
 const POLL_MS = 4000
 // The author lemongrass posts system messages under, session.SystemAuthor in the store.
@@ -187,10 +188,13 @@ onBeforeUnmount(() => clearInterval(timer))
 
 <template>
   <div class="workgroup-pane">
-    <p v-if="!group && !loaded" class="pane-note">Loading...</p>
-    <p v-else-if="!group" class="pane-note">
-      This workgroup is no longer live. Close this tab to remove it.
-    </p>
+    <AppEmptyState v-if="!group && !loaded" layout="fill" loading title="Loading..." />
+    <AppEmptyState
+      v-else-if="!group"
+      layout="fill"
+      title="This workgroup is no longer live."
+      detail="Close this tab to remove it."
+    />
 
     <template v-else>
       <header class="pane-head">
@@ -246,7 +250,7 @@ onBeforeUnmount(() => clearInterval(timer))
             {{ loadingOlder ? 'Loading...' : 'Load earlier messages' }}
           </button>
           <p v-if="threadError" class="pane-error">{{ threadError }}</p>
-          <p v-else-if="messages.length === 0" class="pane-note">No messages yet.</p>
+          <AppEmptyState v-else-if="messages.length === 0" title="No messages yet." />
           <article
             v-for="message in messages"
             :key="message.id"
@@ -297,11 +301,6 @@ onBeforeUnmount(() => clearInterval(timer))
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
   overflow: hidden;
-}
-
-.pane-note {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
 }
 
 .pane-head {

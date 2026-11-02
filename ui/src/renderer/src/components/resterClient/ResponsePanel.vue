@@ -15,6 +15,7 @@ import type {
   ResterClientRun
 } from '../../../../preload/types'
 import AppInput from '../AppInput.vue'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const props = defineProps<{
   result: ResterClientResult | null
@@ -237,12 +238,18 @@ function formatSize(bytes: number): string {
     </div>
 
     <div class="box-body">
-      <p v-if="sending" class="box-placeholder">Sending...</p>
+      <AppEmptyState v-if="sending" layout="fill" loading title="Sending..." />
       <p v-else-if="error" class="error-text">{{ error }}</p>
-      <p v-else-if="download?.kind === 'saved'" class="box-placeholder">
-        Saved to {{ download.path }}
-      </p>
-      <p v-else-if="download?.kind === 'cancelled'" class="box-placeholder">Download cancelled.</p>
+      <AppEmptyState
+        v-else-if="download?.kind === 'saved'"
+        layout="fill"
+        :title="`Saved to ${download.path}`"
+      />
+      <AppEmptyState
+        v-else-if="download?.kind === 'cancelled'"
+        layout="fill"
+        title="Download cancelled."
+      />
 
       <template v-else-if="result">
         <p v-if="result.truncated" class="hint">
@@ -256,17 +263,20 @@ function formatSize(bytes: number): string {
             <span class="header-value">{{ row.value }}</span>
           </div>
         </template>
-        <p v-else-if="result.binary" class="box-placeholder">
-          The body is binary. Use Send and download to save it.
-        </p>
-        <p v-else-if="!result.body" class="box-placeholder">The response has no body.</p>
+        <AppEmptyState
+          v-else-if="result.binary"
+          layout="fill"
+          title="The body is binary."
+          detail="Use Send and download to save it."
+        />
+        <AppEmptyState v-else-if="!result.body" layout="fill" title="The response has no body." />
         <div v-else-if="activeView === 'tree'" class="tree">
           <JsonNode :value="parsed.value" :depth="0" :last="true" :path="[]" />
         </div>
         <pre v-else class="raw">{{ rawText }}</pre>
       </template>
 
-      <p v-else class="box-placeholder">Send the request to see its response here.</p>
+      <AppEmptyState v-else layout="fill" title="Send the request to see its response here." />
     </div>
   </section>
 </template>

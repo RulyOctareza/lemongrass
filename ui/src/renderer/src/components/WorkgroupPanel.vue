@@ -12,6 +12,7 @@ import {
   type ProjectRef
 } from '../workspace'
 import type { WorkgroupInfo } from '../../../preload/types'
+import AppEmptyState from './AppEmptyState.vue'
 
 const POLL_MS = 5000
 
@@ -123,10 +124,12 @@ watch(() => liveShellCount(props.project.id), refresh)
           Orphaned
         </span>
       </button>
-      <p v-if="groups.length === 0 && waiting.length === 0" class="wg-empty">
-        No workgroup is active. A leader agent can start thinkers in other tabs of this project and
-        coordinate them through one shared thread. Ask an agent to set one up.
-      </p>
+      <AppEmptyState
+        v-if="groups.length === 0 && waiting.length === 0"
+        size="sm"
+        title="No workgroup is active."
+        detail="A leader agent can start thinkers in other tabs of this project and coordinate them through one shared thread. Ask an agent to set one up."
+      />
     </div>
   </div>
 </template>
@@ -211,12 +214,6 @@ watch(() => liveShellCount(props.project.id), refresh)
   max-height: 55vh;
   overflow-y: auto;
   padding: var(--space-2) var(--space-1) 0;
-}
-
-.wg-empty {
-  padding: 0 var(--space-2) var(--space-1);
-  color: var(--color-fg-muted);
-  font-size: var(--text-xs);
 }
 
 .wg-row {

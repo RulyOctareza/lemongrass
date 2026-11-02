@@ -21,6 +21,7 @@ import { noteAskAnswered } from '../../notifications'
 import { askStateLabel, askTypeLabel } from './askLabels'
 import { askParts, askWhere, loadAskProjects } from './askOrigin'
 import MarkedText from '../MarkedText.vue'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const ask = ref<Ask | null>(null)
 const loadError = ref('')
@@ -171,7 +172,7 @@ const outcome = computed(() => {
 
       <template v-else>
         <p v-if="loadError" class="error-text">{{ loadError }}</p>
-        <p v-else-if="!ask" class="empty">Loading...</p>
+        <AppEmptyState v-else-if="!ask" layout="fill" loading title="Loading..." />
 
         <template v-else>
           <div class="ask-head">

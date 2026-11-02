@@ -18,6 +18,7 @@ import {
   waitingRows,
   type CenterRow
 } from '../notifications'
+import AppEmptyState from './AppEmptyState.vue'
 
 const waiting = computed(() => waitingRows())
 const stored = computed(() => storedRows())
@@ -95,9 +96,12 @@ watch(
         </button>
       </template>
 
-      <p v-if="waiting.length === 0 && stored.length === 0" class="empty">
-        Nothing new. Decisions, agent events and app events show up in this list.
-      </p>
+      <AppEmptyState
+        v-if="waiting.length === 0 && stored.length === 0"
+        size="sm"
+        title="Nothing new."
+        detail="Decisions, agent events and app events show up in this list."
+      />
     </div>
   </div>
 </template>
@@ -229,13 +233,5 @@ watch(
   flex-shrink: 0;
   color: var(--color-fg-muted);
   white-space: nowrap;
-}
-
-.empty {
-  margin: 0;
-  padding: var(--space-4);
-  color: var(--color-fg-muted);
-  font-size: var(--text-xs);
-  text-align: center;
 }
 </style>

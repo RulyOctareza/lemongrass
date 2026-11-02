@@ -15,6 +15,7 @@ import WebPane from './components/WebPane.vue'
 import WorkgroupPane from './components/WorkgroupPane.vue'
 import { shellTitles } from './shellRegistry'
 import { workgroupStateOf } from './workgroups'
+import { historyIcon, resterClientIcon } from './icons'
 import type { ProjectRef } from './workspace'
 import type { WorkspaceTab } from '../../preload/types'
 
@@ -111,10 +112,7 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     bodyProps: (tab, ctx) => ({ project: ctx.project, path: tab.path, tabId: tab.id })
   },
   history: {
-    icon: [
-      { tag: 'circle', attrs: { cx: 7, cy: 7, r: 5.2 } },
-      { tag: 'path', attrs: { d: 'M7 4v3.2l2.2 1.3' } }
-    ],
+    icon: historyIcon,
     label: () => ({ text: 'History' }),
     title: () => 'Git history',
     body: HistoryView,
@@ -147,10 +145,7 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     bodyProps: () => ({})
   },
   resterClient: {
-    icon: [
-      { tag: 'path', attrs: { d: 'M2 4.5h9.5L9.5 2.5' } },
-      { tag: 'path', attrs: { d: 'M12 9.5H2.5l2 2' } }
-    ],
+    icon: resterClientIcon,
     label: () => ({ text: 'Rester Client' }),
     title: () => 'Rester Client',
     body: ResterClientView,

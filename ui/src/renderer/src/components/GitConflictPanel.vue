@@ -20,6 +20,7 @@ import type { GitFile } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import AppSplitButton from './AppSplitButton.vue'
 import ResolveWithMenu from './ResolveWithMenu.vue'
+import AppEmptyState from './AppEmptyState.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -160,7 +161,7 @@ async function finish(action: 'continue' | 'abort'): Promise<void> {
       Handed to <span class="assignee-name">{{ assignee }}</span>
     </p>
 
-    <p v-if="conflicted.length === 0" class="conflict-empty">All conflicts are resolved.</p>
+    <AppEmptyState v-if="conflicted.length === 0" size="sm" title="All conflicts are resolved." />
     <section v-else>
       <button class="drawer-head" :aria-expanded="drawerOpen" @click="toggleDrawer">
         <svg
@@ -262,11 +263,6 @@ async function finish(action: 'continue' | 'abort'): Promise<void> {
 
 .assignee-name {
   color: var(--color-fg-primary);
-}
-
-.conflict-empty {
-  padding: 0 var(--space-2);
-  color: var(--color-fg-muted);
 }
 
 .drawer-head {

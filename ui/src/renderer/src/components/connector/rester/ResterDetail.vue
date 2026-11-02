@@ -12,6 +12,7 @@ import WebSection from './WebSection.vue'
 import AppSection from './AppSection.vue'
 import UserCenter from './UserCenter.vue'
 import { plainCopy } from './resterDraft'
+import AppEmptyState from '../../AppEmptyState.vue'
 
 const props = defineProps<{
   name: string
@@ -69,7 +70,7 @@ onMounted(load)
     </div>
 
     <p v-if="loadError" class="error-text">{{ loadError }}</p>
-    <p v-else-if="loading" class="empty">Loading...</p>
+    <AppEmptyState v-else-if="loading" layout="fill" loading title="Loading..." />
 
     <template v-else-if="rester">
       <EnvironmentsStrip :rester="rester" :commit="commit" />

@@ -7,6 +7,7 @@ import MarkdownEditor from './MarkdownEditor.vue'
 import TocViewer from './TocViewer.vue'
 import { editDoc, workspaceOf, type ProjectRef } from '../workspace'
 import type { WorkspaceTab } from '../../../preload/types'
+import AppEmptyState from './AppEmptyState.vue'
 
 type DocTab = Extract<WorkspaceTab, { kind: 'doc' }>
 
@@ -38,10 +39,18 @@ function edit(value: string): void {
 
 <template>
   <div class="doc-view">
-    <p v-if="!doc || doc.status === 'loading'" class="empty">Loading...</p>
-    <p v-else-if="doc.status === 'missing'" class="empty">
-      This file no longer exists. Close the tab to remove it.
-    </p>
+    <AppEmptyState
+      v-if="!doc || doc.status === 'loading'"
+      layout="fill"
+      loading
+      title="Loading..."
+    />
+    <AppEmptyState
+      v-else-if="doc.status === 'missing'"
+      layout="fill"
+      title="This file no longer exists."
+      detail="Close the tab to remove it."
+    />
     <div v-else-if="doc.editable" class="editor-wrap">
       <MarkdownEditor
         :key="tab.id"
@@ -59,10 +68,16 @@ function edit(value: string): void {
     <div v-else-if="doc.kind === 'image'" class="file-image">
       <img :src="imageSrc" :alt="tab.path" />
     </div>
-    <p v-else-if="doc.kind === 'binary'" class="empty">This file is binary and has no preview.</p>
-    <p v-else-if="doc.kind === 'tooLarge'" class="empty">
-      This file is over 2 MB and is not shown here.
-    </p>
+    <AppEmptyState
+      v-else-if="doc.kind === 'binary'"
+      layout="fill"
+      title="This file is binary and has no preview."
+    />
+    <AppEmptyState
+      v-else-if="doc.kind === 'tooLarge'"
+      layout="fill"
+      title="This file is over 2 MB and is not shown here."
+    />
     <div v-else class="reader">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="markdown-body" v-html="doc.html" />
@@ -76,12 +91,6 @@ function edit(value: string): void {
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.empty {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
-  padding: var(--space-4) var(--space-6);
 }
 
 .editor-wrap {

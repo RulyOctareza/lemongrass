@@ -52,11 +52,6 @@
   padding: var(--space-4);
 }
 
-.rester-client .client-empty {
-  align-items: center;
-  justify-content: center;
-}
-
 .rester-client .target-row,
 .rester-client .url-row {
   display: flex;
@@ -134,13 +129,6 @@
   gap: var(--space-3);
   padding: var(--space-3);
   overflow: auto;
-}
-
-.rester-client .box-placeholder {
-  margin: auto;
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
-  text-align: center;
 }
 
 .rester-client .status {

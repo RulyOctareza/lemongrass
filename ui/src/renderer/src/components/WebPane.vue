@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { WebBounds, WebState } from '../../../preload/types'
+import AppEmptyState from './AppEmptyState.vue'
 
 const props = defineProps<{
   shellTabId: string
@@ -156,9 +157,12 @@ onBeforeUnmount(() => {
       <span class="web-watch">Watch only</span>
     </div>
     <div ref="host" class="web-host">
-      <p v-if="!shown" class="web-empty">
-        No page open yet. The browser appears here when an agent in that shell tab opens a page.
-      </p>
+      <AppEmptyState
+        v-if="!shown"
+        layout="fill"
+        title="No page open yet."
+        detail="The browser appears here when an agent in that shell tab opens a page."
+      />
     </div>
   </div>
 </template>
@@ -220,13 +224,5 @@ onBeforeUnmount(() => {
   justify-content: center;
   min-height: 0;
   background: var(--color-surface-0);
-}
-
-.web-empty {
-  max-width: 320px;
-  margin: 0;
-  color: var(--color-fg-secondary);
-  font-size: var(--text-sm);
-  text-align: center;
 }
 </style>

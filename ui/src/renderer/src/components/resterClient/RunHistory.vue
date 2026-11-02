@@ -7,6 +7,7 @@ import { statusClass } from '../../resterClientCall'
 import { formatAge } from '../../relativeAge'
 import { ageNow } from '../../ageClock'
 import type { ResterClientRun } from '../../../../preload/types'
+import AppEmptyState from '../AppEmptyState.vue'
 
 defineProps<{
   runs: ResterClientRun[]
@@ -27,7 +28,12 @@ function statusOf(run: ResterClientRun): { text: string; className: string } {
 
 <template>
   <div class="run-list">
-    <p v-if="runs.length === 0" class="hint">No runs yet. Each send is kept here.</p>
+    <AppEmptyState
+      v-if="runs.length === 0"
+      size="sm"
+      title="No runs yet."
+      detail="Each send is kept here."
+    />
     <div
       v-for="run in runs"
       :key="run.id"

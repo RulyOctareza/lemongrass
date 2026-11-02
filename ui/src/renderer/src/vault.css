@@ -109,14 +109,21 @@
   padding: var(--space-3);
 }
 
+/* main, content, kind pane and section form one growing flex column, so a fill empty state has
+   the pane's full height to center in while a long list still scrolls main. */
 .vault-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   padding: var(--space-6);
 }
 
 .vault-content {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 1040px;
   margin: 0 auto;
@@ -130,12 +137,14 @@
 }
 
 .vault-content .kind-pane {
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
 .vault-tab .section {
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -614,12 +623,6 @@
 .vault-tab .error-text {
   color: var(--color-danger, #e5484d);
   font-size: var(--text-xs);
-}
-
-.vault-tab .empty {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
-  padding: var(--space-4);
 }
 
 .vault-tab .create-actions {

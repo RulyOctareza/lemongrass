@@ -31,6 +31,8 @@ import type {
   VaultRester
 } from '../../../../preload/types'
 import AppInput from '../AppInput.vue'
+import AppEmptyState from '../AppEmptyState.vue'
+import { resterClientIcon } from '../../icons'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 // Where the last selected request is remembered, so reopening the app shows it again.
@@ -480,10 +482,13 @@ function onUrlKeydown(event: KeyboardEvent): void {
         </div>
       </section>
 
-      <section v-else class="client-main client-empty">
-        <p class="box-placeholder">
-          Add a request to start. Paste a curl command into its URL box to fill it.
-        </p>
+      <section v-else class="client-main">
+        <AppEmptyState
+          layout="fill"
+          :icon="resterClientIcon"
+          title="Add a request to start."
+          detail="Paste a curl command into its URL box to fill it."
+        />
       </section>
     </div>
   </div>

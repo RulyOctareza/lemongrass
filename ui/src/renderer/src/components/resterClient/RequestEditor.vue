@@ -9,6 +9,7 @@ import AppSegmented from '../AppSegmented.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 import PairRows from './PairRows.vue'
 import type { ResterClientBodyKind, ResterClientRequest } from '../../../../preload/types'
+import AppEmptyState from '../AppEmptyState.vue'
 
 // Edited in place; the parent owns the request.
 const request = defineModel<ResterClientRequest>({ required: true })
@@ -64,9 +65,11 @@ function formatJson(): void {
 
     <div class="box-body">
       <template v-if="section === 'body'">
-        <p v-if="request.bodyKind === 'none'" class="box-placeholder">
-          This request sends no body.
-        </p>
+        <AppEmptyState
+          v-if="request.bodyKind === 'none'"
+          layout="fill"
+          title="This request sends no body."
+        />
         <template v-else-if="request.bodyKind === 'json'">
           <AppTextarea
             v-model="request.json"

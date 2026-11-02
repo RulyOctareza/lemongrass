@@ -15,6 +15,7 @@ import {
 } from '../../connectionString'
 import AppInput from '../AppInput.vue'
 import { matchesQuery } from './listFilter'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -518,8 +519,8 @@ watch(
 
     <p v-if="sshHostByConnectionError" class="error-text">{{ sshHostByConnectionError }}</p>
     <p v-if="connectionsError" class="error-text">{{ connectionsError }}</p>
-    <p v-else-if="connectionsLoading" class="empty">Loading...</p>
-    <p v-else-if="connections.length === 0" class="empty">No connections yet.</p>
+    <AppEmptyState v-else-if="connectionsLoading" loading title="Loading..." />
+    <AppEmptyState v-else-if="connections.length === 0" title="No connections yet." />
 
     <template v-else>
       <div class="list-filter">
@@ -530,7 +531,7 @@ watch(
           placeholder="Search by name"
         />
       </div>
-      <p v-if="shownConnections.length === 0" class="empty">No connection matches.</p>
+      <AppEmptyState v-if="shownConnections.length === 0" title="No connection matches." />
     </template>
 
     <div

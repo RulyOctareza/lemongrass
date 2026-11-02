@@ -17,6 +17,7 @@ import type {
   TabBusy,
   WorkgroupThreadMessage
 } from '../../../../preload/types'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -222,7 +223,7 @@ function onKeydown(event: KeyboardEvent): void {
     </div>
 
     <div v-if="!folded && open" ref="scroller" class="messages">
-      <p v-if="thread.messages.length === 0" class="empty">No messages yet.</p>
+      <AppEmptyState v-if="thread.messages.length === 0" size="sm" title="No messages yet." />
       <article
         v-for="message in thread.messages"
         :key="message.id"
@@ -350,10 +351,6 @@ function onKeydown(event: KeyboardEvent): void {
   gap: var(--space-2);
   max-height: 200px;
   overflow-y: auto;
-}
-
-.empty {
-  color: var(--color-fg-muted);
 }
 
 .message {

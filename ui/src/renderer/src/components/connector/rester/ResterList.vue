@@ -10,6 +10,7 @@ import AppButton from '../../AppButton.vue'
 import ResterCreateForm from './ResterCreateForm.vue'
 import ResterDetail from './ResterDetail.vue'
 import AppInput from '../../AppInput.vue'
+import AppEmptyState from '../../AppEmptyState.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -116,8 +117,8 @@ watch(
       />
 
       <p v-if="listError" class="error-text">{{ listError }}</p>
-      <p v-else-if="loading" class="empty">Loading...</p>
-      <p v-else-if="resters.length === 0" class="empty">No resters yet.</p>
+      <AppEmptyState v-else-if="loading" loading title="Loading..." />
+      <AppEmptyState v-else-if="resters.length === 0" title="No resters yet." />
 
       <template v-else>
         <div class="list-filter">
@@ -130,7 +131,7 @@ watch(
           />
         </div>
         <p v-if="summaryError" class="error-text">{{ summaryError }}</p>
-        <p v-if="shownResters.length === 0" class="empty">No rester matches.</p>
+        <AppEmptyState v-if="shownResters.length === 0" title="No rester matches." />
 
         <div v-else class="channel-list">
           <div v-for="name in shownResters" :key="name" class="channel-row">

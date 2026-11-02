@@ -13,6 +13,7 @@ import AppButton from './AppButton.vue'
 import VaultUnlockGate from './VaultUnlockGate.vue'
 import DecisionsSection from './decisions/DecisionsSection.vue'
 import { askState } from '../asks'
+import { decisionsIcon } from '../icons'
 
 const props = defineProps<{
   active: boolean
@@ -53,8 +54,12 @@ function shown(kind: 'database' | 'http', tab: string): boolean {
               stroke-linecap="round"
               stroke-linejoin="round"
             >
-              <path d="M2.5 2.5h9v6.5h-5l-2.5 2.5v-2.5h-1.5z" />
-              <path d="M5 5.5l1.4 1.4L9 4.3" />
+              <component
+                :is="shape.tag"
+                v-for="(shape, i) in decisionsIcon"
+                :key="i"
+                v-bind="shape.attrs"
+              />
             </svg>
             Decisions
             <span v-if="askState.count.waiting > 0" class="nav-count">

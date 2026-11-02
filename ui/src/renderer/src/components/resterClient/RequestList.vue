@@ -7,6 +7,7 @@ import AppConfirmButton from '../AppConfirmButton.vue'
 import type { ResterClientRequest } from '../../../../preload/types'
 import AppInput from '../AppInput.vue'
 import type { AppInputHandle } from '../appInput'
+import AppEmptyState from '../AppEmptyState.vue'
 
 defineProps<{
   requests: ResterClientRequest[]
@@ -42,7 +43,7 @@ function finishRename(): void {
 
 <template>
   <div class="request-list">
-    <p v-if="requests.length === 0" class="hint">No requests yet.</p>
+    <AppEmptyState v-if="requests.length === 0" size="sm" title="No requests yet." />
     <div
       v-for="request in requests"
       :key="request.id"

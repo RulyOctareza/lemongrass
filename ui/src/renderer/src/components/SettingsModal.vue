@@ -23,6 +23,7 @@ import AppCheckbox from './AppCheckbox.vue'
 import { claudeUsage, refreshUsage, usageStore } from '../usage'
 import type { Project, StatusLineChainState } from '../../../preload/types'
 import AppInput from './AppInput.vue'
+import AppEmptyState from './AppEmptyState.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -271,9 +272,12 @@ async function onRemove(name: string): Promise<void> {
             it.
           </p>
           <div class="statusline-body">
-            <p v-if="!chain.enabled" class="statusline-empty">
-              Off. Your own statusline is back in place and Claude usage is not recorded.
-            </p>
+            <AppEmptyState
+              v-if="!chain.enabled"
+              size="sm"
+              title="Off."
+              detail="Your own statusline is back in place and Claude usage is not recorded."
+            />
             <dl v-else-if="hasOwnCommand" class="settings-facts">
               <template v-for="name in chainAccounts" :key="name">
                 <dt>{{ name }}</dt>
@@ -285,9 +289,11 @@ async function onRemove(name: string): Promise<void> {
                 </dd>
               </template>
             </dl>
-            <p v-else class="statusline-empty">
-              None of your accounts has a statusline of its own.
-            </p>
+            <AppEmptyState
+              v-else
+              size="sm"
+              title="None of your accounts has a statusline of its own."
+            />
           </div>
         </div>
       </section>
@@ -332,8 +338,7 @@ async function onRemove(name: string): Promise<void> {
   font-size: var(--text-xs);
 }
 
-.statusline-none,
-.statusline-empty {
+.statusline-none {
   margin: 0;
   color: var(--color-fg-muted);
   font-size: var(--text-xs);

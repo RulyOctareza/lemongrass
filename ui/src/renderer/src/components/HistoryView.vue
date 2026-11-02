@@ -16,6 +16,8 @@ import GitIcon from './GitIcon.vue'
 import HistoryResetModal from './HistoryResetModal.vue'
 import RevisionView from './RevisionView.vue'
 import AppInput from './AppInput.vue'
+import AppEmptyState from './AppEmptyState.vue'
+import { historyIcon } from '../icons'
 
 const PAGE = 200
 const LANE_WIDTH = 14
@@ -241,10 +243,17 @@ function laneX(lane: number): number {
     <div class="history-body">
       <div class="history-list" @scroll="onScroll">
         <p v-if="error" class="notice error">{{ error }}</p>
-        <p v-else-if="loading && commits.length === 0" class="notice">Loading...</p>
-        <p v-else-if="commits.length === 0" class="notice">
-          {{ searching ? 'No commits match.' : 'No commits yet.' }}
-        </p>
+        <AppEmptyState
+          v-else-if="loading && commits.length === 0"
+          layout="fill"
+          loading
+          title="Loading..."
+        />
+        <AppEmptyState
+          v-else-if="commits.length === 0"
+          layout="fill"
+          :title="searching ? 'No commits match.' : 'No commits yet.'"
+        />
         <button
           v-for="(commit, index) in commits"
           :key="commit.hash"
@@ -318,7 +327,12 @@ function laneX(lane: number): number {
       </div>
 
       <div class="history-detail">
-        <p v-if="!selectedCommit" class="notice">Select a commit to see what it changed.</p>
+        <AppEmptyState
+          v-if="!selectedCommit"
+          layout="fill"
+          :icon="historyIcon"
+          title="Select a commit to see what it changed."
+        />
         <template v-else>
           <div class="detail-head">
             <p class="detail-message">{{ info?.message ?? selectedCommit.subject }}</p>
@@ -595,14 +609,15 @@ function laneX(lane: number): number {
   font-weight: var(--weight-semibold);
 }
 
-.notice {
+.notice.error {
   padding: var(--space-4) var(--space-6);
-  color: var(--color-fg-muted);
+  color: var(--color-error);
   font-size: var(--text-sm);
+  white-space: pre-wrap;
 }
 
-.notice.error {
-  color: var(--color-error);
-  white-space: pre-wrap;
+/* The list scrolls as a block, so its fill state takes the list's height instead of growing. */
+.history-list > .empty-state {
+  height: 100%;
 }
 </style>

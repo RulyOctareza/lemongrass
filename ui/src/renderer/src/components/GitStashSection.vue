@@ -14,6 +14,7 @@ import AppModal from './AppModal.vue'
 import GitIcon from './GitIcon.vue'
 import RevisionView from './RevisionView.vue'
 import AppInput from './AppInput.vue'
+import AppEmptyState from './AppEmptyState.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -97,7 +98,7 @@ async function save(): Promise<void> {
         <AppButton variant="primary" :disabled="state.busy !== null" @click="save">Stash</AppButton>
       </div>
       <p v-if="error" class="stash-error">{{ error }}</p>
-      <p v-if="stashes.length === 0" class="stash-empty">No stashes</p>
+      <AppEmptyState v-if="stashes.length === 0" size="sm" title="No stashes" />
       <ul v-else class="stash-list">
         <li v-for="stash in stashes" :key="stash.ref" class="stash-item">
           <button class="stash-row" :title="stash.message" @click="viewing = stash">
@@ -235,12 +236,6 @@ async function save(): Promise<void> {
   font-size: var(--text-xs);
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.stash-empty {
-  padding: 0 var(--space-2);
-  color: var(--color-fg-muted);
-  font-size: var(--text-xs);
 }
 
 .stash-list {

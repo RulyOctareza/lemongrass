@@ -8,6 +8,7 @@ import { useConflictThread } from '../../conflictThread'
 import { setConflictPath, type ProjectRef } from '../../workspace'
 import ConflictFilePicker from './ConflictFilePicker.vue'
 import ConflictFileView from './ConflictFileView.vue'
+import AppEmptyState from '../AppEmptyState.vue'
 
 // The conflict tab: one for the whole conflict session, showing one file at a time.
 const props = defineProps<{
@@ -50,7 +51,11 @@ watch(
   <!-- Each file the tab showed stays cached, keyed by path, so switching files keeps its unsaved
        middle and its undo history, as switching tabs does. -->
   <div v-if="noneLeft" class="none-left">
-    No conflicts left in this project. You can close this tab.
+    <AppEmptyState
+      layout="fill"
+      title="No conflicts left in this project."
+      detail="You can close this tab."
+    />
   </div>
   <KeepAlive v-else>
     <ConflictFileView :key="path" :project="project" :path="path" :thread="thread">
@@ -69,13 +74,7 @@ watch(
 <style scoped>
 .none-left {
   display: flex;
-  align-items: center;
-  justify-content: center;
   height: 100%;
-  padding: var(--space-6);
-  background: var(--color-surface-0);
-  color: var(--color-fg-primary);
-  font-size: var(--text-sm);
-  text-align: center;
+  background: var(--layer-page);
 }
 </style>

@@ -15,6 +15,7 @@ import AppConfirmButton from '../AppConfirmButton.vue'
 import AppInput from '../AppInput.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 import type { AppInputHandle } from '../appInput'
+import AppEmptyState from '../AppEmptyState.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -391,7 +392,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
       </p>
 
       <p v-if="loadError" class="error-text">{{ loadError }}</p>
-      <p v-else-if="loading && !catalog.length" class="empty">Loading the policy...</p>
+      <AppEmptyState v-else-if="loading && !catalog.length" loading title="Loading the policy..." />
     </div>
 
     <div v-if="catalog.length" class="settings-scroll">
@@ -723,11 +724,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
 
 .chip-remove:hover {
   color: var(--color-fg-primary);
-}
-
-.empty {
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
 }
 
 .error-text {
