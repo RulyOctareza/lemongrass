@@ -6,7 +6,7 @@ import { workgroupStateOf } from './workgroups'
 import { shellTabById } from './workspace'
 
 // How the app names a tab in a sentence. A tab title is free text a model may have set, so it is
-// always quoted and marked, never run into the sentence; a workgroup member goes by role and group.
+// always marked, never run into the sentence as plain words; a workgroup member goes by its label and group.
 
 export interface NamePart {
   text: string
@@ -26,39 +26,39 @@ function memberParts(projectId: string, tabId: string): NamePart[] | null {
     const member = group.members.find((m) => m.tabId === tabId)
     if (!member) continue
     return [
-      { text: `${member.role} "` },
       { text: member.label, mark: true },
-      { text: '" in workgroup "' },
-      { text: group.name, mark: true },
-      { text: '"' }
+      { text: ' in workgroup ' },
+      { text: group.name, mark: true }
     ]
   }
   return null
 }
 
-// Starts lower case except for agent names, so it reads mid-sentence; MarkedText capitalizes it at the start of one.
+// Starts lower case except for agent names and marked labels, so it reads mid-sentence; MarkedText
+// capitalizes plain words at the start of one.
 // closedTitle is the title saved earlier, for naming a tab that has closed since.
 export function tabParts(tabId: string, closedTitle?: string): NamePart[] {
   const found = shellTabById(tabId)
   if (!found) {
     const title = closedTitle ? cleanTitle(closedTitle) : ''
     if (!title) return [{ text: 'an agent in a closed tab' }]
-    return [{ text: 'the closed tab "' }, { text: title, mark: true }, { text: '"' }]
+    return [{ text: 'the closed tab ' }, { text: title, mark: true }]
   }
   const member = memberParts(found.project.id, tabId)
   if (member) return member
   const agent = AGENT_NAMES[found.tab.command] ?? 'an agent'
   const title = cleanTitle(shellTitles[tabId] ?? '')
   if (!title) return [{ text: `${agent} in an untitled tab` }]
-  return [{ text: `${agent} in "` }, { text: title, mark: true }, { text: '" tab' }]
+  return [{ text: `${agent} in ` }, { text: title, mark: true }, { text: ' tab' }]
 }
 
 export function plainText(parts: NamePart[]): string {
   return parts.map((part) => part.text).join('')
 }
 
+// A marked first part is a name and keeps its own case.
 export function capitalizeParts(parts: NamePart[]): NamePart[] {
   const [first, ...rest] = parts
-  if (!first) return parts
+  if (!first || first.mark) return parts
   return [{ ...first, text: first.text.charAt(0).toUpperCase() + first.text.slice(1) }, ...rest]
 }

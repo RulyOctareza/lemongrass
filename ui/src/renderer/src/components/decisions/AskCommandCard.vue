@@ -126,25 +126,29 @@ async function decline(): Promise<void> {
     <p v-if="!ask.verdict" class="hint">
       No guard rule matches the command. The requester asked on its own.
     </p>
-    <p v-else class="hint">
+    <!-- The hint uses the vault login's info-trigger and info-popover look from vault.css; the popover spans the line. -->
+    <p v-else class="hint guard-line">
       {{ guardLead }}<strong class="rule-id">{{ ask.verdict.rule }}</strong
       ><span
-        class="rule-help"
-        role="img"
-        aria-label="You can change this rule for this project in Settings, Safety."
-        title="You can change this rule for this project in Settings, Safety."
+        class="info-trigger rule-help"
+        tabindex="0"
+        aria-label="About the rule"
+        aria-describedby="ask-rule-help"
         ><svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
           fill="none"
           stroke="currentColor"
-          stroke-width="1.1"
+          stroke-width="1.4"
           stroke-linecap="round"
+          aria-hidden="true"
         >
-          <circle cx="6" cy="6" r="5" />
-          <path d="M4.6 4.6a1.4 1.4 0 1 1 1.9 1.3c-.4.2-.5.4-.5.8" />
-          <circle cx="6" cy="8.6" r=".3" fill="currentColor" /></svg></span
+          <circle cx="8" cy="8" r="6.5" />
+          <path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.7c-.5.2-.8.6-.8 1.1v.4" />
+          <circle cx="8" cy="11.6" r="0.4" fill="currentColor" /></svg></span
+      ><span id="ask-rule-help" class="info-popover" role="tooltip"
+        >You can change rule {{ ask.verdict.rule }} for this project in Settings, Safety.</span
       >.
       <template v-if="ask.rule">The guard refused it and sent it to you.</template>
     </p>
@@ -237,11 +241,12 @@ async function decline(): Promise<void> {
   font-family: var(--font-mono);
 }
 
+.guard-line {
+  position: relative;
+}
+
 .rule-help {
-  display: inline-flex;
   margin-left: 4px;
-  color: var(--color-fg-secondary);
-  vertical-align: -1px;
-  cursor: help;
+  vertical-align: -2px;
 }
 </style>
