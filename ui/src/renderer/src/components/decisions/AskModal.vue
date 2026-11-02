@@ -280,8 +280,26 @@ const outcome = computed(() => {
   overflow: visible;
 }
 
+/* In the modal the gate sizes to its content. Its info popover would sit outside the gate, where the
+   gate's own scroll area counts it even while hidden, so here it joins the flow only while shown. */
 .vault-tab.ask-body .vault-gate {
-  padding: var(--space-4) 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.vault-tab.ask-body .vault-gate .unlock-head {
+  flex-wrap: wrap;
+}
+
+.vault-tab.ask-body .vault-gate .info-popover {
+  display: none;
+  position: static;
+  flex-basis: 100%;
+}
+
+.vault-tab.ask-body .vault-gate .info-trigger:hover + .info-popover,
+.vault-tab.ask-body .vault-gate .info-trigger:focus-visible + .info-popover {
+  display: block;
 }
 
 .vault-tab .untrusted {
