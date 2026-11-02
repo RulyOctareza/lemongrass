@@ -192,7 +192,7 @@ onBeforeUnmount(hide)
   gap: var(--space-1);
   padding: var(--space-2);
   overflow-y: auto;
-  background: var(--color-surface-1);
+  background: var(--layer-float);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
@@ -233,7 +233,7 @@ onBeforeUnmount(hide)
 }
 
 .menu-row:hover:not(:disabled) {
-  background: var(--color-surface-2);
+  background: var(--layer-float-hover);
 }
 
 .menu-row:disabled {

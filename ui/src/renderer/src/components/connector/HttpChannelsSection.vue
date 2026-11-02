@@ -14,6 +14,7 @@ import HttpChannelForm from './HttpChannelForm.vue'
 import ChannelTypeIcon from './ChannelTypeIcon.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 import { matchesQuery, resterDomains } from './listFilter'
+import AppInput from '../AppInput.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -268,10 +269,11 @@ onUnmounted(() => {
           search-placeholder="Search resters"
           @select="resterFilter = $event"
         />
-        <input
+        <AppInput
           v-model="query"
           type="text"
           spellcheck="false"
+          icon="search"
           placeholder="Filter by name, rester, method, type or domain"
         />
       </div>
@@ -384,7 +386,7 @@ onUnmounted(() => {
         </div>
 
         <div v-if="activatingHTTPId === channel.ID" class="inline-form">
-          <input
+          <AppInput
             v-model.number="activateHTTPTtlMinutes"
             type="number"
             min="1"

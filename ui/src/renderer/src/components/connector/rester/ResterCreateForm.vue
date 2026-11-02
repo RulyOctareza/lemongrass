@@ -8,6 +8,7 @@ import type { VaultRester } from '../../../../../preload/types'
 import AppButton from '../../AppButton.vue'
 import AppCheckbox from '../../AppCheckbox.vue'
 import { defaultResterAPI } from './resterDraft'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   taken: string[]
@@ -77,19 +78,19 @@ async function save(): Promise<void> {
 
     <div class="field-block">
       <label class="field-label" for="rester-name">Name</label>
-      <input id="rester-name" v-model="name" type="text" placeholder="e.g. billing" autofocus />
+      <AppInput id="rester-name" v-model="name" type="text" placeholder="e.g. billing" autofocus />
       <p v-if="nameTaken" class="error-text">A rester with this name already exists.</p>
     </div>
 
     <div class="field-block">
       <label class="field-label" for="rester-env-name">First environment</label>
-      <input id="rester-env-name" v-model="envName" type="text" placeholder="e.g. staging" />
+      <AppInput id="rester-env-name" v-model="envName" type="text" placeholder="e.g. staging" />
     </div>
 
     <div class="field-grid">
       <div class="field-block">
         <label class="field-label" for="rester-base-url">API base URL</label>
-        <input
+        <AppInput
           id="rester-base-url"
           v-model="baseUrl"
           type="text"
@@ -98,7 +99,12 @@ async function save(): Promise<void> {
       </div>
       <div class="field-block">
         <label class="field-label" for="rester-origin">Web origin</label>
-        <input id="rester-origin" v-model="origin" type="text" placeholder="https://example.com" />
+        <AppInput
+          id="rester-origin"
+          v-model="origin"
+          type="text"
+          placeholder="https://example.com"
+        />
       </div>
     </div>
 
@@ -118,7 +124,12 @@ async function save(): Promise<void> {
 
     <div v-if="withApp" class="field-block">
       <label class="field-label" for="rester-package">App package name</label>
-      <input id="rester-package" v-model="packageName" type="text" placeholder="com.example.app" />
+      <AppInput
+        id="rester-package"
+        v-model="packageName"
+        type="text"
+        placeholder="com.example.app"
+      />
     </div>
 
     <div class="create-actions">

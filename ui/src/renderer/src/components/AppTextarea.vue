@@ -35,7 +35,7 @@ defineExpose({ focus: () => element.value?.focus() })
   box-sizing: border-box;
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-2);
+  background: var(--layer-input);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
   color: var(--color-fg-primary);

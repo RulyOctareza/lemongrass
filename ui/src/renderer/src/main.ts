@@ -10,6 +10,7 @@ import '@fontsource-variable/jetbrains-mono/wght.css'
 import '@fontsource-variable/jetbrains-mono/wght-italic.css'
 import './style.css'
 import './settings.css'
+import './controls.css'
 
 import { createApp } from 'vue'
 import App from './App.vue'

@@ -124,7 +124,7 @@ onBeforeUnmount(() => {
   z-index: 50;
   min-width: 180px;
   padding: var(--space-2);
-  background: var(--color-bg-elevated);
+  background: var(--layer-float);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.4));
@@ -147,10 +147,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-/* The menu sits on --color-bg-elevated, which equals --color-surface-2 in the dark theme. */
+/* Rows hover one level above the floating panel they sit in. */
 .menu-item:hover:not(:disabled),
 .menu-item:focus-visible:not(:disabled) {
-  background: var(--color-surface-3);
+  background: var(--layer-float-hover);
 }
 
 .menu-icon {

@@ -22,6 +22,7 @@ import UsageMeters from './UsageMeters.vue'
 import AppCheckbox from './AppCheckbox.vue'
 import { claudeUsage, refreshUsage, usageStore } from '../usage'
 import type { Project, StatusLineChainState } from '../../../preload/types'
+import AppInput from './AppInput.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -239,7 +240,7 @@ async function onRemove(name: string): Promise<void> {
         <p v-if="removeError" class="settings-error">{{ removeError }}</p>
 
         <form class="settings-add" @submit.prevent="submitAdd">
-          <input
+          <AppInput
             v-model="newName"
             class="settings-input"
             type="text"

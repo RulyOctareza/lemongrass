@@ -9,6 +9,7 @@ import { matchesQuery, resterDomains } from '../listFilter'
 import AppButton from '../../AppButton.vue'
 import ResterCreateForm from './ResterCreateForm.vue'
 import ResterDetail from './ResterDetail.vue'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -120,10 +121,11 @@ watch(
 
       <template v-else>
         <div class="list-filter">
-          <input
+          <AppInput
             v-model="query"
             type="text"
             spellcheck="false"
+            icon="search"
             placeholder="Search by name or domain"
           />
         </div>

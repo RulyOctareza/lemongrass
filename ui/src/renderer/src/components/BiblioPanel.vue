@@ -15,6 +15,7 @@ import WorkgroupPanel from './WorkgroupPanel.vue'
 import { activePath, closeUnder, openFile, type ProjectRef } from '../workspace'
 import type { BiblioTree } from '../../../preload/types'
 import AppButton from './AppButton.vue'
+import AppInput from './AppInput.vue'
 
 const props = defineProps<{
   tree: BiblioTree | null
@@ -194,9 +195,8 @@ function onGutterUp(): void {
       :title="createTargetFolder ? 'New file' : 'New scratchpad'"
       @close="cancelCreate"
     >
-      <input
+      <AppInput
         v-model="newTitle"
-        class="title-input"
         type="text"
         placeholder="Title"
         autofocus
@@ -221,21 +221,6 @@ function onGutterUp(): void {
   flex-shrink: 0;
   min-height: 0;
   display: flex;
-}
-
-.title-input {
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-}
-
-.title-input:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .biblio-tree {

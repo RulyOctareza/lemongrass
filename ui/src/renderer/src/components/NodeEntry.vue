@@ -84,7 +84,7 @@ onBeforeUnmount(() => clearTimeout(timer))
   gap: 6px;
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-2);
+  background: var(--layer-raised);
   border: none;
   border-radius: var(--radius-md);
   color: var(--color-fg-primary);
@@ -96,7 +96,7 @@ onBeforeUnmount(() => clearTimeout(timer))
 }
 
 .node-item:hover {
-  background: var(--color-surface-3);
+  background: var(--layer-raised-hover);
 }
 
 .node-label {

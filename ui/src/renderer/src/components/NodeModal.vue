@@ -16,6 +16,8 @@ import type {
   NodeShare,
   NodeState
 } from '../../../preload/types'
+import AppInput from './AppInput.vue'
+import type { AppInputHandle } from './appInput'
 
 const emit = defineEmits<{
   close: []
@@ -90,7 +92,7 @@ const openKinds = ref<Kind[]>([])
 const dirty = computed(() => draft.value !== null && JSON.stringify(draft.value) !== baseline.value)
 
 const renaming = ref(false)
-const renameInput = ref<HTMLInputElement | null>(null)
+const renameInput = ref<AppInputHandle | null>(null)
 
 const selected = computed(
   (): NodeGrantView | null => state.value?.grants.find((g) => g.id === selectedId.value) ?? null
@@ -552,8 +554,9 @@ function copy(key: string, text: string): void {
         <div v-if="tunnel.provider === 'ngrok'" class="settings-fields">
           <label class="settings-field">
             Authtoken
-            <input
+            <AppInput
               v-model="tunnel.authtoken"
+              mono
               class="settings-input"
               type="password"
               autocomplete="off"
@@ -566,8 +569,9 @@ function copy(key: string, text: string): void {
           </label>
           <label class="settings-field">
             Domain
-            <input
+            <AppInput
               v-model="tunnel.domain"
+              mono
               class="settings-input"
               type="text"
               spellcheck="false"
@@ -578,7 +582,7 @@ function copy(key: string, text: string): void {
         <div v-else class="settings-fields">
           <label class="settings-field settings-field--narrow">
             Port
-            <input
+            <AppInput
               v-model.number="tunnel.localPort"
               class="settings-input"
               type="number"
@@ -612,7 +616,7 @@ function copy(key: string, text: string): void {
           <div class="settings-field">
             <span>Token</span>
             <div class="node-token">
-              <input
+              <AppInput
                 v-if="renaming && draft"
                 ref="renameInput"
                 v-model="draft.label"
@@ -700,7 +704,7 @@ function copy(key: string, text: string): void {
             <div v-if="creating" class="settings-fields">
               <label class="settings-field">
                 Name
-                <input
+                <AppInput
                   v-model="draft.label"
                   class="settings-input"
                   type="text"
@@ -722,12 +726,13 @@ function copy(key: string, text: string): void {
               <dt>Expires</dt>
               <dd class="node-expires">
                 in
-                <input
+                <AppInput
+                  size="sm"
                   class="settings-input node-days"
                   type="number"
                   min="1"
                   aria-label="Days until it expires"
-                  :value="daysLeft(draft.expiresAt)"
+                  :model-value="daysLeft(draft.expiresAt)"
                   @change="setDays(($event.target as HTMLInputElement).valueAsNumber)"
                 />
                 days
@@ -784,7 +789,7 @@ function copy(key: string, text: string): void {
                 </div>
                 <label class="settings-field">
                   Filter
-                  <input
+                  <AppInput
                     v-model="resourceFilter"
                     class="settings-input"
                     type="text"
@@ -938,8 +943,6 @@ function copy(key: string, text: string): void {
 
 .node-days {
   width: 5rem;
-  padding-top: var(--space-1);
-  padding-bottom: var(--space-1);
 }
 
 .node-danger {
@@ -961,7 +964,6 @@ function copy(key: string, text: string): void {
   padding: var(--space-3);
   background: var(--color-surface-2);
   border-radius: var(--radius-md);
-  --input-bg: var(--color-surface-1);
 }
 
 .node-issued {

@@ -5,6 +5,8 @@
 import { nextTick, ref } from 'vue'
 import AppConfirmButton from '../AppConfirmButton.vue'
 import type { ResterClientRequest } from '../../../../preload/types'
+import AppInput from '../AppInput.vue'
+import type { AppInputHandle } from '../appInput'
 
 defineProps<{
   requests: ResterClientRequest[]
@@ -19,7 +21,7 @@ const emit = defineEmits<{
 
 const renamingId = ref<string | null>(null)
 const renameText = ref('')
-const renameInput = ref<HTMLInputElement[] | null>(null)
+const renameInput = ref<AppInputHandle[] | null>(null)
 
 function title(request: ResterClientRequest): string {
   return request.name || request.url || 'Untitled request'
@@ -50,10 +52,11 @@ function finishRename(): void {
       @dblclick="startRename(request)"
     >
       <span class="method" :class="request.method.toLowerCase()">{{ request.method }}</span>
-      <input
+      <AppInput
         v-if="renamingId === request.id"
         ref="renameInput"
         v-model="renameText"
+        size="sm"
         class="rename"
         type="text"
         placeholder="Request name"
@@ -141,7 +144,6 @@ function finishRename(): void {
 .rename {
   flex: 1;
   min-width: 0;
-  padding: 2px var(--space-2);
 }
 
 .remove {

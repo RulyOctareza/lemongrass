@@ -12,6 +12,9 @@ import type {
 } from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
 import AppConfirmButton from '../AppConfirmButton.vue'
+import AppInput from '../AppInput.vue'
+import AppSwitcher from '../AppSwitcher.vue'
+import type { AppInputHandle } from '../appInput'
 
 const props = defineProps<{
   projects: Project[]
@@ -63,6 +66,17 @@ function emptyPolicy(): VaultPolicy {
 }
 
 const isGlobal = computed(() => scope.value === GLOBAL)
+
+const scopeItems = computed(() => [
+  { id: GLOBAL, label: 'Global' },
+  ...props.projects.map((project) => ({ id: project.id, label: project.name }))
+])
+
+const modeItems: { id: Mode; label: string }[] = [
+  { id: 'deny', label: 'Deny' },
+  { id: 'ask', label: 'Ask me' },
+  { id: 'allow', label: 'Allow' }
+]
 const globalBinaries = computed(() => (isGlobal.value ? [] : policies.value.global.binaries))
 const globalPaths = computed(() => (isGlobal.value ? [] : policies.value.global.paths))
 
@@ -84,7 +98,7 @@ const groups = computed(() => {
 
 const filterOpen = ref(false)
 const filterQuery = ref('')
-const filterInput = ref<HTMLInputElement | null>(null)
+const filterInput = ref<AppInputHandle | null>(null)
 
 // Filtering only hides rows, so a change in a hidden rule still counts and is saved.
 const visibleGroups = computed(() => {
@@ -329,13 +343,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
       </p>
 
       <div class="scope-row">
-        <label class="scope-label" for="policy-scope">Policy for</label>
-        <select id="policy-scope" v-model="scope" class="scope-select">
-          <option :value="GLOBAL">Global</option>
-          <option v-for="project in props.projects" :key="project.id" :value="project.id">
-            {{ project.name }}
-          </option>
-        </select>
+        <span class="scope-label">Policy for</span>
+        <AppSwitcher
+          class="scope-select"
+          :items="scopeItems"
+          :active-id="scope"
+          placeholder="Global"
+          empty-text="No projects."
+          framed
+          searchable
+          search-placeholder="Search projects"
+          @select="scope = $event"
+        />
         <!-- Keyed by scope so switching scope drops a half-finished confirm. -->
         <AppConfirmButton
           :key="scope"
@@ -349,9 +368,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
         </AppConfirmButton>
       </div>
       <div v-if="filterOpen" class="find">
-        <input
+        <AppInput
           ref="filterInput"
           v-model="filterQuery"
+          icon="search"
           class="find-input"
           placeholder="Filter rules"
           spellcheck="false"
@@ -390,11 +410,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
                 <span class="rule-id">{{ rule.id }}</span>
               </div>
               <span v-if="rule.locked" class="value-capsule">Locked</span>
-              <select v-else v-model="modes[rule.id]" class="policy-mode" :aria-label="rule.id">
-                <option value="deny">Deny</option>
-                <option value="ask">Ask me</option>
-                <option value="allow">Allow</option>
-              </select>
+              <AppSwitcher
+                v-else
+                class="policy-mode"
+                :items="modeItems"
+                :active-id="modes[rule.id]"
+                placeholder="Mode"
+                empty-text="No modes."
+                framed
+                size="sm"
+                :aria-label="rule.id"
+                @select="modes[rule.id] = $event as Mode"
+              />
             </div>
           </div>
         </div>
@@ -407,7 +434,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
           added.
         </p>
         <div class="add-row">
-          <input
+          <AppInput
             v-model="newBinary"
             type="text"
             placeholder="e.g. make"
@@ -445,7 +472,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
           of a name, for example ~/private or /data/*/secret.
         </p>
         <div class="add-row">
-          <input
+          <AppInput
             v-model="newPath"
             type="text"
             placeholder="e.g. ~/private"
@@ -482,7 +509,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
       <span v-else-if="dirty" class="settings-footer-status">Unsaved changes</span>
       <span v-else-if="savedNotice" class="settings-footer-status saved">{{ savedNotice }}</span>
       <span v-else class="settings-footer-status muted">No changes</span>
-      <input
+      <AppInput
         v-if="!vaultUnlocked && dirty"
         v-model="passphraseInput"
         type="password"
@@ -537,35 +564,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
   min-width: 0;
 }
 
-.add-row input {
+.add-row .app-input {
   flex: 1;
   min-width: 0;
 }
 
 .settings-footer .passphrase-input {
   width: 12rem;
-}
-
-input,
-select {
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-}
-
-select {
-  /* The native chevron sits in a fixed inset that padding does not reliably move, so it is dropped. */
-  appearance: none;
-}
-
-input:focus,
-select:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .find {
@@ -625,7 +630,7 @@ select:focus {
   justify-content: space-between;
   gap: var(--space-2);
   padding: var(--space-3);
-  background: var(--color-surface-2);
+  background: var(--layer-raised);
   border-radius: var(--radius-md);
 }
 
@@ -650,7 +655,6 @@ select:focus {
 .policy-mode {
   flex-shrink: 0;
   min-width: 10rem;
-  background: var(--color-surface-1);
 }
 
 .value-capsule {

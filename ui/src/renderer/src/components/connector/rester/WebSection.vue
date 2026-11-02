@@ -17,6 +17,7 @@ import {
   type StepAction,
   type StepDraft
 } from './loginSteps'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   rester: VaultRester
@@ -180,13 +181,13 @@ async function turnOff(): Promise<void> {
           </button>
         </div>
 
-        <input
+        <AppInput
           v-if="step.Action === 'goto'"
           v-model="step.URL"
           type="text"
           placeholder="URL or path, e.g. /login"
         />
-        <input
+        <AppInput
           v-if="step.Action !== 'goto'"
           v-model="step.Selector"
           type="text"
@@ -205,8 +206,12 @@ async function turnOff(): Promise<void> {
           @select="(id) => (step.Field = id)"
         />
         <div v-if="step.Action === 'wait'" class="field-grid">
-          <input v-model="step.URL" type="text" placeholder="URL pattern (optional), e.g. /home*" />
-          <input
+          <AppInput
+            v-model="step.URL"
+            type="text"
+            placeholder="URL pattern (optional), e.g. /home*"
+          />
+          <AppInput
             v-model.number="step.TimeoutSeconds"
             type="number"
             min="0"

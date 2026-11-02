@@ -16,6 +16,7 @@ import {
   type AppStepAction,
   type AppStepDraft
 } from './appSteps'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   rester: VaultRester
@@ -132,7 +133,12 @@ async function turnOff(): Promise<void> {
       <p v-if="!rester.App" class="hint">Saving turns the app side on for this rester.</p>
       <div class="field-block">
         <label class="field-label" for="app-package">Package name</label>
-        <input id="app-package" v-model="packageName" type="text" placeholder="com.example.app" />
+        <AppInput
+          id="app-package"
+          v-model="packageName"
+          type="text"
+          placeholder="com.example.app"
+        />
       </div>
       <p class="hint">
         The phone runs these steps in order to log a user in. Fill takes a value from the user's
@@ -188,20 +194,20 @@ async function turnOff(): Promise<void> {
         </div>
 
         <div class="field-grid">
-          <input
+          <AppInput
             v-if="step.Action !== 'launch' && step.Action !== 'key'"
             v-model="step.Text"
             type="text"
             placeholder="Text on screen"
           />
-          <input
+          <AppInput
             v-if="step.Action !== 'launch' && step.Action !== 'key'"
             v-model="step.ID"
             type="text"
             placeholder="Resource id, wins over text"
           />
         </div>
-        <input
+        <AppInput
           v-if="step.Action === 'key'"
           v-model="step.Key"
           type="text"
@@ -217,7 +223,7 @@ async function turnOff(): Promise<void> {
           framed
           @select="(id) => (step.Field = id)"
         />
-        <input
+        <AppInput
           v-if="step.Action !== 'launch' && step.Action !== 'key'"
           v-model.number="step.TimeoutSeconds"
           type="number"

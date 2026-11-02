@@ -4,7 +4,6 @@
 /*
  * The shared layout of every modal that has a section list on the left: Settings, Node.
  * A new section of such a modal uses these classes, so the two never drift apart.
- * A lifted container sets --input-bg so its fields stay one step darker than itself.
  */
 
 .settings-layout {
@@ -174,21 +173,6 @@
 .settings-add > .settings-input {
   flex: 1;
   min-width: 0;
-}
-
-.settings-input {
-  padding: var(--space-2) var(--space-3);
-  background: var(--input-bg, var(--color-surface-0));
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md, 8px);
-  color: var(--color-fg-primary);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-}
-
-.settings-input:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .settings-fields {

@@ -9,6 +9,8 @@ import type { GitBranches, GitLocalBranch } from '../../../preload/types'
 import type { MenuAnchor } from '../menuPlacement'
 import AppContextMenu, { type MenuItem } from './AppContextMenu.vue'
 import GitCounts from './GitCounts.vue'
+import AppInput from './AppInput.vue'
+import type { AppInputHandle } from './appInput'
 
 // blockedReason names why the current branch cannot be left now, such as a stopped rebase, which
 // blocks merge, checkout, new branch and deleting the checked-out branch. Update only fetches or
@@ -38,7 +40,7 @@ const state = computed(() => gitStateOf(props.project.id))
 const open = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
-const filterRef = ref<HTMLInputElement | null>(null)
+const filterRef = ref<AppInputHandle | null>(null)
 const position = ref({ left: 0, top: 0, width: MENU_MIN_WIDTH, maxHeight: MENU_MAX_HEIGHT })
 const branches = ref<GitBranches | null>(null)
 const filter = ref('')
@@ -260,7 +262,7 @@ async function act(key: string): Promise<void> {
 }
 
 function openFirst(): void {
-  const row = menuRef.value?.querySelector<HTMLElement>('.branch-row')
+  const row = menuRef.value?.querySelector<HTMLElement>('.branch-lists .lg-menu-row')
   row?.click()
 }
 
@@ -306,8 +308,7 @@ onBeforeUnmount(removeListeners)
   <button
     ref="triggerRef"
     type="button"
-    class="branch-trigger"
-    :class="{ open }"
+    class="branch-trigger lg-field-trigger lg-field-trigger--sm"
     :disabled="state.busy !== null"
     title="Branches"
     :aria-expanded="open"
@@ -316,7 +317,7 @@ onBeforeUnmount(removeListeners)
   >
     <slot />
     <svg
-      class="branch-caret"
+      class="lg-trigger-caret"
       width="9"
       height="9"
       viewBox="0 0 10 10"
@@ -335,7 +336,7 @@ onBeforeUnmount(removeListeners)
     <div
       v-if="open"
       ref="menuRef"
-      class="branch-menu"
+      class="branch-menu lg-float lg-menu--sm"
       :style="{
         left: `${position.left}px`,
         top: `${position.top}px`,
@@ -343,50 +344,52 @@ onBeforeUnmount(removeListeners)
         maxHeight: `${position.maxHeight}px`
       }"
     >
-      <input
+      <AppInput
         ref="filterRef"
         v-model="filter"
         class="branch-filter"
+        size="sm"
+        icon="search"
         placeholder="Filter branches"
         aria-label="Filter branches"
         @keydown.enter="openFirst"
       />
       <p v-if="error" class="branch-error">{{ error }}</p>
       <p v-if="notice" class="branch-notice">{{ notice }}</p>
-      <p v-if="!branches" class="branch-empty">Loading...</p>
+      <p v-if="!branches" class="lg-menu-empty">Loading...</p>
       <div v-else class="branch-lists" role="listbox">
         <template v-if="local.length > 0">
-          <p class="branch-heading">Local</p>
+          <p class="lg-menu-heading">Local</p>
           <button
             v-for="branch in local"
             :key="`local-${branch.name}`"
             type="button"
-            class="branch-row"
+            class="lg-menu-row"
             :class="{
-              current: branch.name === branches.current,
-              selected: !selected?.remote && selected?.name === branch.name
+              'is-active': branch.name === branches.current,
+              'is-open': !selected?.remote && selected?.name === branch.name
             }"
             @click="openActions($event.currentTarget as HTMLElement, branch.name, false)"
           >
-            <span class="branch-row-name">{{ branch.name }}</span>
-            <span v-if="branch.name === branches.current" class="branch-tag">current</span>
+            <span class="lg-menu-label">{{ branch.name }}</span>
+            <span v-if="branch.name === branches.current" class="lg-menu-hint">current</span>
             <GitCounts :ahead="branch.ahead" :behind="branch.behind" />
           </button>
         </template>
         <template v-if="remote.length > 0">
-          <p class="branch-heading">Remote</p>
+          <p class="lg-menu-heading">Remote</p>
           <button
             v-for="name in remote"
             :key="`remote-${name}`"
             type="button"
-            class="branch-row"
-            :class="{ selected: selected?.remote && selected.name === name }"
+            class="lg-menu-row"
+            :class="{ 'is-open': selected?.remote && selected.name === name }"
             @click="openActions($event.currentTarget as HTMLElement, name, true)"
           >
-            <span class="branch-row-name">{{ name }}</span>
+            <span class="lg-menu-label">{{ name }}</span>
           </button>
         </template>
-        <p v-if="local.length === 0 && remote.length === 0" class="branch-empty">
+        <p v-if="local.length === 0 && remote.length === 0" class="lg-menu-empty">
           No branches match.
         </p>
       </div>
@@ -403,49 +406,13 @@ onBeforeUnmount(removeListeners)
 
 <style scoped>
 .branch-trigger {
-  display: flex;
   flex-shrink: 0;
-  align-items: center;
   gap: 6px;
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  text-align: left;
-  cursor: pointer;
-}
-
-.branch-trigger:hover:not(:disabled),
-.branch-trigger.open {
-  background: var(--color-surface-2);
-}
-
-.branch-trigger.open {
-  border-color: var(--color-amber);
-}
-
-.branch-trigger:disabled {
-  cursor: default;
 }
 
 .branch-trigger:hover:not(:disabled) :slotted(.git-icon),
 .branch-trigger:focus-visible:not(:disabled) :slotted(.git-icon) {
   color: var(--color-fg-accent);
-}
-
-.branch-caret {
-  flex-shrink: 0;
-  color: var(--color-fg-muted);
-  transition: transform var(--duration-fast) var(--ease-out);
-}
-
-.branch-trigger.open .branch-caret {
-  transform: rotate(180deg);
 }
 
 .branch-menu {
@@ -455,28 +422,10 @@ onBeforeUnmount(removeListeners)
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-2);
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
 }
 
 .branch-filter {
-  box-sizing: border-box;
   flex-shrink: 0;
-  width: 100%;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-}
-
-.branch-filter:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .branch-lists {
@@ -486,68 +435,21 @@ onBeforeUnmount(removeListeners)
   overflow-y: auto;
 }
 
-.branch-heading {
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-fg-secondary);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-}
-
-.branch-row {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 4px var(--space-2);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  text-align: left;
-  cursor: pointer;
-}
-
-.branch-row:hover:not(:disabled) {
-  background: var(--color-surface-2);
-}
-
-.branch-row:disabled {
-  cursor: default;
-}
-
-.branch-row.current {
-  color: var(--color-fg-accent);
-}
-
-.branch-row.selected {
-  background: var(--color-surface-2);
-}
-
-.branch-row-name {
-  min-width: 0;
+/* GitCounts sits after the hint, so the label alone pushes the rest to the right. */
+.branch-lists .lg-menu-label {
   margin-right: auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.branch-tag {
-  color: var(--color-fg-muted);
+.branch-lists .lg-menu-hint {
+  margin-left: 0;
 }
 
 .branch-notice {
   flex-shrink: 0;
   padding: var(--space-2);
-  background: var(--color-surface-2);
+  background: var(--layer-float-hover);
   border-radius: var(--radius-md);
   color: var(--color-fg-secondary);
-  font-size: var(--text-xs);
-}
-
-.branch-empty {
-  color: var(--color-fg-muted);
   font-size: var(--text-xs);
 }
 

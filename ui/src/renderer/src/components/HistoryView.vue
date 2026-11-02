@@ -15,6 +15,7 @@ import HistoryAmendModal from './HistoryAmendModal.vue'
 import GitIcon from './GitIcon.vue'
 import HistoryResetModal from './HistoryResetModal.vue'
 import RevisionView from './RevisionView.vue'
+import AppInput from './AppInput.vue'
 
 const PAGE = 200
 const LANE_WIDTH = 14
@@ -217,8 +218,10 @@ function laneX(lane: number): number {
 <template>
   <div class="history">
     <div class="history-bar">
-      <input
+      <AppInput
         v-model="search"
+        size="sm"
+        icon="search"
         class="history-search"
         placeholder="Search commits"
         aria-label="Search commits"
@@ -398,18 +401,6 @@ function laneX(lane: number): number {
 .history-search {
   flex: 1;
   min-width: 0;
-  padding: var(--space-1) var(--space-3);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-}
-
-.history-search:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .history-body {

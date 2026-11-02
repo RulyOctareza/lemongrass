@@ -13,6 +13,7 @@ import AppConfirmButton from './AppConfirmButton.vue'
 import AppModal from './AppModal.vue'
 import GitIcon from './GitIcon.vue'
 import RevisionView from './RevisionView.vue'
+import AppInput from './AppInput.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -81,8 +82,9 @@ async function save(): Promise<void> {
 
     <template v-if="!folded">
       <div v-if="saving" class="stash-form">
-        <input
+        <AppInput
           v-model="message"
+          size="sm"
           class="stash-input"
           placeholder="Message (optional)"
           aria-label="Stash message"
@@ -220,20 +222,7 @@ async function save(): Promise<void> {
 }
 
 .stash-input {
-  box-sizing: border-box;
   width: 100%;
-  padding: var(--space-1) var(--space-3);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-}
-
-.stash-input:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .stash-error {

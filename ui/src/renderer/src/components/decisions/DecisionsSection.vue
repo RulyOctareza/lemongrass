@@ -106,7 +106,7 @@ watch(
 }
 
 .decision-row:hover {
-  background: var(--color-surface-3);
+  background: var(--layer-card-hover);
 }
 
 .decision-summary {

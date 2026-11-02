@@ -9,7 +9,9 @@ import { computed, onMounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import type { VaultChannelWithShortId } from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
+import AppSwitcher from '../AppSwitcher.vue'
 import AppMultiPicker from '../AppMultiPicker.vue'
+import AppInput from '../AppInput.vue'
 
 export interface DbChannelSeed {
   name: string
@@ -143,7 +145,7 @@ async function submitCreate(): Promise<void> {
       <div class="form-column">
         <div class="field-block">
           <label class="field-label" for="new-channel-name">Name</label>
-          <input
+          <AppInput
             id="new-channel-name"
             v-model="newChannelName"
             type="text"
@@ -151,14 +153,21 @@ async function submitCreate(): Promise<void> {
           />
         </div>
         <div class="field-block">
-          <label class="field-label" for="new-channel-db">Connection</label>
-          <select id="new-channel-db" v-model="newDbName">
-            <option v-for="name in connections" :key="name" :value="name">{{ name }}</option>
-          </select>
+          <span class="field-label">Connection</span>
+          <AppSwitcher
+            :items="connections.map((name) => ({ id: name, label: name }))"
+            :active-id="newDbName"
+            placeholder="Pick a connection"
+            empty-text="No connections."
+            framed
+            searchable
+            search-placeholder="Search connections"
+            @select="newDbName = $event"
+          />
         </div>
         <div class="field-block">
           <label class="field-label" for="new-channel-ttl">TTL</label>
-          <input
+          <AppInput
             id="new-channel-ttl"
             v-model.number="newTtlMinutes"
             type="number"

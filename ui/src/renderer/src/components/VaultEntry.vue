@@ -57,7 +57,7 @@ const emit = defineEmits<{
   gap: 6px;
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-2);
+  background: var(--layer-raised);
   border: none;
   border-radius: var(--radius-md);
   color: var(--color-fg-primary);
@@ -71,7 +71,7 @@ const emit = defineEmits<{
 }
 
 .vault-item:hover {
-  background: var(--color-surface-3);
+  background: var(--layer-raised-hover);
 }
 
 .vault-item.open {

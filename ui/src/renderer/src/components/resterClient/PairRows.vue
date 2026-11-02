@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import AppButton from '../AppButton.vue'
 import type { ResterClientPair } from '../../../../preload/types'
+import AppInput from '../AppInput.vue'
 
 defineProps<{
   addLabel: string
@@ -17,8 +18,8 @@ const pairs = defineModel<ResterClientPair[]>({ required: true })
 <template>
   <div class="pairs">
     <div v-for="(pair, i) in pairs" :key="i" class="pair">
-      <input v-model="pair.name" type="text" :placeholder="namePlaceholder" spellcheck="false" />
-      <input v-model="pair.value" type="text" placeholder="value" spellcheck="false" />
+      <AppInput v-model="pair.name" type="text" :placeholder="namePlaceholder" spellcheck="false" />
+      <AppInput v-model="pair.value" type="text" placeholder="value" spellcheck="false" />
       <button type="button" class="remove" title="Remove" @click="pairs.splice(i, 1)">×</button>
     </div>
     <AppButton class="add" @click="pairs.push({ name: '', value: '' })">+ {{ addLabel }}</AppButton>

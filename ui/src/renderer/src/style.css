@@ -58,6 +58,18 @@
   --color-surface-2:    #1E1E1E;   /* elevated card */
   --color-surface-3:    #2A2A2A;   /* hovered card / input bg */
 
+  /* Layer roles. Components pick a role, never a surface step, so every screen layers the same:
+     a card sits on the page, a raised card on a card or a sidebar, an input is set into whatever
+     holds it, and a floating panel (dropdown, popover, menu) stands above everything. */
+  --layer-page:         var(--color-surface-0);
+  --layer-card:         var(--color-surface-1);
+  --layer-card-hover:   var(--color-surface-2);
+  --layer-raised:       var(--color-surface-2);
+  --layer-raised-hover: var(--color-surface-3);
+  --layer-input:        var(--color-surface-0);
+  --layer-float:        var(--color-surface-2);
+  --layer-float-hover:  var(--color-surface-3);
+
   /* Neutrals */
   --color-gray-900:     #111111;
   --color-gray-800:     #1A1A1A;
@@ -77,8 +89,8 @@
 
   /* Semantic foreground */
   --color-fg-primary:   #FFFFFF;
-  --color-fg-secondary: #9A9A9A;
-  --color-fg-muted:     #4A4A4A;
+  --color-fg-secondary: #B0B0B0;
+  --color-fg-muted:     #808080;
   --color-fg-disabled:  #3D3D3D;
   --color-fg-accent:    #F5C518;
 
@@ -157,6 +169,8 @@
   --color-surface-1:    #FFFFFF;
   --color-surface-2:    #F7F5F0;
   --color-surface-3:    #EDEDEA;
+  --layer-float:        var(--color-surface-1);
+  --layer-float-hover:  var(--color-surface-3);
   --color-border-subtle:  rgba(0, 0, 0, 0.06);
   --color-border-default: rgba(0, 0, 0, 0.10);
   --color-border-strong:  rgba(0, 0, 0, 0.20);

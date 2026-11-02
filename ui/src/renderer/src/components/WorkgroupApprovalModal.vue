@@ -376,7 +376,7 @@ watch(
 }
 
 .member {
-  background: var(--color-surface-2);
+  background: var(--layer-raised);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);

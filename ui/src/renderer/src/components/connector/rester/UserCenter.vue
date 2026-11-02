@@ -9,6 +9,7 @@ import AppButton from '../../AppButton.vue'
 import AppCheckbox from '../../AppCheckbox.vue'
 import UserModal from './UserModal.vue'
 import type { CommitRester } from './resterDraft'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   rester: VaultRester
@@ -67,9 +68,9 @@ async function toggleAssignment(user: VaultResterUser, env: string): Promise<voi
   <div class="inline-section">
     <div class="users-toolbar">
       <span class="field-label">Users ({{ rester.Users.length }})</span>
-      <input
+      <AppInput
         v-model="search"
-        type="search"
+        icon="search"
         class="users-search"
         placeholder="Search name, handle or tag"
       />

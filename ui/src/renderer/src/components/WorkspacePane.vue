@@ -1043,7 +1043,7 @@ onBeforeUnmount(() => {
   z-index: 50;
   min-width: 160px;
   padding: var(--space-2);
-  background: var(--color-bg-elevated);
+  background: var(--layer-float);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.4));
@@ -1080,7 +1080,7 @@ onBeforeUnmount(() => {
 }
 
 .menu-item:hover:not(:disabled) {
-  background: var(--color-surface-2);
+  background: var(--layer-float-hover);
 }
 
 .menu-item:hover:not(:disabled) .menu-icon {

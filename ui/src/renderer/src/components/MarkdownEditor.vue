@@ -8,6 +8,8 @@ import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import { Markdown } from 'tiptap-markdown'
 import { Find, findState, setFindQuery, stepFind } from '../editorFind'
+import AppInput from './AppInput.vue'
+import type { AppInputHandle } from './appInput'
 
 const props = defineProps<{
   modelValue: string
@@ -25,7 +27,7 @@ const findOpen = ref(false)
 const findQuery = ref('')
 const findCount = ref(0)
 const findCurrent = ref(0)
-const findInput = ref<HTMLInputElement>()
+const findInput = ref<AppInputHandle>()
 let lastMarkdown = ''
 const imageNotice = ref('')
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
@@ -339,9 +341,10 @@ watch(
       </button>
     </div>
     <div v-if="findOpen" class="find">
-      <input
+      <AppInput
         ref="findInput"
         v-model="findQuery"
+        size="sm"
         class="find-input"
         placeholder="Find"
         spellcheck="false"
@@ -465,18 +468,6 @@ watch(
 .find-input {
   flex: 1;
   min-width: 0;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  outline: none;
-}
-
-.find-input:focus {
-  border-color: var(--color-amber);
 }
 
 .find-count {

@@ -3,12 +3,15 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import AppInput from './AppInput.vue'
+import type { AppInputHandle } from './appInput'
 
 const props = withDefaults(
   defineProps<{
     // search is the text the filter box matches, the label when absent. disabled is the reason
     // the item cannot be picked, shown beside its label; hint is muted text in the same place for
-    // an item that can be picked.
+    // an item that can be picked. group puts the item under a heading; items of one group must be
+    // next to each other.
     items: {
       id: string
       label: string
@@ -16,6 +19,7 @@ const props = withDefaults(
       search?: string
       disabled?: string
       hint?: string
+      group?: string
     }[]
     activeId: string | null
     placeholder: string
@@ -24,8 +28,11 @@ const props = withDefaults(
     // Without it the dropdown has no add row.
     addLabel?: string
     emptyText: string
-    // A framed trigger sits among form fields; the plain one sits in a header.
+    // A framed trigger sits among form fields and reads as an input; the plain one sits in a header.
     framed?: boolean
+    // sm is for dense rows, such as a rule list.
+    size?: 'sm' | 'md'
+    disabled?: boolean
     // Adds a filter box at the top of the dropdown.
     searchable?: boolean
     searchPlaceholder?: string
@@ -36,6 +43,8 @@ const props = withDefaults(
     label: undefined,
     addLabel: undefined,
     framed: false,
+    size: 'md',
+    disabled: false,
     searchable: false,
     searchPlaceholder: 'Search',
     above: false
@@ -50,7 +59,7 @@ const emit = defineEmits<{
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 const query = ref('')
-const searchRef = ref<HTMLInputElement | null>(null)
+const searchRef = ref<AppInputHandle | null>(null)
 
 const shownItems = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -62,7 +71,14 @@ const activeLabel = computed(
   () => props.label ?? props.items.find((i) => i.id === props.activeId)?.label ?? props.placeholder
 )
 
+function headingAt(index: number): string | undefined {
+  const group = shownItems.value[index].group
+  if (!group) return undefined
+  return index === 0 || shownItems.value[index - 1].group !== group ? group : undefined
+}
+
 async function toggleOpen(): Promise<void> {
+  if (props.disabled) return
   open.value = !open.value
   if (!open.value || !props.searchable) return
   query.value = ''
@@ -100,15 +116,16 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   <div ref="rootRef" class="switcher">
     <button
       type="button"
-      class="trigger"
-      :class="{ framed }"
+      :class="
+        framed ? ['lg-field-trigger', { 'lg-field-trigger--sm': size === 'sm' }] : 'plain-trigger'
+      "
       :aria-expanded="open"
+      :disabled="disabled"
       @click="toggleOpen"
     >
       <span class="trigger-label">{{ activeLabel }}</span>
       <svg
-        class="caret"
-        :class="{ open }"
+        class="lg-trigger-caret"
         width="9"
         height="9"
         viewBox="0 0 10 10"
@@ -117,40 +134,47 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
         stroke-width="1.4"
         stroke-linecap="round"
         stroke-linejoin="round"
+        aria-hidden="true"
       >
         <path d="M2 3.5L5 6.5L8 3.5" />
       </svg>
     </button>
 
-    <div v-if="open" class="dropdown" :class="{ above }">
-      <input
+    <div
+      v-if="open"
+      class="dropdown lg-float"
+      :class="{ above, fit: framed, 'lg-menu--sm': size === 'sm' }"
+    >
+      <AppInput
         v-if="searchable"
         ref="searchRef"
         v-model="query"
         class="search"
-        type="text"
+        :size="size"
+        icon="search"
         spellcheck="false"
         :placeholder="searchPlaceholder"
         @keydown.enter.prevent="pickFirstShown"
         @keydown.escape="open = false"
       />
       <div class="item-list">
-        <button
-          v-for="item in shownItems"
-          :key="item.id"
-          type="button"
-          class="item-row"
-          :class="{ active: item.id === activeId }"
-          :title="item.disabled ?? item.title"
-          :disabled="!!item.disabled"
-          @click="pick(item.id)"
-        >
-          <span class="item-label">{{ item.label }}</span>
-          <span v-if="item.disabled" class="item-reason">{{ item.disabled }}</span>
-          <span v-else-if="item.hint" class="item-reason hint">{{ item.hint }}</span>
-        </button>
-        <p v-if="items.length === 0" class="empty">{{ emptyText }}</p>
-        <p v-else-if="shownItems.length === 0" class="empty">No match.</p>
+        <template v-for="(item, i) in shownItems" :key="item.id">
+          <p v-if="headingAt(i)" class="lg-menu-heading">{{ headingAt(i) }}</p>
+          <button
+            type="button"
+            class="lg-menu-row"
+            :class="{ 'is-active': item.id === activeId }"
+            :title="item.disabled ?? item.title"
+            :disabled="!!item.disabled"
+            @click="pick(item.id)"
+          >
+            <span class="lg-menu-label">{{ item.label }}</span>
+            <span v-if="item.disabled" class="lg-menu-hint">{{ item.disabled }}</span>
+            <span v-else-if="item.hint" class="lg-menu-hint">{{ item.hint }}</span>
+          </button>
+        </template>
+        <p v-if="items.length === 0" class="lg-menu-empty">{{ emptyText }}</p>
+        <p v-else-if="shownItems.length === 0" class="lg-menu-empty">No match.</p>
       </div>
       <button v-if="addLabel" type="button" class="add-item" @click="pickAdd">
         <span class="icon">+</span>
@@ -165,7 +189,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   position: relative;
 }
 
-.trigger {
+.plain-trigger {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -180,21 +204,14 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   transition: background var(--duration-fast) var(--ease-out);
 }
 
-.trigger:hover {
+.plain-trigger:hover:not(:disabled),
+.plain-trigger[aria-expanded='true'] {
   background: var(--color-surface-2);
-}
-
-.trigger.framed {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--input-bg, var(--color-surface-0));
-  border: 1px solid var(--color-border-default);
   color: var(--color-fg-primary);
 }
 
-.trigger.framed:focus-visible {
-  outline: none;
-  border-color: var(--color-amber);
+.plain-trigger .lg-trigger-caret {
+  margin-left: 0;
 }
 
 .trigger-label {
@@ -204,19 +221,9 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   white-space: nowrap;
 }
 
-.trigger.framed .trigger-label {
+.lg-field-trigger .trigger-label {
   flex: 1;
   max-width: none;
-  text-align: left;
-}
-
-.caret {
-  flex-shrink: 0;
-  transition: transform var(--duration-fast) var(--ease-out);
-}
-
-.caret.open {
-  transform: rotate(180deg);
 }
 
 .dropdown {
@@ -227,11 +234,15 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   width: 260px;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
   overflow: hidden;
+}
+
+/* Under a field the dropdown is at least as wide as its trigger and otherwise fits its items, so
+   a narrow trigger at the right edge of a row does not push the dropdown out of the container. */
+.dropdown.fit {
+  width: max-content;
+  min-width: 100%;
+  max-width: 320px;
 }
 
 .dropdown.above {
@@ -241,18 +252,6 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
 
 .search {
   margin: var(--space-2) var(--space-2) 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-0);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-}
-
-.search:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .item-list {
@@ -262,65 +261,6 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-/* overflow: hidden lets a flex item shrink below its content, so without this a long list
-   squeezes its rows to fit max-height instead of scrolling. */
-.item-row {
-  flex-shrink: 0;
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--color-fg-secondary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.item-row:hover:not(:disabled) {
-  background: var(--color-surface-2);
-}
-
-.item-row:disabled {
-  color: var(--color-fg-muted);
-  cursor: default;
-}
-
-.item-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.item-reason {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: var(--text-xs);
-}
-
-.item-reason.hint {
-  color: var(--color-fg-muted);
-}
-
-.item-row.active {
-  background: var(--color-amber-muted);
-  color: var(--color-fg-accent);
-  font-weight: var(--weight-medium);
-}
-
-.empty {
-  padding: var(--space-2) var(--space-3);
-  color: var(--color-fg-muted);
-  font-size: var(--text-sm);
 }
 
 .add-item {

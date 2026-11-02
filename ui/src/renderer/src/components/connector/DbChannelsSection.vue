@@ -2,11 +2,14 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import type { VaultChannel, VaultChannelWithShortId } from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
 import DbChannelForm, { type DbChannelSeed } from './DbChannelForm.vue'
+import AppInput from '../AppInput.vue'
+import AppSwitcher from '../AppSwitcher.vue'
+import { matchesQuery } from './listFilter'
 
 const props = defineProps<{
   visible: boolean
@@ -41,6 +44,35 @@ async function refresh(): Promise<void> {
     loading.value = false
   }
 }
+
+// A connection name is never empty, so the empty id cannot collide with one.
+const ALL_CONNECTIONS = ''
+const connectionFilter = ref(ALL_CONNECTIONS)
+const query = ref('')
+
+watch(connections, (names) => {
+  if (connectionFilter.value !== ALL_CONNECTIONS && !names.includes(connectionFilter.value)) {
+    connectionFilter.value = ALL_CONNECTIONS
+  }
+})
+
+const connectionItems = computed(() => [
+  { id: ALL_CONNECTIONS, label: 'All connections' },
+  ...connections.value.map((name) => ({ id: name, label: name }))
+])
+
+const shownChannels = computed(() =>
+  channels.value.filter((channel) => {
+    if (connectionFilter.value !== ALL_CONNECTIONS && channel.DBName !== connectionFilter.value) {
+      return false
+    }
+    return matchesQuery(query.value, [
+      channel.Name,
+      ...(channel.Scope.Tables ?? []),
+      ...(channel.Scope.Operations ?? [])
+    ])
+  })
+)
 
 function statusFor(channel: VaultChannel): string {
   const expires = new Date(channel.ExpiresAt)
@@ -204,8 +236,35 @@ onUnmounted(() => {
     <p v-else-if="loading" class="empty">Loading...</p>
     <p v-else-if="channels.length === 0" class="empty">No channels yet.</p>
 
-    <div v-else class="channel-list">
-      <div v-for="channel in channels" :key="channel.ID" class="channel-row channel-row--stacked">
+    <template v-else>
+      <div class="list-filter">
+        <AppSwitcher
+          class="connection-filter"
+          :items="connectionItems"
+          :active-id="connectionFilter"
+          placeholder="All connections"
+          empty-text="No connections."
+          framed
+          searchable
+          search-placeholder="Search connections"
+          @select="connectionFilter = $event"
+        />
+        <AppInput
+          v-model="query"
+          icon="search"
+          spellcheck="false"
+          placeholder="Filter by name, table or operation"
+        />
+      </div>
+      <p v-if="shownChannels.length === 0" class="empty">No channel matches.</p>
+    </template>
+
+    <div v-if="shownChannels.length > 0 && !listError && !loading" class="channel-list">
+      <div
+        v-for="channel in shownChannels"
+        :key="channel.ID"
+        class="channel-row channel-row--stacked"
+      >
         <div class="channel-top">
           <div class="channel-info">
             <span class="channel-name">{{
@@ -274,7 +333,7 @@ onUnmounted(() => {
         </div>
 
         <div v-if="activatingId === channel.ID" class="inline-form">
-          <input
+          <AppInput
             v-model.number="activateTtlMinutes"
             type="number"
             min="1"

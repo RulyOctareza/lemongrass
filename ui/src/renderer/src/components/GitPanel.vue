@@ -424,7 +424,7 @@ watch(() => props.project.id, refresh)
   gap: 6px;
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-2);
+  background: var(--layer-raised);
   border: none;
   border-radius: var(--radius-md);
   color: var(--color-fg-primary);
@@ -438,7 +438,7 @@ watch(() => props.project.id, refresh)
 }
 
 .git-item:hover {
-  background: var(--color-surface-3);
+  background: var(--layer-raised-hover);
 }
 
 .git-item.open {

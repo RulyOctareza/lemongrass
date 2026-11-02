@@ -9,6 +9,8 @@ import type { GitBranches } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import AppModal from './AppModal.vue'
 import AppSwitcher from './AppSwitcher.vue'
+import AppInput from './AppInput.vue'
+import type { AppInputHandle } from './appInput'
 
 const props = defineProps<{
   project: ProjectRef
@@ -31,7 +33,7 @@ const base = ref<string | null>(null)
 const checked = ref<{ name: string; valid: boolean } | null>(null)
 const error = ref<string | null>(null)
 const busy = ref(false)
-const nameRef = ref<HTMLInputElement | null>(null)
+const nameRef = ref<AppInputHandle | null>(null)
 
 const trimmed = computed(() => name.value.trim())
 const exists = computed(
@@ -104,7 +106,7 @@ async function create(): Promise<void> {
   <AppModal title="New branch" @close="emit('close')">
     <label class="create-field">
       <span class="create-label">Name</span>
-      <input
+      <AppInput
         ref="nameRef"
         v-model="name"
         class="create-input"
@@ -154,20 +156,7 @@ async function create(): Promise<void> {
 }
 
 .create-input {
-  box-sizing: border-box;
   width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--input-bg, var(--color-surface-0));
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-}
-
-.create-input:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .create-note {

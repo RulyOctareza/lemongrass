@@ -13,6 +13,7 @@ import {
   type CommitRester,
   type HeaderDraft
 } from './resterDraft'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   rester: VaultRester
@@ -131,7 +132,7 @@ async function turnOff(): Promise<void> {
 
       <div class="field-block">
         <label class="field-label" for="api-login-endpoint">Login endpoint</label>
-        <input
+        <AppInput
           id="api-login-endpoint"
           v-model="loginEndpoint"
           type="text"
@@ -141,7 +142,7 @@ async function turnOff(): Promise<void> {
 
       <div class="field-block">
         <label class="field-label" for="api-token-path">Token path</label>
-        <input
+        <AppInput
           id="api-token-path"
           v-model="tokenPath"
           type="text"
@@ -155,14 +156,14 @@ async function turnOff(): Promise<void> {
       <div class="field-block">
         <span id="api-ttl" class="field-label">Token lifetime</span>
         <AppSegmented v-model="ttlMode" :options="ttlOptions" aria-labelledby="api-ttl" />
-        <input
+        <AppInput
           v-if="ttlMode === 'fixed'"
           v-model.number="fixedTtlMinutes"
           type="number"
           min="1"
           title="Fixed lifetime in minutes"
         />
-        <input
+        <AppInput
           v-if="ttlMode === 'field'"
           v-model="ttlField"
           type="text"
@@ -178,8 +179,8 @@ async function turnOff(): Promise<void> {
           aria-labelledby="api-placement"
         />
         <div class="field-grid">
-          <input v-model="placementName" type="text" placeholder="Name, e.g. Authorization" />
-          <input
+          <AppInput v-model="placementName" type="text" placeholder="Name, e.g. Authorization" />
+          <AppInput
             v-if="placementKind === 'header'"
             v-model="placementPrefix"
             type="text"
@@ -195,8 +196,8 @@ async function turnOff(): Promise<void> {
         </p>
         <div class="kv-list">
           <div v-for="(header, i) in headers" :key="i" class="kv-row">
-            <input v-model="header.name" type="text" placeholder="e.g. api-version" />
-            <input v-model="header.value" type="text" placeholder="value" />
+            <AppInput v-model="header.name" type="text" placeholder="e.g. api-version" />
+            <AppInput v-model="header.value" type="text" placeholder="value" />
             <button
               type="button"
               class="chip-remove"

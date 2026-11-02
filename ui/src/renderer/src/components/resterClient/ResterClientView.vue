@@ -30,6 +30,7 @@ import type {
   ResterClientRun,
   VaultRester
 } from '../../../../preload/types'
+import AppInput from '../AppInput.vue'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 // Where the last selected request is remembered, so reopening the app shows it again.
@@ -445,8 +446,9 @@ function onUrlKeydown(event: KeyboardEvent): void {
               @select="selected.method = $event"
             />
           </div>
-          <input
+          <AppInput
             v-model="selected.url"
+            mono
             class="url-input"
             type="text"
             spellcheck="false"

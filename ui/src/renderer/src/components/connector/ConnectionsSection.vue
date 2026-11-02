@@ -13,6 +13,8 @@ import {
   parseConnectionString,
   type EngineChoice
 } from '../../connectionString'
+import AppInput from '../AppInput.vue'
+import { matchesQuery } from './listFilter'
 
 const props = defineProps<{
   visible: boolean
@@ -22,6 +24,10 @@ const vaultUnlocked = toRef(vaultSession, 'unlocked')
 const sessionPassphrase = toRef(vaultSession, 'passphrase')
 
 const connections = ref<string[]>([])
+const connectionQuery = ref('')
+const shownConnections = computed(() =>
+  connections.value.filter((name) => matchesQuery(connectionQuery.value, [name]))
+)
 const connectionsLoading = ref(false)
 const connectionsError = ref('')
 const sshHostByConnection = ref<Record<string, string>>({})
@@ -259,6 +265,17 @@ async function openConnectionEdit(name: string): Promise<void> {
 }
 
 // Only fills the port when it is empty or still at an engine default.
+const engineItems: { id: EngineChoice; label: string }[] = [
+  { id: 'mysql', label: 'MySQL' },
+  { id: 'mariadb', label: 'MariaDB' },
+  { id: 'postgres', label: 'Postgres' }
+]
+
+function pickEngine(id: string): void {
+  newConnectionEngine.value = id as EngineChoice
+  onEngineChange()
+}
+
 function onEngineChange(): void {
   if (!newConnectionPort.value || Object.values(defaultPorts).includes(newConnectionPort.value)) {
     newConnectionPort.value = defaultPorts[newConnectionEngine.value]
@@ -368,7 +385,7 @@ watch(
 
       <div>
         <label class="field-label" for="conn-name">Name</label>
-        <input
+        <AppInput
           id="conn-name"
           v-model="newConnectionName"
           type="text"
@@ -401,31 +418,35 @@ watch(
 
       <div class="field-grid">
         <div>
-          <label class="field-label" for="conn-engine">Engine</label>
-          <select
-            id="conn-engine"
-            v-model="newConnectionEngine"
+          <span class="field-label">Engine</span>
+          <AppSwitcher
+            :items="engineItems"
+            :active-id="newConnectionEngine"
+            placeholder="Engine"
+            empty-text="No engines."
+            framed
             :disabled="editingConnectionName !== null"
-            @change="onEngineChange"
-          >
-            <option value="mysql">MySQL</option>
-            <option value="mariadb">MariaDB</option>
-            <option value="postgres">Postgres</option>
-          </select>
+            @select="pickEngine"
+          />
         </div>
         <div>
           <label class="field-label" for="conn-host">
             {{ useSSHTunnel ? 'Database host, from the SSH host' : 'Host' }}
           </label>
-          <input id="conn-host" v-model="newConnectionHost" type="text" placeholder="localhost" />
+          <AppInput
+            id="conn-host"
+            v-model="newConnectionHost"
+            type="text"
+            placeholder="localhost"
+          />
         </div>
         <div>
           <label class="field-label" for="conn-port">Port</label>
-          <input id="conn-port" v-model="newConnectionPort" type="text" placeholder="3306" />
+          <AppInput id="conn-port" v-model="newConnectionPort" type="text" placeholder="3306" />
         </div>
         <div>
           <label class="field-label" for="conn-database">Database</label>
-          <input
+          <AppInput
             id="conn-database"
             v-model="newConnectionDatabase"
             type="text"
@@ -434,11 +455,11 @@ watch(
         </div>
         <div>
           <label class="field-label" for="conn-user">Username</label>
-          <input id="conn-user" v-model="newConnectionUser" type="text" placeholder="db user" />
+          <AppInput id="conn-user" v-model="newConnectionUser" type="text" placeholder="db user" />
         </div>
         <div>
           <label class="field-label" for="conn-password">Password</label>
-          <input
+          <AppInput
             id="conn-password"
             v-model="newConnectionPassword"
             type="password"
@@ -500,8 +521,23 @@ watch(
     <p v-else-if="connectionsLoading" class="empty">Loading...</p>
     <p v-else-if="connections.length === 0" class="empty">No connections yet.</p>
 
-    <div v-else class="channel-list">
-      <div v-for="name in connections" :key="name" class="channel-row">
+    <template v-else>
+      <div class="list-filter">
+        <AppInput
+          v-model="connectionQuery"
+          icon="search"
+          spellcheck="false"
+          placeholder="Search by name"
+        />
+      </div>
+      <p v-if="shownConnections.length === 0" class="empty">No connection matches.</p>
+    </template>
+
+    <div
+      v-if="!connectionsError && !connectionsLoading && shownConnections.length > 0"
+      class="channel-list"
+    >
+      <div v-for="name in shownConnections" :key="name" class="channel-row">
         <div class="channel-info">
           <span class="channel-db">{{ name }}</span>
           <span v-if="sshHostByConnection[name]" class="value-capsule">

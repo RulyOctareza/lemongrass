@@ -6,6 +6,7 @@ import AppButton from '../../AppButton.vue'
 import AppSegmented from '../../AppSegmented.vue'
 import AppSwitcher from '../../AppSwitcher.vue'
 import type { FieldDraft, FieldType } from './resterDraft'
+import AppInput from '../../AppInput.vue'
 
 defineProps<{
   addLabel: string
@@ -40,7 +41,7 @@ function label(type: FieldType): string {
 <template>
   <div class="kv-list">
     <div v-for="(field, i) in fields" :key="i" class="kv-row">
-      <input v-model="field.key" type="text" placeholder="field name" />
+      <AppInput v-model="field.key" type="text" placeholder="field name" />
       <div class="kv-type" title="Type sent in the login body">
         <AppSwitcher
           :items="typeItems"
@@ -59,7 +60,7 @@ function label(type: FieldType): string {
         :options="booleanOptions"
         :aria-label="`Value of ${field.key || 'field'}`"
       />
-      <input
+      <AppInput
         v-else
         v-model="field.value"
         type="text"

@@ -8,6 +8,7 @@ import { computed, onMounted, ref } from 'vue'
 import '../vault.css'
 import { clearShortIds, describeError, unlockVaultSession } from '../vaultSession'
 import AppButton from './AppButton.vue'
+import AppInput from './AppInput.vue'
 
 const unlockInput = ref('')
 const unlockError = ref('')
@@ -120,7 +121,7 @@ async function confirmReset(): Promise<void> {
           </p>
         </div>
         <div class="unlock-row">
-          <input
+          <AppInput
             v-model="unlockInput"
             type="password"
             placeholder="Vault passphrase"

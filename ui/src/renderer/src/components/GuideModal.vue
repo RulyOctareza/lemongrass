@@ -55,7 +55,7 @@ const emit = defineEmits<{
   padding: var(--space-3);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-xl);
-  background: var(--color-surface-2);
+  background: var(--layer-raised);
 }
 
 .card-title {

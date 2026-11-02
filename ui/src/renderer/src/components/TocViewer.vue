@@ -254,7 +254,7 @@ function openChapter(path: string): void {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-4);
-  background: var(--color-surface-1);
+  background: var(--layer-card);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-xl);
 }

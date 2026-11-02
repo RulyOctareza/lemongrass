@@ -7,6 +7,7 @@ import type { VaultEnvironment } from '../../../../../preload/types'
 import AppButton from '../../AppButton.vue'
 import AppModal from '../../AppModal.vue'
 import { headerDrafts, headersFromDrafts, type HeaderDraft } from './resterDraft'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   title: string
@@ -47,7 +48,7 @@ function save(): void {
     <div class="env-form">
       <div class="field-block">
         <label class="field-label" for="env-name">Name</label>
-        <input
+        <AppInput
           id="env-name"
           v-model="name"
           type="text"
@@ -59,7 +60,7 @@ function save(): void {
       </div>
       <div class="field-block">
         <label class="field-label" for="env-base-url">API base URL</label>
-        <input
+        <AppInput
           id="env-base-url"
           v-model="baseUrl"
           type="text"
@@ -69,7 +70,7 @@ function save(): void {
       </div>
       <div class="field-block">
         <label class="field-label" for="env-origin">Web origin</label>
-        <input id="env-origin" v-model="origin" type="text" placeholder="https://example.com" />
+        <AppInput id="env-origin" v-model="origin" type="text" placeholder="https://example.com" />
         <p class="hint">Leave blank when this environment has no web side.</p>
       </div>
       <div class="field-block">
@@ -77,8 +78,8 @@ function save(): void {
         <p class="hint">Sent with the shared API headers. A header here wins on the same name.</p>
         <div class="kv-list">
           <div v-for="(header, i) in headers" :key="i" class="kv-row">
-            <input v-model="header.name" type="text" placeholder="name" />
-            <input v-model="header.value" type="text" placeholder="value" />
+            <AppInput v-model="header.name" type="text" placeholder="name" />
+            <AppInput v-model="header.value" type="text" placeholder="value" />
             <button
               type="button"
               class="chip-remove"

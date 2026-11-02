@@ -19,6 +19,7 @@ import AppButton from '../AppButton.vue'
 import AppCheckbox from '../AppCheckbox.vue'
 import AppSegmented from '../AppSegmented.vue'
 import AppSwitcher from '../AppSwitcher.vue'
+import AppInput from '../AppInput.vue'
 
 const props = defineProps<{
   resters: string[]
@@ -241,7 +242,7 @@ onMounted(applySeed)
       <div class="form-column">
         <div class="field-block">
           <label class="field-label" for="new-http-channel-name">Name</label>
-          <input
+          <AppInput
             id="new-http-channel-name"
             v-model="newHTTPChannelName"
             type="text"
@@ -300,7 +301,7 @@ onMounted(applySeed)
         </div>
         <div class="field-block">
           <label class="field-label" for="new-http-channel-ttl">TTL</label>
-          <input
+          <AppInput
             id="new-http-channel-ttl"
             v-model.number="newHTTPTtlMinutes"
             type="number"
@@ -339,7 +340,11 @@ onMounted(applySeed)
             sign-on host.
           </p>
           <div v-for="(_origin, i) in newHTTPOrigins" :key="i" class="exclusion-row">
-            <input v-model="newHTTPOrigins[i]" type="text" placeholder="https://sso.example.com" />
+            <AppInput
+              v-model="newHTTPOrigins[i]"
+              type="text"
+              placeholder="https://sso.example.com"
+            />
             <button
               type="button"
               class="chip-remove"
@@ -369,7 +374,7 @@ onMounted(applySeed)
               empty-text="No methods."
               @select="(m) => (ex.method = m)"
             />
-            <input v-model="ex.pathPattern" type="text" placeholder="/users/*/change-password" />
+            <AppInput v-model="ex.pathPattern" type="text" placeholder="/users/*/change-password" />
             <button
               type="button"
               class="chip-remove"

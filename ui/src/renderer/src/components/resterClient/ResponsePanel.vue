@@ -14,6 +14,7 @@ import type {
   ResterClientResult,
   ResterClientRun
 } from '../../../../preload/types'
+import AppInput from '../AppInput.vue'
 
 const props = defineProps<{
   result: ResterClientResult | null
@@ -195,8 +196,10 @@ function formatSize(bytes: number): string {
       />
     </header>
     <div v-if="!sending && !error && result && parsed.ok" class="search-row">
-      <input
+      <AppInput
         v-model="query"
+        size="sm"
+        mono
         class="search-input"
         type="text"
         spellcheck="false"
@@ -293,8 +296,6 @@ function formatSize(bytes: number): string {
 .search-input {
   flex: 1;
   min-width: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
 }
 
 .count {

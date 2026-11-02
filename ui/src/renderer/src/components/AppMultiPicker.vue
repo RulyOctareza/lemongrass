@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AppCheckbox from './AppCheckbox.vue'
+import AppInput from './AppInput.vue'
 
 export interface PickerGroup {
   label?: string
@@ -68,15 +69,14 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
   <div ref="root" class="picker">
     <button
       type="button"
-      class="picker-trigger"
+      class="lg-field-trigger"
       :aria-expanded="open"
       :disabled="disabled"
       @click="toggleOpen"
     >
       <span class="picker-summary">{{ summary }}</span>
       <svg
-        class="picker-chev"
-        :class="{ open }"
+        class="lg-trigger-caret"
         width="12"
         height="12"
         viewBox="0 0 12 12"
@@ -93,11 +93,10 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
 
     <slot />
 
-    <div v-if="open" class="picker-popover">
-      <input
+    <div v-if="open" class="picker-popover lg-float">
+      <AppInput
         v-model="filter"
-        type="text"
-        class="picker-filter"
+        icon="search"
         :placeholder="filterPlaceholder"
         spellcheck="false"
         autocomplete="off"
@@ -105,9 +104,9 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
       />
       <div class="picker-list">
         <template v-for="(group, g) in matching" :key="g">
-          <span v-if="group.label" class="picker-group">{{ group.label }}</span>
-          <p v-if="group.total === 0" class="picker-empty">None.</p>
-          <p v-else-if="group.items.length === 0" class="picker-empty">Nothing matches.</p>
+          <p v-if="group.label" class="lg-menu-heading">{{ group.label }}</p>
+          <p v-if="group.total === 0" class="lg-menu-empty">None.</p>
+          <p v-else-if="group.items.length === 0" class="lg-menu-empty">Nothing matches.</p>
           <AppCheckbox
             v-for="(item, i) in group.items"
             :key="i"
@@ -123,39 +122,11 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
 </template>
 
 <style scoped>
-/* --input-bg lets a container that is already lifted, such as a form card, keep its fields one
-   step darker than itself, the same as its plain inputs. */
 .picker {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
-}
-
-.picker-trigger {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--input-bg, var(--color-surface-0));
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-.picker-trigger:focus-visible {
-  outline: none;
-  border-color: var(--color-amber);
-}
-
-.picker-trigger:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .picker-summary {
@@ -166,40 +137,13 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
   white-space: nowrap;
 }
 
-.picker-chev {
-  flex-shrink: 0;
-  color: var(--color-fg-muted);
-  transition: transform var(--duration-fast) var(--ease-out);
-}
-
-.picker-chev.open {
-  transform: rotate(180deg);
-}
-
+/* The popover opens in the flow of the form rather than floating, so the form grows with it. */
 .picker-popover {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-2);
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-}
-
-.picker-filter {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--input-bg, var(--color-surface-0));
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-}
-
-.picker-filter:focus {
-  outline: none;
-  border-color: var(--color-amber);
+  box-shadow: none;
 }
 
 .picker-list {
@@ -209,21 +153,16 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
   overflow-y: auto;
 }
 
-.picker-group {
-  padding-top: var(--space-2);
-  color: var(--color-fg-muted);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
+.picker-list .lg-menu-heading {
+  padding-left: 0;
 }
 
-.picker-group:first-child {
+.picker-list .lg-menu-heading:first-child {
   padding-top: 0;
 }
 
-.picker-empty {
-  margin: 0;
+.picker-list .lg-menu-empty {
   padding: var(--space-1) 0;
-  color: var(--color-fg-muted);
   font-size: var(--text-xs);
 }
 </style>

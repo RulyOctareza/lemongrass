@@ -20,6 +20,7 @@ import {
   type CommitRester,
   type FieldDraft
 } from './resterDraft'
+import AppInput from '../../AppInput.vue'
 
 const props = defineProps<{
   rester: VaultRester
@@ -223,7 +224,7 @@ async function removeUser(): Promise<void> {
     <div class="user-form">
       <div class="field-block">
         <label class="field-label" for="user-name">Name</label>
-        <input id="user-name" v-model="name" type="text" placeholder="User name" autofocus />
+        <AppInput id="user-name" v-model="name" type="text" placeholder="User name" autofocus />
         <p v-if="userHandle(name) !== '' && userHandle(name) !== name" class="hint">
           Models use this user as {{ userHandle(name) }}.
         </p>
@@ -235,7 +236,7 @@ async function removeUser(): Promise<void> {
 
       <div class="field-block">
         <label class="field-label" for="user-tags">Tags</label>
-        <input
+        <AppInput
           id="user-tags"
           v-model="tags"
           type="text"
@@ -262,7 +263,7 @@ async function removeUser(): Promise<void> {
 
       <div class="field-block">
         <AppCheckbox :checked="isByot" @click="isByot = !isByot">Bring your own token</AppCheckbox>
-        <input v-if="isByot" v-model="token" type="text" placeholder="Paste the token" />
+        <AppInput v-if="isByot" v-model="token" type="text" placeholder="Paste the token" />
         <template v-else>
           <span class="field-label">Login fields</span>
           <p class="hint">Sent in the API login body and typed by the web login steps.</p>
@@ -356,7 +357,7 @@ async function removeUser(): Promise<void> {
               </span>
             </button>
             <template v-if="overrides[env.Name].open">
-              <input
+              <AppInput
                 v-if="isByot"
                 v-model="overrides[env.Name].token"
                 type="text"

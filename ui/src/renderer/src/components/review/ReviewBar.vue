@@ -10,6 +10,7 @@ import { reviewTargetsOf } from '../../reviewTargets'
 import { plainCopy } from '../connector/rester/resterDraft'
 import type { ProjectRef } from '../../workspace'
 import type { TabBusy } from '../../../../preload/types'
+import AppInput from '../AppInput.vue'
 
 const props = defineProps<{
   project: ProjectRef
@@ -98,8 +99,9 @@ async function submit(): Promise<void> {
 <template>
   <div class="review-bar">
     <span class="count">{{ count === 1 ? '1 comment' : `${count} comments` }}</span>
-    <input
+    <AppInput
       v-model="message"
+      size="sm"
       class="message"
       type="text"
       spellcheck="false"
@@ -150,18 +152,6 @@ async function submit(): Promise<void> {
 .message {
   flex: 1;
   min-width: 160px;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-fg-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-}
-
-.message:focus {
-  outline: none;
-  border-color: var(--color-amber);
 }
 
 .picker {

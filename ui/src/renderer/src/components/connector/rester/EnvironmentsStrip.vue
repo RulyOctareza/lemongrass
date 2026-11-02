@@ -158,7 +158,7 @@ async function remove(name: string): Promise<void> {
   gap: var(--space-1);
   min-width: 0;
   padding: var(--space-3);
-  background: var(--color-surface-1);
+  background: var(--layer-raised);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
 }
