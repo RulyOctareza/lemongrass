@@ -2,7 +2,7 @@
 // Copyright (C) 2026 The Lemongrass Authors
 
 import { BrowserWindow, ipcMain } from 'electron'
-import type { Ask, AskCount } from '../preload/types'
+import type { Ask, AskCount, AskDeclineExtra } from '../preload/types'
 import { notify } from './appNotify'
 import { vaultCall } from './vault'
 
@@ -112,8 +112,16 @@ export function startAsks(getWindow: () => BrowserWindow | undefined): void {
   ipcMain.handle('ask:stop', (_event, passphrase: string, id: string) =>
     vaultCall<void>('stop_ask', { root_secret: passphrase, id })
   )
-  ipcMain.handle('ask:decline', (_event, passphrase: string, id: string, note: string) =>
-    vaultCall<void>('decline_ask', { root_secret: passphrase, id, note })
+  ipcMain.handle(
+    'ask:decline',
+    (_event, passphrase: string, id: string, note: string, extra?: AskDeclineExtra) =>
+      vaultCall<void>('decline_ask', {
+        root_secret: passphrase,
+        id,
+        note,
+        ...(extra?.dbName ? { db_name: extra.dbName } : {}),
+        ...(extra?.removedTables?.length ? { removed_tables: extra.removedTables } : {})
+      })
   )
   void refresh(false)
   pollTimer = setInterval(() => void refresh(false), POLL_MS)

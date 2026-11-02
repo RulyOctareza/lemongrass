@@ -1126,6 +1126,9 @@ export interface Ask {
   blocking: boolean
   reason?: string
   tables?: string[]
+  // Declared by the model: operations on a db ask, HTTP methods on a rester ask.
+  operations?: string[]
+  methods?: string[]
   message?: string
   command?: string
   rule?: string
@@ -1135,6 +1138,26 @@ export interface Ask {
   short_id?: string
   note?: string
   result?: AskResult | null
+  granted?: AskGrant | null
+  removed_tables?: AskRemovedTable[]
+}
+
+// What a channel ask was answered with; a subset of what it declared.
+export interface AskGrant {
+  tables?: string[]
+  operations?: string[]
+  methods?: string[]
+}
+
+export interface AskRemovedTable {
+  table: string
+  reason: string
+}
+
+// A db ask's decline may name the connection picked and the requested tables the human removed.
+export interface AskDeclineExtra {
+  dbName?: string
+  removedTables?: string[]
 }
 
 // Numbers and an opaque id only, readable while the vault is locked.

@@ -7,6 +7,7 @@ import type {
   AccountAddResult,
   Ask,
   AskCount,
+  AskDeclineExtra,
   Notice,
   NoticeInput,
   AccountInfo,
@@ -611,8 +612,8 @@ const ask = {
     ipcRenderer.invoke('ask:execute', passphrase, id, timeoutSeconds),
   stop: (passphrase: string, id: string): Promise<void> =>
     ipcRenderer.invoke('ask:stop', passphrase, id),
-  decline: (passphrase: string, id: string, note: string): Promise<void> =>
-    ipcRenderer.invoke('ask:decline', passphrase, id, note),
+  decline: (passphrase: string, id: string, note: string, extra?: AskDeclineExtra): Promise<void> =>
+    ipcRenderer.invoke('ask:decline', passphrase, id, note, extra),
   onCount: (callback: (count: AskCount) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, count: AskCount): void => callback(count)
     ipcRenderer.on('ask:count', listener)

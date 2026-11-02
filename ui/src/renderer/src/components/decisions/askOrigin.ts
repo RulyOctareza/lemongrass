@@ -28,18 +28,9 @@ export function askWhere(ask: Ask): string {
   return rest ? `the ${rest} folder of ${owner.name}` : owner.name
 }
 
-function listWords(items: string[]): string {
-  if (items.length <= 1) return items[0] ?? ''
-  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
-}
-
 function wants(ask: Ask): string {
-  if (ask.type === 'db') {
-    const tables = ask.tables ?? []
-    return tables.length
-      ? ` wants a database channel for ${listWords(tables)}`
-      : ' wants a database channel'
-  }
+  // The tables show as capsules in the grant view, so the sentence stays short however many there are.
+  if (ask.type === 'db') return ' wants a database channel'
   if (ask.type === 'rester') return ' wants a rester channel'
   return ' wants to run a command'
 }

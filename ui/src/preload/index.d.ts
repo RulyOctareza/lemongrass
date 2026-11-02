@@ -6,6 +6,7 @@ import type {
   AccountAddResult,
   Ask,
   AskCount,
+  AskDeclineExtra,
   Notice,
   NoticeInput,
   AccountInfo,
@@ -103,7 +104,12 @@ interface Api {
     get: (passphrase: string, id: string) => Promise<Ask>
     execute: (passphrase: string, id: string, timeoutSeconds: number) => Promise<Ask>
     stop: (passphrase: string, id: string) => Promise<void>
-    decline: (passphrase: string, id: string, note: string) => Promise<void>
+    decline: (
+      passphrase: string,
+      id: string,
+      note: string,
+      extra?: AskDeclineExtra
+    ) => Promise<void>
     onCount: (callback: (count: AskCount) => void) => () => void
     onChanged: (callback: () => void) => () => void
     onOpen: (callback: (id: string) => void) => () => void

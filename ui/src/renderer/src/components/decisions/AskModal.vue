@@ -14,9 +14,9 @@ import AppButton from '../AppButton.vue'
 import AppModal from '../AppModal.vue'
 import AppTextarea from '../AppTextarea.vue'
 import VaultUnlockGate from '../VaultUnlockGate.vue'
-import DbChannelForm from '../connector/DbChannelForm.vue'
 import HttpChannelForm from '../connector/HttpChannelForm.vue'
 import AskCommandCard from './AskCommandCard.vue'
+import AskDbGrant from './AskDbGrant.vue'
 import { noteAskAnswered } from '../../notifications'
 import { askStateLabel, askTypeLabel } from './askLabels'
 import { askParts, askWhere, loadAskProjects } from './askOrigin'
@@ -91,6 +91,7 @@ const declineStep = ref(false)
 const declining = ref(false)
 const declineError = ref('')
 const noteInput = ref<InstanceType<typeof AppTextarea> | null>(null)
+const dbGrant = ref<InstanceType<typeof AskDbGrant> | null>(null)
 
 watch(
   () => askState.openId,
@@ -117,7 +118,12 @@ async function declineChannel(): Promise<void> {
   declining.value = true
   declineError.value = ''
   try {
-    await window.api.ask.decline(vaultSession.passphrase, ask.value.id, note.value.trim())
+    await window.api.ask.decline(
+      vaultSession.passphrase,
+      ask.value.id,
+      note.value.trim(),
+      ask.value.type === 'db' ? dbGrant.value?.declineExtra() : undefined
+    )
     noteAskAnswered(ask.value, 'declined')
     closeAsk()
   } catch (err) {
@@ -148,17 +154,32 @@ const status = computed(() => {
   return null
 })
 
+function listWords(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
 const outcome = computed(() => {
   const a = ask.value
   if (!a || a.type === 'command') return ''
-  if (a.state === 'answered')
-    return a.short_id
-      ? `The requester has channel ${a.short_id}.`
-      : 'The requester has the channel.'
+  if (a.state === 'answered') {
+    const channel = a.short_id ? `channel ${a.short_id}` : 'the channel'
+    const granted = a.granted
+    if (a.type === 'db' && granted?.tables?.length && granted.operations?.length)
+      return `The requester has ${channel}, with ${listWords(granted.operations)} on ${listWords(granted.tables)}.`
+    if (a.type === 'rester' && granted?.methods?.length)
+      return `The requester has ${channel}, with ${listWords(granted.methods)}.`
+    return `The requester has ${channel}.`
+  }
   if (a.state === 'declined') return 'The requester has your decline and its note.'
   if (a.state === 'expired') return 'The ask expired with no answer.'
   return ''
 })
+
+// Each requested table left out of the grant or the decline, as the requester reads it.
+const removedLines = computed(() =>
+  (ask.value?.removed_tables ?? []).map((r) => `Table ${r.table} was left out: ${r.reason}.`)
+)
 </script>
 
 <template>
@@ -205,30 +226,39 @@ const outcome = computed(() => {
               <pre class="untrusted">{{ ask.reason }}</pre>
             </div>
 
-            <p v-if="outcome" class="hint">{{ outcome }}</p>
+            <template v-if="outcome">
+              <p class="hint">{{ outcome }}</p>
+              <p v-for="line in removedLines" :key="line" class="hint">{{ line }}</p>
+            </template>
 
             <template v-else-if="ask.state === 'waiting'">
               <div v-show="!declineStep" class="channel-step">
-                <p class="hint">
-                  You set the permissions and how long the channel stays open. Creating the channel
-                  sends its short id to the requester.
-                </p>
                 <template v-if="ask.type === 'db'">
+                  <p class="hint">
+                    Approving creates the channel with the tables and operations below and sends its
+                    short id to the requester.
+                  </p>
                   <p v-if="connections.length === 0" class="hint">
                     Add a database connection in the Vault first.
                   </p>
-                  <DbChannelForm
+                  <AskDbGrant
                     v-else
+                    ref="dbGrant"
                     :key="ask.id"
-                    title="New database channel"
+                    :ask="ask"
                     :connections="connections"
-                    :requested-tables="ask.tables ?? []"
-                    :ask-id="ask.id"
                     @created="onDbCreated"
-                    @cancel="closeAsk"
+                    @decline="startDecline"
                   />
+                  <div v-if="connections.length === 0" class="create-actions">
+                    <AppButton @click="startDecline">Decline</AppButton>
+                  </div>
                 </template>
                 <template v-else>
+                  <p class="hint">
+                    You set the permissions and how long the channel stays open. Creating the
+                    channel sends its short id to the requester.
+                  </p>
                   <p v-if="resters.length === 0" class="hint">Add a rester in the Vault first.</p>
                   <HttpChannelForm
                     v-else
@@ -239,11 +269,10 @@ const outcome = computed(() => {
                     @created="onHttpCreated"
                     @cancel="closeAsk"
                   />
+                  <div class="create-actions decline-block">
+                    <AppButton @click="startDecline">Decline</AppButton>
+                  </div>
                 </template>
-
-                <div class="create-actions decline-block">
-                  <AppButton @click="startDecline">Decline</AppButton>
-                </div>
               </div>
 
               <div v-if="declineStep" class="field-block">

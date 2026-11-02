@@ -2,13 +2,14 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-// The db channel creation form, used by the Channels section and by a db ask. Its styles come from
+// The db channel creation form of the Channels section; a db ask has its own grant view. Its styles come from
 // vault.css, so it must render inside a .vault-tab element. A parent reopens it with fresh values by
 // remounting it under a new key.
 import { computed, onMounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import type { VaultChannelWithShortId } from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
+import AppCheckbox from '../AppCheckbox.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 import AppMultiPicker from '../AppMultiPicker.vue'
 import AppInput from '../AppInput.vue'
@@ -24,10 +25,6 @@ const props = defineProps<{
   connections: string[]
   title: string
   seed?: DbChannelSeed
-  // A db ask's tables: kept selected across connection changes, and Create waits until the chosen connection has them all.
-  requestedTables?: string[]
-  // Set when the channel answers a model's ask; the main process answers the ask with the short id.
-  askId?: string
 }>()
 
 const emit = defineEmits<{
@@ -51,7 +48,7 @@ const operationOptions = [
 
 const newChannelName = ref(props.seed?.name ?? '')
 const newDbName = ref(props.seed?.dbName ?? props.connections[0] ?? '')
-const newTables = ref<string[]>([...(props.seed?.tables ?? props.requestedTables ?? [])])
+const newTables = ref<string[]>([...(props.seed?.tables ?? [])])
 const newOperations = ref<string[]>([...(props.seed?.operations ?? [])])
 const newTtlMinutes = ref(10)
 const creating = ref(false)
@@ -77,7 +74,7 @@ async function loadTablesFor(dbName: string): Promise<void> {
 
 // Registered after the seed is applied, so only a change the human makes resets the tables.
 watch(newDbName, (dbName) => {
-  newTables.value = [...(props.requestedTables ?? [])]
+  newTables.value = []
   loadTablesFor(dbName)
 })
 
@@ -94,15 +91,14 @@ const tablesSummaryLabel = computed(() => {
   return `${newTables.value.length} tables selected`
 })
 
-const missingTables = computed(() => {
-  if (!props.requestedTables || tablesLoading.value || tablesError.value || !newDbName.value)
-    return []
-  const present = new Set(availableTables.value)
-  return props.requestedTables.filter((t) => !present.has(t))
-})
-
 function removeSelectedTable(table: string): void {
   newTables.value = newTables.value.filter((t) => t !== table)
+}
+
+function toggleOperation(op: string): void {
+  const i = newOperations.value.indexOf(op)
+  if (i === -1) newOperations.value.push(op)
+  else newOperations.value.splice(i, 1)
 }
 
 const canCreate = computed(
@@ -110,8 +106,7 @@ const canCreate = computed(
     !!newChannelName.value.trim() &&
     !!newDbName.value.trim() &&
     vaultUnlocked.value &&
-    !creating.value &&
-    missingTables.value.length === 0
+    !creating.value
 )
 
 async function submitCreate(): Promise<void> {
@@ -125,8 +120,7 @@ async function submitCreate(): Promise<void> {
       newDbName.value.trim(),
       // IPC structured clone cannot clone a Vue reactive Proxy, so the arrays are spread first.
       { Tables: [...newTables.value], Operations: [...newOperations.value] },
-      Math.round(newTtlMinutes.value * 60),
-      props.askId
+      Math.round(newTtlMinutes.value * 60)
     )
     emit('created', result)
   } catch (err) {
@@ -209,18 +203,18 @@ async function submitCreate(): Promise<void> {
               </span>
             </div>
           </AppMultiPicker>
-          <p v-if="missingTables.length > 0" class="error-text">
-            This connection has no table named {{ missingTables.join(', ') }}. Choose another
-            connection.
-          </p>
         </div>
         <div class="field-block">
           <label class="field-label">Operations</label>
           <div class="checkbox-grid">
-            <label v-for="op in operationOptions" :key="op" class="checkbox-option">
-              <input v-model="newOperations" type="checkbox" :value="op" />
+            <AppCheckbox
+              v-for="op in operationOptions"
+              :key="op"
+              :checked="newOperations.includes(op)"
+              @click="toggleOperation(op)"
+            >
               {{ op }}
-            </label>
+            </AppCheckbox>
           </div>
           <p v-if="newOperations.includes('performance')" class="hint">
             Performance lets this channel read server-wide performance views (MySQL
