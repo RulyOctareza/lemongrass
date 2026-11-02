@@ -166,6 +166,11 @@ export interface VaultResterApp {
   Login: VaultAppStep[] | null
 }
 
+export interface VaultResterSummary {
+  Name: string
+  Environments: { Name: string; BaseURL: string; Origin: string }[] | null
+}
+
 export interface VaultRester {
   API: VaultResterAPI | null
   Web: VaultResterWeb | null

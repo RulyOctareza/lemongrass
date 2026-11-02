@@ -2,11 +2,18 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
-import type { VaultHTTPChannel, VaultHTTPChannelWithShortId } from '../../../../preload/types'
+import type {
+  VaultHTTPChannel,
+  VaultHTTPChannelWithShortId,
+  VaultResterSummary
+} from '../../../../preload/types'
 import AppButton from '../AppButton.vue'
 import HttpChannelForm from './HttpChannelForm.vue'
+import ChannelTypeIcon from './ChannelTypeIcon.vue'
+import AppSwitcher from '../AppSwitcher.vue'
+import { matchesQuery, resterDomains } from './listFilter'
 
 const props = defineProps<{
   visible: boolean
@@ -16,6 +23,7 @@ const vaultUnlocked = toRef(vaultSession, 'unlocked')
 const sessionPassphrase = toRef(vaultSession, 'passphrase')
 
 const resters = ref<string[]>([])
+const summaries = ref<Record<string, VaultResterSummary>>({})
 
 async function refreshResters(): Promise<void> {
   try {
@@ -24,6 +32,49 @@ async function refreshResters(): Promise<void> {
     httpChannelsListError.value = describeError(err)
   }
 }
+
+// Domains live inside the encrypted rester; without them the filter still matches everything else.
+async function refreshSummaries(): Promise<void> {
+  try {
+    const list = await window.api.vault.listResterSummaries(sessionPassphrase.value)
+    summaries.value = Object.fromEntries(list.map((s) => [s.Name, s]))
+  } catch {
+    summaries.value = {}
+  }
+}
+
+// A rester name is never empty, so the empty id cannot collide with one.
+const ALL_RESTERS = ''
+const resterFilter = ref(ALL_RESTERS)
+const query = ref('')
+
+watch(resters, (names) => {
+  if (resterFilter.value !== ALL_RESTERS && !names.includes(resterFilter.value)) {
+    resterFilter.value = ALL_RESTERS
+  }
+})
+
+const resterItems = computed(() => [
+  { id: ALL_RESTERS, label: 'All resters' },
+  ...resters.value.map((name) => ({
+    id: name,
+    label: name,
+    search: [name, ...resterDomains(summaries.value[name])].join(' ')
+  }))
+])
+
+const shownChannels = computed(() =>
+  httpChannels.value.filter((channel) => {
+    if (resterFilter.value !== ALL_RESTERS && channel.Rester !== resterFilter.value) return false
+    return matchesQuery(query.value, [
+      channel.Name,
+      channel.Rester,
+      channel.Type || 'api',
+      ...(channel.Scope.Methods ?? []),
+      ...resterDomains(summaries.value[channel.Rester], channel.Environment)
+    ])
+  })
+)
 
 const httpChannels = ref<VaultHTTPChannel[]>([])
 const httpChannelsLoading = ref(false)
@@ -152,6 +203,7 @@ async function copyHTTPShortId(id: string): Promise<void> {
 
 onMounted(() => {
   refreshResters()
+  refreshSummaries()
   refreshHTTPChannels()
 })
 
@@ -160,6 +212,7 @@ watch(
   (visible) => {
     if (!visible) return
     refreshResters()
+    refreshSummaries()
     refreshHTTPChannels()
   }
 )
@@ -202,9 +255,35 @@ onUnmounted(() => {
     <p v-else-if="httpChannelsLoading" class="empty">Loading...</p>
     <p v-else-if="httpChannels.length === 0" class="empty">No HTTP channels yet.</p>
 
-    <div v-else class="channel-list">
+    <template v-else>
+      <div class="list-filter">
+        <AppSwitcher
+          class="rester-filter"
+          :items="resterItems"
+          :active-id="resterFilter"
+          placeholder="All resters"
+          empty-text="No resters."
+          framed
+          searchable
+          search-placeholder="Search resters"
+          @select="resterFilter = $event"
+        />
+        <input
+          v-model="query"
+          type="text"
+          spellcheck="false"
+          placeholder="Filter by name, rester, method, type or domain"
+        />
+      </div>
+      <p v-if="shownChannels.length === 0" class="empty">No channel matches.</p>
+    </template>
+
+    <div
+      v-if="shownChannels.length > 0 && !httpChannelsListError && !httpChannelsLoading"
+      class="channel-list"
+    >
       <div
-        v-for="channel in httpChannels"
+        v-for="channel in shownChannels"
         :key="channel.ID"
         class="channel-row channel-row--stacked"
       >
@@ -216,7 +295,10 @@ onUnmounted(() => {
             <span class="channel-db">{{ channel.Rester }}</span>
             <div class="capsule-row">
               <span class="value-capsule">{{ channel.Environment || 'default' }}</span>
-              <span class="value-capsule">{{ channel.Type || 'api' }}</span>
+              <span class="value-capsule type-capsule">
+                <ChannelTypeIcon :type="channel.Type || 'api'" />
+                {{ channel.Type || 'api' }}
+              </span>
             </div>
             <div v-if="channel.Type === 'web'" class="capsule-group">
               <span class="capsule-group-label">Origins</span>

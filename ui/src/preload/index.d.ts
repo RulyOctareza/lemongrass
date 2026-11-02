@@ -74,6 +74,7 @@ import type {
   WebBounds,
   WebState,
   VaultRester,
+  VaultResterSummary,
   VaultResterUser,
   VaultResterLoginTest,
   VaultEnvironment,
@@ -377,6 +378,7 @@ interface Api {
     verifyPassphrase: (passphrase: string) => Promise<void>
     resetVault: () => Promise<void>
     listResters: () => Promise<string[]>
+    listResterSummaries: (passphrase: string) => Promise<VaultResterSummary[]>
     putRester: (passphrase: string, name: string, rester: VaultRester) => Promise<void>
     getRester: (passphrase: string, name: string) => Promise<VaultRester>
     updateRester: (passphrase: string, name: string, rester: VaultRester) => Promise<void>

@@ -284,6 +284,30 @@
   font-size: var(--text-xs);
 }
 
+/* The filter row above a list: an optional fixed-width picker, then the text box taking the rest. */
+.vault-tab .list-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vault-tab .list-filter input {
+  flex: 1;
+  min-width: 0;
+}
+
+.vault-tab .list-filter .rester-filter {
+  flex: 0 0 200px;
+  --input-bg: var(--color-surface-2);
+}
+
+.vault-tab .type-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-fg-primary);
+}
+
 .vault-tab .status-capsule {
   padding: 1px var(--space-2);
   border-radius: var(--radius-pill);
@@ -512,9 +536,57 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-2);
+  background: var(--color-surface-1);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
+}
+
+/* The popover spans the head row, so it stays inside the panel's width wherever the gate sits. */
+.vault-tab .unlock-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vault-tab .info-trigger {
+  display: inline-flex;
+  color: var(--color-fg-muted);
+  border-radius: var(--radius-pill);
+  cursor: help;
+  outline: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.vault-tab .info-trigger:hover,
+.vault-tab .info-trigger:focus-visible {
+  color: var(--color-fg-primary);
+}
+
+.vault-tab .info-popover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: var(--space-3);
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  color: var(--color-fg-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.vault-tab .info-trigger:hover + .info-popover,
+.vault-tab .info-trigger:focus-visible + .info-popover {
+  opacity: 1;
+  visibility: visible;
 }
 
 .vault-tab .unlock-row {

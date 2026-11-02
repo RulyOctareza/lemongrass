@@ -87,20 +87,38 @@ async function confirmReset(): Promise<void> {
   <div class="vault-gate">
     <div v-if="!hasPassphraseLoading" class="unlock-panel">
       <template v-if="!showResetConfirm">
-        <h4 class="inline-section-title">
-          {{ unlockMode === 'set' ? 'Set your vault passphrase' : 'Enter your vault passphrase' }}
-        </h4>
-        <p class="hint">
-          <template v-if="unlockMode === 'set'">
-            The vault is more than a place for credentials. It guards the parts of lemongrass that
-            agents can't reach. This becomes its passphrase. Use the same one every time.
-          </template>
-          <template v-else>
-            The vault is more than a place for credentials. It is where you run the parts of
-            lemongrass that agents can't reach: connections, channel actions, safety rules and
-            approvals. Enter your passphrase to access it. Auto-locks after 5 minutes idle.
-          </template>
-        </p>
+        <div class="unlock-head">
+          <h4 class="inline-section-title">
+            {{ unlockMode === 'set' ? 'Set your vault passphrase' : 'Enter your vault passphrase' }}
+          </h4>
+          <span class="info-trigger" tabindex="0" aria-label="About the vault">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="6.5" />
+              <path d="M8 7.2V11.2" />
+              <circle cx="8" cy="4.9" r="0.4" fill="currentColor" />
+            </svg>
+          </span>
+          <p class="info-popover" role="tooltip">
+            <template v-if="unlockMode === 'set'">
+              The vault is more than a place for credentials. It guards the parts of lemongrass that
+              agents can't reach. This becomes its passphrase. Use the same one every time.
+            </template>
+            <template v-else>
+              The vault is more than a place for credentials. It is where you run the parts of
+              lemongrass that agents can't reach: connections, channel actions, safety rules and
+              approvals. Enter your passphrase to access it. Auto-locks after 5 minutes idle.
+            </template>
+          </p>
+        </div>
         <div class="unlock-row">
           <input
             v-model="unlockInput"

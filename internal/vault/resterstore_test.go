@@ -90,3 +90,30 @@ func TestPutResterRefusesAStoredName(t *testing.T) {
 		t.Error("UpdateRester on an unknown name = nil, want an error")
 	}
 }
+
+func TestListResterSummaries(t *testing.T) {
+	svc, err := NewService(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	d := NewAPIRester("https://api.example.test", ResterAPI{LoginEndpoint: "/login", TokenPath: "access_token"}, nil)
+	d.Environments[0].Headers = []Header{{Name: "X-Key", Value: "secret"}}
+	if err := svc.PutRester(testRootSecret, "staging", d); err != nil {
+		t.Fatalf("PutRester: %v", err)
+	}
+
+	sums, err := svc.ListResterSummaries(testRootSecret)
+	if err != nil {
+		t.Fatalf("ListResterSummaries: %v", err)
+	}
+	if len(sums) != 1 || sums[0].Name != "staging" || len(sums[0].Environments) != 1 {
+		t.Fatalf("ListResterSummaries() = %+v, want one rester with one environment", sums)
+	}
+	if got := sums[0].Environments[0].BaseURL; got != "https://api.example.test" {
+		t.Errorf("BaseURL = %q, want https://api.example.test", got)
+	}
+
+	if _, err := svc.ListResterSummaries("wrong-secret"); !IsAuthFailure(err) {
+		t.Errorf("ListResterSummaries(wrong secret) error = %v, want an auth failure", err)
+	}
+}

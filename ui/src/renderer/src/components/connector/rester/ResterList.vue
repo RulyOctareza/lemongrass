@@ -2,8 +2,10 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { describeError } from '../../../vaultSession'
+import { computed, onMounted, ref, watch } from 'vue'
+import { describeError, vaultSession } from '../../../vaultSession'
+import type { VaultResterSummary } from '../../../../../preload/types'
+import { matchesQuery, resterDomains } from '../listFilter'
 import AppButton from '../../AppButton.vue'
 import ResterCreateForm from './ResterCreateForm.vue'
 import ResterDetail from './ResterDetail.vue'
@@ -18,6 +20,26 @@ const listError = ref('')
 const showCreate = ref(false)
 const openName = ref<string | null>(null)
 const deletingName = ref<string | null>(null)
+const query = ref('')
+const summaries = ref<Record<string, VaultResterSummary>>({})
+const summaryError = ref('')
+
+const shownResters = computed(() =>
+  resters.value.filter((name) =>
+    matchesQuery(query.value, [name, ...resterDomains(summaries.value[name])])
+  )
+)
+
+// Domains live inside the encrypted rester, so a failure here leaves search matching names only.
+async function refreshSummaries(): Promise<void> {
+  summaryError.value = ''
+  try {
+    const list = await window.api.vault.listResterSummaries(vaultSession.passphrase)
+    summaries.value = Object.fromEntries(list.map((s) => [s.Name, s]))
+  } catch (err) {
+    summaryError.value = `Search covers names only. ${describeError(err)}`
+  }
+}
 
 async function refresh(): Promise<void> {
   loading.value = true
@@ -29,6 +51,7 @@ async function refresh(): Promise<void> {
   } finally {
     loading.value = false
   }
+  refreshSummaries()
 }
 
 async function deleteRester(name: string): Promise<void> {
@@ -95,23 +118,36 @@ watch(
       <p v-else-if="loading" class="empty">Loading...</p>
       <p v-else-if="resters.length === 0" class="empty">No resters yet.</p>
 
-      <div v-else class="channel-list">
-        <div v-for="name in resters" :key="name" class="channel-row">
-          <div class="channel-info">
-            <span class="channel-db">{{ name }}</span>
-          </div>
-          <div class="channel-actions">
-            <AppButton @click="openName = name">Open</AppButton>
-            <AppButton
-              variant="danger"
-              :disabled="deletingName === name"
-              @click="deleteRester(name)"
-            >
-              {{ deletingName === name ? 'Deleting...' : 'Delete' }}
-            </AppButton>
+      <template v-else>
+        <div class="list-filter">
+          <input
+            v-model="query"
+            type="text"
+            spellcheck="false"
+            placeholder="Search by name or domain"
+          />
+        </div>
+        <p v-if="summaryError" class="error-text">{{ summaryError }}</p>
+        <p v-if="shownResters.length === 0" class="empty">No rester matches.</p>
+
+        <div v-else class="channel-list">
+          <div v-for="name in shownResters" :key="name" class="channel-row">
+            <div class="channel-info">
+              <span class="channel-db">{{ name }}</span>
+            </div>
+            <div class="channel-actions">
+              <AppButton @click="openName = name">Open</AppButton>
+              <AppButton
+                variant="danger"
+                :disabled="deletingName === name"
+                @click="deleteRester(name)"
+              >
+                {{ deletingName === name ? 'Deleting...' : 'Delete' }}
+              </AppButton>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
     </template>
   </div>
 </template>

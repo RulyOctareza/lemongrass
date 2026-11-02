@@ -177,6 +177,12 @@ export interface ResterApp {
   Login: AppStep[] | null
 }
 
+// A rester's name and environment addresses only, for matching a list by domain.
+export interface ResterSummary {
+  Name: string
+  Environments: { Name: string; BaseURL: string; Origin: string }[] | null
+}
+
 export interface Rester {
   API: ResterAPI | null
   Web: ResterWeb | null
@@ -384,6 +390,14 @@ async function listResters(): Promise<string[]> {
 
 async function putRester(passphrase: string, name: string, rester: Rester): Promise<void> {
   await vaultCall<void>('put_rester', { root_secret: passphrase, name, rester })
+}
+
+async function listResterSummaries(passphrase: string): Promise<ResterSummary[]> {
+  const { resters } = await vaultCall<{ resters: ResterSummary[] | null }>(
+    'list_rester_summaries',
+    { root_secret: passphrase }
+  )
+  return resters ?? []
 }
 
 // Reads a stored rester back in full, passwords and tokens included, for the edit form.
@@ -613,6 +627,9 @@ export function registerVaultHandlers(): void {
   ipcMain.handle('vault:resetVault', () => resetVault())
 
   ipcMain.handle('vault:listResters', () => listResters())
+  ipcMain.handle('vault:listResterSummaries', (_event, passphrase: string) =>
+    listResterSummaries(passphrase)
+  )
   ipcMain.handle('vault:putRester', (_event, passphrase: string, name: string, rester: Rester) =>
     putRester(passphrase, name, rester)
   )

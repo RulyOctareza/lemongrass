@@ -75,6 +75,7 @@ import type {
   WebBounds,
   WebState,
   VaultRester,
+  VaultResterSummary,
   VaultResterUser,
   VaultResterLoginTest,
   VaultEnvironment,
@@ -420,6 +421,8 @@ const vault = {
     ipcRenderer.invoke('vault:verifyPassphrase', passphrase),
   resetVault: (): Promise<void> => ipcRenderer.invoke('vault:resetVault'),
   listResters: (): Promise<string[]> => ipcRenderer.invoke('vault:listResters'),
+  listResterSummaries: (passphrase: string): Promise<VaultResterSummary[]> =>
+    ipcRenderer.invoke('vault:listResterSummaries', passphrase),
   putRester: (passphrase: string, name: string, rester: VaultRester): Promise<void> =>
     ipcRenderer.invoke('vault:putRester', passphrase, name, rester),
   getRester: (passphrase: string, name: string): Promise<VaultRester> =>

@@ -53,6 +53,7 @@ const (
 	opHTTPChannelUsers    = "http_channel_users"
 	opFlushHTTPTokens     = "flush_http_tokens"
 	opGetRester           = "get_rester"
+	opResterSummaries     = "list_rester_summaries"
 	opUpdateRester        = "update_rester"
 	opWebLoginFields      = "web_login_fields"
 	opAppLogin            = "app_login"
@@ -299,6 +300,10 @@ type humanFlushPayload struct {
 	Rester      string `json:"rester"`
 	Environment string `json:"environment"`
 	User        string `json:"user"`
+}
+
+type resterSummariesPayload struct {
+	Resters []vault.ResterSummary `json:"resters"`
 }
 
 type resterPayload struct {
@@ -721,6 +726,16 @@ func dispatch(svc *Backend, adminLimiter *vault.FailureLimiter, req request) res
 		return adminOp(adminLimiter, func() (response, error) {
 			d, err := svc.GetRester(p.RootSecret, p.Name)
 			return payloadResponse(resterPayload{Rester: d}), err
+		})
+
+	case opResterSummaries:
+		var p rootSecretPayload
+		if err := json.Unmarshal(req.Payload, &p); err != nil {
+			return errResponse(err)
+		}
+		return adminOp(adminLimiter, func() (response, error) {
+			sums, err := svc.ListResterSummaries(p.RootSecret)
+			return payloadResponse(resterSummariesPayload{Resters: sums}), err
 		})
 
 	case opUpdateRester:

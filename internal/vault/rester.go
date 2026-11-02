@@ -242,6 +242,54 @@ func (s *Service) ListResters() ([]string, error) {
 	return out, nil
 }
 
+// ResterSummary is the part of a rester a list needs to find it by, its name and each
+// environment's addresses. It holds no secret, so the app can keep it for filtering.
+type ResterSummary struct {
+	Name         string
+	Environments []EnvironmentSummary
+}
+
+// EnvironmentSummary is an environment's addresses without its headers, which can carry secrets.
+type EnvironmentSummary struct {
+	Name    string
+	BaseURL string
+	Origin  string
+}
+
+// ListResterSummaries decrypts every stored rester under one derived key and returns only its
+// name and environment addresses, so a list can match by domain without a key derivation per
+// rester and without passwords or tokens leaving the vault.
+func (s *Service) ListResterSummaries(rootSecret string) ([]ResterSummary, error) {
+	names, err := s.ListResters()
+	if err != nil {
+		return nil, err
+	}
+	rootKey, err := DeriveKey(rootSecret, s.rootSalt)
+	if err != nil {
+		return nil, err
+	}
+	defer Zero(rootKey)
+
+	out := make([]ResterSummary, 0, len(names))
+	for _, name := range names {
+		b, err := s.creds.Get(resterKey(name), rootKey)
+		if err != nil {
+			return nil, fmt.Errorf("vault: reading rester %s: %w", name, err)
+		}
+		r, err := decodeRester(b)
+		Zero(b)
+		if err != nil {
+			return nil, fmt.Errorf("vault: decoding rester %s: %w", name, err)
+		}
+		sum := ResterSummary{Name: name, Environments: make([]EnvironmentSummary, 0, len(r.Environments))}
+		for _, e := range r.Environments {
+			sum.Environments = append(sum.Environments, EnvironmentSummary{Name: e.Name, BaseURL: e.BaseURL, Origin: e.Origin})
+		}
+		out = append(out, sum)
+	}
+	return out, nil
+}
+
 // DeleteRester removes a stored rester. It succeeds even if name was never stored.
 func (s *Service) DeleteRester(name string) error {
 	if err := s.creds.Delete(resterKey(name)); err != nil {
