@@ -6,6 +6,8 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import ProjectSidebar from './components/ProjectSidebar.vue'
 import ProjectSwitcher from './components/ProjectSwitcher.vue'
 import HeaderBar from './components/HeaderBar.vue'
+// A copy of ui/build/icon.svg, so the header mark matches the app icon; replace both together.
+import brandMark from './assets/brand-mark.svg'
 import WorkspaceView from './components/WorkspaceView.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import GuideModal from './components/GuideModal.vue'
@@ -175,21 +177,7 @@ onBeforeUnmount(() => {
       @open-guide="guideOpen = true"
     >
       <template #title>
-        <span class="brand-mark">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--color-black)"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.2c1.7 6.6.2 13.1-5 17.7" />
-            <path d="M2 21c0-3 1.85-5.36 5.08-6" />
-          </svg>
-        </span>
+        <img class="brand-mark" :src="brandMark" alt="" width="18" height="18" />
         <span class="wordmark">lemongrass</span>
         <span class="switcher-zone">
           <ProjectSwitcher
@@ -313,13 +301,9 @@ onBeforeUnmount(() => {
 }
 
 .brand-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 18px;
   height: 18px;
-  border-radius: var(--radius-sm);
-  background: var(--color-amber);
   flex-shrink: 0;
   margin-right: var(--space-2);
 }
@@ -328,7 +312,7 @@ onBeforeUnmount(() => {
   font-family: var(--font-display);
   font-size: var(--text-md);
   font-weight: var(--weight-bold);
-  color: var(--color-fg-accent);
+  color: var(--color-fg-primary);
   letter-spacing: var(--tracking-snug);
 }
 
