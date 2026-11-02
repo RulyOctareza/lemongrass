@@ -9,7 +9,8 @@ import type { Ask } from '../../../../preload/types'
 import { askState, openAsk } from '../../asks'
 import { describeError, vaultSession } from '../../vaultSession'
 import { askStateLabel, askSummary } from './askLabels'
-import { askSentence, loadAskProjects } from './askOrigin'
+import { askParts, askWhere, loadAskProjects } from './askOrigin'
+import MarkedText from '../MarkedText.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -73,9 +74,9 @@ watch(
         @click="openAsk(ask.id)"
       >
         <span class="channel-info">
-          <span class="channel-name">{{ askSentence(ask) }}</span>
+          <span class="channel-name"><MarkedText :parts="askParts(ask)" /></span>
           <span v-if="ask.type !== 'db'" class="decision-summary">{{ askSummary(ask) }}</span>
-          <span class="channel-db">Asked {{ age(ask.created_at) }}</span>
+          <span class="channel-db">Asked {{ age(ask.created_at) }} in {{ askWhere(ask) }}</span>
         </span>
         <span
           class="status-capsule"

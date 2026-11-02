@@ -11,13 +11,10 @@ import AppButton from '../AppButton.vue'
 import AppConfirmButton from '../AppConfirmButton.vue'
 import AppSegmented from '../AppSegmented.vue'
 import AppTextarea from '../AppTextarea.vue'
-import { capitalize } from './askOrigin'
 import { noteAskAnswered } from '../../notifications'
 
 const props = defineProps<{
   ask: Ask
-  // Who asked, such as "Claude in Fix login".
-  who: string
 }>()
 
 const emit = defineEmits<{
@@ -62,24 +59,23 @@ function clock(iso: string | undefined): string {
   return at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-const guardText = computed(() => {
+// The part before the marked rule id; the rule id and its hint follow in the template.
+const guardLead = computed(() => {
   const verdict = props.ask.verdict
-  if (!verdict)
-    return `No guard rule matches the command. ${capitalize(props.who)} asked on its own.`
-  const what = verdict.description || `guarded by ${verdict.rule}`
-  const rule =
-    verdict.mode === 'deny'
-      ? `The command is ${what}, which the guard denies to agents (rule ${verdict.rule}).`
-      : `The command is ${what}, which the guard leaves to you (rule ${verdict.rule}).`
-  return props.ask.rule ? `${rule} The guard refused it and sent it to you.` : rule
+  if (!verdict) return ''
+  const what = verdict.description || 'guarded'
+  return verdict.mode === 'deny'
+    ? `The command is ${what}, which the guard denies to agents under rule `
+    : `The command is ${what}, which the guard leaves to you under rule `
 })
 
-const resultText = computed(() => {
+// Marked in the template; the plain rest of the line follows it.
+const resultHead = computed(() => {
   const r = result.value
   if (!r) return ''
-  if (r.stopped) return `Stopped at ${clock(r.ended_at)}.`
-  if (r.timed_out) return `Timed out at ${clock(r.ended_at)}.`
-  return `Exited with code ${r.exit_code} at ${clock(r.ended_at)}.`
+  if (r.stopped) return 'Stopped'
+  if (r.timed_out) return 'Timed out'
+  return `Exited with code ${r.exit_code}`
 })
 
 // The parent refetches after each action, so the card only ever shows the daemon's own record.
@@ -127,8 +123,30 @@ async function decline(): Promise<void> {
       <span class="field-label">Reason</span>
       <pre class="untrusted">{{ ask.reason }}</pre>
     </div>
-    <p class="hint">
-      {{ guardText }}
+    <p v-if="!ask.verdict" class="hint">
+      No guard rule matches the command. The requester asked on its own.
+    </p>
+    <p v-else class="hint">
+      {{ guardLead }}<strong class="rule-id">{{ ask.verdict.rule }}</strong
+      ><span
+        class="rule-help"
+        role="img"
+        aria-label="You can change this rule for this project in Settings, Safety."
+        title="You can change this rule for this project in Settings, Safety."
+        ><svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.1"
+          stroke-linecap="round"
+        >
+          <circle cx="6" cy="6" r="5" />
+          <path d="M4.6 4.6a1.4 1.4 0 1 1 1.9 1.3c-.4.2-.5.4-.5.8" />
+          <circle cx="6" cy="8.6" r=".3" fill="currentColor" /></svg></span
+      >.
+      <template v-if="ask.rule">The guard refused it and sent it to you.</template>
     </p>
 
     <template v-if="waiting">
@@ -161,7 +179,7 @@ async function decline(): Promise<void> {
 
       <template v-else>
         <div class="field-block">
-          <label class="field-label" for="ask-decline-note">Note for {{ who }}</label>
+          <label class="field-label" for="ask-decline-note">Note for the requester</label>
           <AppTextarea
             id="ask-decline-note"
             ref="noteInput"
@@ -190,7 +208,10 @@ async function decline(): Promise<void> {
     </template>
 
     <template v-else-if="result">
-      <p class="hint">{{ resultText }} {{ capitalize(who) }} has the result.</p>
+      <p class="hint">
+        <strong class="result-head">{{ resultHead }}</strong> at {{ clock(result.ended_at) }}. The
+        requester has its response.
+      </p>
       <div class="field-block">
         <span class="field-label">Last lines of output</span>
         <pre class="untrusted mono">{{ result.output_tail || 'No output.' }}</pre>
@@ -204,5 +225,23 @@ async function decline(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.rule-id,
+.result-head {
+  color: var(--color-fg-accent);
+  font-weight: var(--weight-semibold);
+}
+
+.rule-id {
+  font-family: var(--font-mono);
+}
+
+.rule-help {
+  display: inline-flex;
+  margin-left: 4px;
+  color: var(--color-fg-secondary);
+  vertical-align: -1px;
+  cursor: help;
 }
 </style>

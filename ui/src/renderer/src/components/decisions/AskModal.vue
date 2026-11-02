@@ -19,7 +19,8 @@ import HttpChannelForm from '../connector/HttpChannelForm.vue'
 import AskCommandCard from './AskCommandCard.vue'
 import { noteAskAnswered } from '../../notifications'
 import { askStateLabel, askTypeLabel } from './askLabels'
-import { askOrigin, askSentence, capitalize, loadAskProjects } from './askOrigin'
+import { askParts, askWhere, loadAskProjects } from './askOrigin'
+import MarkedText from '../MarkedText.vue'
 
 const ask = ref<Ask | null>(null)
 const loadError = ref('')
@@ -28,7 +29,6 @@ const resters = ref<string[]>([])
 let loadSeq = 0
 
 const title = computed(() => (ask.value ? askTypeLabel(ask.value.type) : 'Decision'))
-const who = computed(() => (ask.value ? askOrigin(ask.value).who : 'the agent'))
 
 loadAskProjects()
 
@@ -137,21 +137,25 @@ function askedAt(iso: string): string {
   })
 }
 
-const metaLine = computed(() => {
-  const a = ask.value
-  if (!a) return ''
-  const asked = `Asked ${askedAt(a.created_at)}.`
-  return a.state === 'waiting' ? asked : `${asked} ${askStateLabel(a.state)}.`
+// Waiting needs no chip: the actions below say it. A finished command reads as done too.
+const status = computed(() => {
+  const state = ask.value?.state
+  if (state === 'answered') return { label: 'Done', tone: 'done' }
+  if (state === 'running') return { label: askStateLabel(state), tone: 'running' }
+  if (state === 'declined' || state === 'expired')
+    return { label: askStateLabel(state), tone: 'muted' }
+  return null
 })
 
 const outcome = computed(() => {
   const a = ask.value
   if (!a || a.type === 'command') return ''
-  const agent = capitalize(who.value)
   if (a.state === 'answered')
-    return a.short_id ? `${agent} has channel ${a.short_id}.` : `${agent} has the channel.`
-  if (a.state === 'declined') return `${agent} has your decline and its note.`
-  if (a.state === 'expired') return `The ask from ${who.value} expired with no answer.`
+    return a.short_id
+      ? `The requester has channel ${a.short_id}.`
+      : 'The requester has the channel.'
+  if (a.state === 'declined') return 'The requester has your decline and its note.'
+  if (a.state === 'expired') return 'The ask expired with no answer.'
   return ''
 })
 </script>
@@ -171,15 +175,21 @@ const outcome = computed(() => {
 
         <template v-else>
           <div class="ask-head">
-            <p class="ask-lead">{{ askSentence(ask) }}</p>
-            <p class="ask-meta" :title="ask.cwd">{{ metaLine }}</p>
+            <div class="ask-lead-row">
+              <p class="ask-lead"><MarkedText :parts="askParts(ask)" /></p>
+              <span v-if="status" class="ask-status" :class="`ask-status--${status.tone}`">
+                {{ status.label }}
+              </span>
+            </div>
+            <p class="ask-meta" :title="ask.cwd">
+              Asked {{ askedAt(ask.created_at) }} in {{ askWhere(ask) }}.
+            </p>
           </div>
 
           <AskCommandCard
             v-if="ask.type === 'command'"
             :key="ask.id"
             :ask="ask"
-            :who="who"
             @changed="onCommandChanged"
             @done="closeAsk"
           />
@@ -200,7 +210,7 @@ const outcome = computed(() => {
               <div v-show="!declineStep" class="channel-step">
                 <p class="hint">
                   You set the permissions and how long the channel stays open. Creating the channel
-                  sends its short id to {{ who }}.
+                  sends its short id to the requester.
                 </p>
                 <template v-if="ask.type === 'db'">
                   <p v-if="connections.length === 0" class="hint">
@@ -236,7 +246,7 @@ const outcome = computed(() => {
               </div>
 
               <div v-if="declineStep" class="field-block">
-                <label class="field-label" for="ask-channel-note">Note for {{ who }}</label>
+                <label class="field-label" for="ask-channel-note">Note for the requester</label>
                 <AppTextarea
                   id="ask-channel-note"
                   ref="noteInput"
@@ -298,6 +308,36 @@ const outcome = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.ask-lead-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ask-status {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.ask-status--done {
+  background: var(--color-jade-muted);
+  color: var(--color-jade);
+}
+
+.ask-status--running {
+  background: var(--color-amber-muted);
+  color: var(--color-fg-accent);
+}
+
+.ask-status--muted {
+  background: var(--color-surface-3);
+  color: var(--color-fg-secondary);
 }
 
 .ask-lead {
