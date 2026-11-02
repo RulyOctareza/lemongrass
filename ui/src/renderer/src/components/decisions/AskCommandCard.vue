@@ -52,6 +52,17 @@ const waiting = computed(() => props.ask.state === 'waiting')
 const running = computed(() => props.ask.state === 'running')
 const result = computed(() => props.ask.result ?? null)
 
+// The rule hint opens beside its icon, toward whichever side of the line has room, so the modal
+// never clips it.
+const guardLine = ref<HTMLElement | null>(null)
+const hintFromEnd = ref(false)
+
+function placeHint(event: Event): void {
+  const line = guardLine.value?.getBoundingClientRect()
+  const icon = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  if (line) hintFromEnd.value = icon.left - line.left > line.width / 2
+}
+
 function clock(iso: string | undefined): string {
   if (!iso) return ''
   const at = new Date(iso)
@@ -127,28 +138,32 @@ async function decline(): Promise<void> {
       No guard rule matches the command. The requester asked on its own.
     </p>
     <!-- The hint uses the vault login's info-trigger and info-popover look from vault.css; the popover spans the line. -->
-    <p v-else class="hint guard-line">
+    <p v-else ref="guardLine" class="hint guard-line">
       {{ guardLead }}<strong class="rule-id">{{ ask.verdict.rule }}</strong
-      ><span
-        class="info-trigger rule-help"
-        tabindex="0"
-        aria-label="About the rule"
-        aria-describedby="ask-rule-help"
-        ><svg
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.4"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <circle cx="8" cy="8" r="6.5" />
-          <path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.7c-.5.2-.8.6-.8 1.1v.4" />
-          <circle cx="8" cy="11.6" r="0.4" fill="currentColor" /></svg></span
-      ><span id="ask-rule-help" class="info-popover" role="tooltip"
-        >You can change rule {{ ask.verdict.rule }} for this project in Settings, Safety.</span
+      ><span class="rule-hint" :class="{ 'rule-hint--end': hintFromEnd }"
+        ><span
+          class="info-trigger rule-help"
+          tabindex="0"
+          aria-label="About the rule"
+          aria-describedby="ask-rule-help"
+          @mouseenter="placeHint"
+          @focus="placeHint"
+          ><svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="8" r="6.5" />
+            <path d="M8 7.2V11.2" />
+            <circle cx="8" cy="4.9" r="0.4" fill="currentColor" /></svg></span
+        ><span id="ask-rule-help" class="info-popover" role="tooltip"
+          >You can change rule {{ ask.verdict.rule }} for this project in Settings, Safety.</span
+        ></span
       >.
       <template v-if="ask.rule">The guard refused it and sent it to you.</template>
     </p>
@@ -241,12 +256,25 @@ async function decline(): Promise<void> {
   font-family: var(--font-mono);
 }
 
-.guard-line {
+.rule-hint {
   position: relative;
+  display: inline-block;
 }
 
 .rule-help {
   margin-left: 4px;
   vertical-align: -2px;
+}
+
+.rule-hint .info-popover {
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: auto;
+  width: 260px;
+}
+
+.rule-hint--end .info-popover {
+  left: auto;
+  right: 0;
 }
 </style>
