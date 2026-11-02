@@ -14,9 +14,9 @@ import AppButton from '../AppButton.vue'
 import AppModal from '../AppModal.vue'
 import AppTextarea from '../AppTextarea.vue'
 import VaultUnlockGate from '../VaultUnlockGate.vue'
-import HttpChannelForm from '../connector/HttpChannelForm.vue'
 import AskCommandCard from './AskCommandCard.vue'
 import AskDbGrant from './AskDbGrant.vue'
+import AskResterGrant from './AskResterGrant.vue'
 import { noteAskAnswered } from '../../notifications'
 import { askStateLabel, askTypeLabel } from './askLabels'
 import { askParts, askWhere, loadAskProjects } from './askOrigin'
@@ -256,20 +256,19 @@ const removedLines = computed(() =>
                 </template>
                 <template v-else>
                   <p class="hint">
-                    You set the permissions and how long the channel stays open. Creating the
-                    channel sends its short id to the requester.
+                    Approving creates an API channel with the methods below and sends its short id
+                    to the requester.
                   </p>
                   <p v-if="resters.length === 0" class="hint">Add a rester in the Vault first.</p>
-                  <HttpChannelForm
+                  <AskResterGrant
                     v-else
                     :key="ask.id"
-                    title="New rester channel"
+                    :ask="ask"
                     :resters="resters"
-                    :ask-id="ask.id"
                     @created="onHttpCreated"
-                    @cancel="closeAsk"
+                    @decline="startDecline"
                   />
-                  <div class="create-actions decline-block">
+                  <div v-if="resters.length === 0" class="create-actions">
                     <AppButton @click="startDecline">Decline</AppButton>
                   </div>
                 </template>
@@ -405,10 +404,5 @@ const removedLines = computed(() =>
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.decline-block {
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border-default);
 }
 </style>

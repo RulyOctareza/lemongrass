@@ -2,9 +2,9 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-// The HTTP channel creation form, used by the HTTP Channels section and by a rester ask. Its styles
-// come from vault.css, so it must render inside a .vault-tab element. A parent reopens it with fresh
-// values by remounting it under a new key.
+// The HTTP channel creation form of the HTTP Channels section; a rester ask has its own grant
+// view. Its styles come from vault.css, so it must render inside a .vault-tab element. A parent
+// reopens it with fresh values by remounting it under a new key.
 import { onMounted, ref, toRef } from 'vue'
 import { vaultSession, describeError } from '../../vaultSession'
 import type {
@@ -27,8 +27,6 @@ const props = defineProps<{
   // The channel a Copy starts from.
   seed?: VaultHTTPChannel
   copiedFrom?: string
-  // Set when the channel answers a model's ask; the main process answers the ask with the short id.
-  askId?: string
 }>()
 
 const emit = defineEmits<{
@@ -191,8 +189,7 @@ async function submitHTTPCreate(): Promise<void> {
       newHTTPType.value,
       scope,
       webScope,
-      Math.round(newHTTPTtlMinutes.value * 60),
-      props.askId
+      Math.round(newHTTPTtlMinutes.value * 60)
     )
     emit('created', result)
   } catch (err) {
