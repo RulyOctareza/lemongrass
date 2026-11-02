@@ -2,9 +2,12 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+// The dropdown renders in body, fixed to the window at the trigger, so a modal or a scrolling pane
+// that clips with overflow never crops it.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppInput from './AppInput.vue'
 import type { AppInputHandle } from './appInput'
+import { placeFloat, placementStyle } from '../floatPlace'
 
 const props = withDefaults(
   defineProps<{
@@ -36,7 +39,8 @@ const props = withDefaults(
     // Adds a filter box at the top of the dropdown.
     searchable?: boolean
     searchPlaceholder?: string
-    // Opens the dropdown upward, for a trigger near the bottom of the window.
+    // Prefers opening upward, for a trigger near the bottom of the window; either way the dropdown
+    // takes the side with room.
     above?: boolean
   }>(),
   {
@@ -58,8 +62,47 @@ const emit = defineEmits<{
 
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
+const triggerRef = ref<HTMLElement | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
 const query = ref('')
 const searchRef = ref<AppInputHandle | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
+const placed = ref(false)
+// The unfiltered height, measured once per opening, decides the side; filtering only shrinks it.
+let naturalHeight = 0
+
+const GAP = 8
+
+function place(): void {
+  const trigger = triggerRef.value
+  const dropdown = dropdownRef.value
+  if (!trigger || !dropdown) return
+  const rect = trigger.getBoundingClientRect()
+  const p = placeFloat(rect, dropdown.offsetWidth, naturalHeight, GAP, props.above)
+  dropdownStyle.value = {
+    ...placementStyle(p),
+    ...(props.framed ? { minWidth: `${rect.width}px` } : {})
+  }
+  placed.value = true
+}
+
+async function openDropdown(): Promise<void> {
+  placed.value = false
+  const rect = triggerRef.value?.getBoundingClientRect()
+  dropdownStyle.value = props.framed && rect ? { minWidth: `${rect.width}px` } : {}
+  open.value = true
+  await nextTick()
+  naturalHeight = dropdownRef.value?.offsetHeight ?? 0
+  place()
+}
+
+function listen(on: boolean): void {
+  const method = on ? 'addEventListener' : 'removeEventListener'
+  window[method]('resize', place)
+  document[method]('scroll', place, true)
+}
+
+watch(open, (isOpen) => listen(isOpen))
 
 const shownItems = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -79,11 +122,13 @@ function headingAt(index: number): string | undefined {
 
 async function toggleOpen(): Promise<void> {
   if (props.disabled) return
-  open.value = !open.value
-  if (!open.value || !props.searchable) return
+  if (open.value) {
+    open.value = false
+    return
+  }
   query.value = ''
-  await nextTick()
-  searchRef.value?.focus()
+  await openDropdown()
+  if (props.searchable) searchRef.value?.focus()
 }
 
 function pickFirstShown(): void {
@@ -103,18 +148,22 @@ function pickAdd(): void {
 
 function onDocumentClickOutside(event: MouseEvent): void {
   if (!open.value) return
-  if (rootRef.value && !rootRef.value.contains(event.target as Node)) {
-    open.value = false
-  }
+  const target = event.target as Node
+  if (rootRef.value?.contains(target) || dropdownRef.value?.contains(target)) return
+  open.value = false
 }
 
 onMounted(() => document.addEventListener('click', onDocumentClickOutside, true))
-onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutside, true))
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClickOutside, true)
+  listen(false)
+})
 </script>
 
 <template>
   <div ref="rootRef" class="switcher">
     <button
+      ref="triggerRef"
       type="button"
       :class="
         framed ? ['lg-field-trigger', { 'lg-field-trigger--sm': size === 'sm' }] : 'plain-trigger'
@@ -140,47 +189,51 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
       </svg>
     </button>
 
-    <div
-      v-if="open"
-      class="dropdown lg-float"
-      :class="{ above, fit: framed, 'lg-menu--sm': size === 'sm' }"
-    >
-      <AppInput
-        v-if="searchable"
-        ref="searchRef"
-        v-model="query"
-        class="search"
-        :size="size"
-        icon="search"
-        spellcheck="false"
-        :placeholder="searchPlaceholder"
-        @keydown.enter.prevent="pickFirstShown"
-        @keydown.escape="open = false"
-      />
-      <div class="item-list">
-        <template v-for="(item, i) in shownItems" :key="item.id">
-          <p v-if="headingAt(i)" class="lg-menu-heading">{{ headingAt(i) }}</p>
-          <button
-            type="button"
-            class="lg-menu-row"
-            :class="{ 'is-active': item.id === activeId }"
-            :title="item.disabled ?? item.title"
-            :disabled="!!item.disabled"
-            @click="pick(item.id)"
-          >
-            <span class="lg-menu-label">{{ item.label }}</span>
-            <span v-if="item.disabled" class="lg-menu-hint">{{ item.disabled }}</span>
-            <span v-else-if="item.hint" class="lg-menu-hint">{{ item.hint }}</span>
-          </button>
-        </template>
-        <p v-if="items.length === 0" class="lg-menu-empty">{{ emptyText }}</p>
-        <p v-else-if="shownItems.length === 0" class="lg-menu-empty">No match.</p>
+    <Teleport to="body">
+      <div
+        v-if="open"
+        ref="dropdownRef"
+        class="dropdown lg-float"
+        :class="{ placed, fit: framed, 'lg-menu--sm': size === 'sm' }"
+        :style="dropdownStyle"
+      >
+        <AppInput
+          v-if="searchable"
+          ref="searchRef"
+          v-model="query"
+          class="search"
+          :size="size"
+          icon="search"
+          spellcheck="false"
+          :placeholder="searchPlaceholder"
+          @keydown.enter.prevent="pickFirstShown"
+          @keydown.escape="open = false"
+        />
+        <div class="item-list">
+          <template v-for="(item, i) in shownItems" :key="item.id">
+            <p v-if="headingAt(i)" class="lg-menu-heading">{{ headingAt(i) }}</p>
+            <button
+              type="button"
+              class="lg-menu-row"
+              :class="{ 'is-active': item.id === activeId }"
+              :title="item.disabled ?? item.title"
+              :disabled="!!item.disabled"
+              @click="pick(item.id)"
+            >
+              <span class="lg-menu-label">{{ item.label }}</span>
+              <span v-if="item.disabled" class="lg-menu-hint">{{ item.disabled }}</span>
+              <span v-else-if="item.hint" class="lg-menu-hint">{{ item.hint }}</span>
+            </button>
+          </template>
+          <p v-if="items.length === 0" class="lg-menu-empty">{{ emptyText }}</p>
+          <p v-else-if="shownItems.length === 0" class="lg-menu-empty">No match.</p>
+        </div>
+        <button v-if="addLabel" type="button" class="add-item" @click="pickAdd">
+          <span class="icon">+</span>
+          <span>{{ addLabel }}</span>
+        </button>
       </div>
-      <button v-if="addLabel" type="button" class="add-item" @click="pickAdd">
-        <span class="icon">+</span>
-        <span>{{ addLabel }}</span>
-      </button>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -226,28 +279,29 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
   max-width: none;
 }
 
+/* Above the app modal, below the app's closing overlay. Hidden until placed, so it never flashes at
+   the window corner. */
 .dropdown {
-  position: absolute;
-  top: calc(100% + var(--space-2));
+  position: fixed;
+  top: 0;
   left: 0;
-  z-index: 80;
+  z-index: 950;
   width: 260px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  visibility: hidden;
 }
 
-/* Under a field the dropdown is at least as wide as its trigger and otherwise fits its items, so
-   a narrow trigger at the right edge of a row does not push the dropdown out of the container. */
+.dropdown.placed {
+  visibility: visible;
+}
+
+/* Under a field the dropdown is at least as wide as its trigger (set inline) and otherwise fits
+   its items. */
 .dropdown.fit {
   width: max-content;
-  min-width: 100%;
   max-width: 320px;
-}
-
-.dropdown.above {
-  top: auto;
-  bottom: calc(100% + var(--space-2));
 }
 
 .search {
@@ -255,6 +309,8 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClickOutsi
 }
 
 .item-list {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: 320px;
   overflow-y: auto;
   padding: var(--space-2);

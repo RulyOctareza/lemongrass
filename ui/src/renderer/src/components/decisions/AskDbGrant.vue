@@ -11,6 +11,7 @@ import type { Ask, AskDeclineExtra, VaultChannelWithShortId } from '../../../../
 import { describeError, vaultSession } from '../../vaultSession'
 import AppButton from '../AppButton.vue'
 import AppCheckbox from '../AppCheckbox.vue'
+import AppInfoPopover from '../AppInfoPopover.vue'
 import AppInput from '../AppInput.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 
@@ -177,19 +178,29 @@ function declineExtra(): AskDeclineExtra {
 
 defineExpose({ declineExtra })
 
-// A popover opens toward the side of the row with room, so the modal never clips it.
-const tableRow = ref<HTMLElement | null>(null)
-const hintFromEnd = ref<Record<string, boolean>>({})
+// One hint card serves every capsule: it follows whichever capsule is hovered or focused.
+const hintTable = ref<string | null>(null)
+const hintAnchor = ref<HTMLElement | null>(null)
+const hintId = computed(() => `ask-table-hint-${props.ask.id}`)
 
-function placeHint(table: string, event: Event): void {
-  const row = tableRow.value?.getBoundingClientRect()
-  const capsule = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  if (row) hintFromEnd.value[table] = capsule.left - row.left > row.width / 2
+function showHint(table: string, event: Event): void {
+  hintTable.value = table
+  hintAnchor.value = event.currentTarget as HTMLElement
 }
 
-function hintId(table: string): string {
-  return `ask-table-${props.ask.id}-${table}`
+function hideHint(event: Event): void {
+  const next = (event as FocusEvent).relatedTarget as Node | null
+  if (next && hintAnchor.value?.contains(next)) return
+  hintTable.value = null
+  hintAnchor.value = null
 }
+
+watch(remaining, (tables) => {
+  if (hintTable.value && !tables.includes(hintTable.value)) {
+    hintTable.value = null
+    hintAnchor.value = null
+  }
+})
 </script>
 
 <template>
@@ -227,37 +238,34 @@ function hintId(table: string): string {
       <div class="form-column">
         <div class="field-block">
           <span class="field-label">Tables</span>
-          <div ref="tableRow" class="capsule-row">
+          <div class="capsule-row">
             <span
               v-for="table in remaining"
               :key="table"
-              class="capsule-wrap"
-              :class="{ 'capsule-wrap--end': hintFromEnd[table] }"
-              @mouseenter="placeHint(table, $event)"
-              @focusin="placeHint(table, $event)"
+              class="capsule"
+              :class="`capsule--${capsuleTone(table)}`"
+              tabindex="0"
+              :aria-describedby="hintTable === table ? hintId : undefined"
+              @mouseenter="showHint(table, $event)"
+              @mouseleave="hideHint"
+              @focusin="showHint(table, $event)"
+              @focusout="hideHint"
             >
-              <span
-                class="capsule"
-                :class="`capsule--${capsuleTone(table)}`"
-                tabindex="0"
-                :aria-describedby="hintId(table)"
+              {{ table }}
+              <button
+                v-if="capsuleState(table) === 'missing'"
+                type="button"
+                class="capsule-remove"
+                :aria-label="`Remove table ${table}`"
+                @click="removeTable(table)"
               >
-                {{ table }}
-                <button
-                  v-if="capsuleState(table) === 'missing'"
-                  type="button"
-                  class="capsule-remove"
-                  :aria-label="`Remove table ${table}`"
-                  @click="removeTable(table)"
-                >
-                  ×
-                </button>
-              </span>
-              <span :id="hintId(table)" class="info-popover" role="tooltip">
-                {{ capsuleHint(table) }}
-              </span>
+                ×
+              </button>
             </span>
           </div>
+          <AppInfoPopover :id="hintId" :anchor="hintAnchor">
+            {{ hintTable ? capsuleHint(hintTable) : '' }}
+          </AppInfoPopover>
           <p v-if="tablesError" class="error-text">{{ tablesError }}</p>
           <p v-if="removed.length > 0" class="hint">
             Removed {{ removed.join(', ') }}. The requester is told
@@ -313,11 +321,6 @@ function hintId(table: string): string {
   gap: var(--space-1);
 }
 
-.capsule-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
 .capsule {
   display: inline-flex;
   align-items: center;
@@ -366,28 +369,6 @@ function hintId(table: string): string {
 .capsule-remove:hover,
 .capsule-remove:focus-visible {
   opacity: 1;
-}
-
-/* The vault login's popover look. It is out of layout until shown, so a hidden popover never
-   counts toward the modal's scroll area. */
-.capsule-wrap .info-popover {
-  display: none;
-  top: calc(100% + var(--space-1));
-  left: 0;
-  right: auto;
-  width: 260px;
-  opacity: 1;
-  visibility: visible;
-}
-
-.capsule-wrap--end .info-popover {
-  left: auto;
-  right: 0;
-}
-
-.capsule-wrap:hover > .info-popover,
-.capsule-wrap:focus-within > .info-popover {
-  display: block;
 }
 
 .op-box:disabled {
