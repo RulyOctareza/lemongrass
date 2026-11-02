@@ -4,7 +4,7 @@ Lemongrass runs coding agents in real terminals and gives them what a raw termin
 
 It is an Electron app plus `lgrass`, a Go CLI that the agents call themselves. Claude Code and Codex are supported, and a pane can also open Cursor Agent or a plain shell. Lemongrass is licensed under the GNU AGPL-3.0, see [LICENSE](LICENSE). Copyright belongs to The Lemongrass Authors, see [AUTHORS](AUTHORS).
 
-![The Lemongrass app with a live workgroup and its thread, a web tab and the Vault](docs/images/overall-view.png)
+![The Lemongrass app with a live workgroup and its thread, a web tab and the Vault](docs/images/overall-view-2.png)
 
 ## What it does
 
@@ -31,7 +31,22 @@ A leader agent declares a workgroup of one or more thinkers, each running Claude
 
 ### Bypass mode with a guard that stays on
 
-Claude Code tabs start with `--dangerously-skip-permissions`, so an agent does not stall on prompts. A `PreToolUse` hook enforces a catalog of dangerous operations instead, in the categories Git, Deletion, System, Network, Infrastructure, Database clients and Lemongrass itself. A refused call returns an approval message to the agent and is not silently dropped. A user policy, global or per project, is edited in the Safety section of Settings, held by the vault daemon, and saved only with the vault passphrase. The hook reads it from the daemon. Writes into Claude Code's memory folders wait behind a sign word, and a held call runs once with `lgrass replay` after signing.
+Claude Code tabs start with `--dangerously-skip-permissions`, so an agent does not stall on prompts. A `PreToolUse` hook judges every call against a catalog instead. Each entry names a tool, its subcommands, flags and targets, so `podman pull` and `podman images` get different answers, and a path inside the project is told apart from one outside it. The catalog covers deletion, git history and remote writes, downloads (images, packages, toolchains, files, models, clones), system and service control, credentials, network, containers and clusters, cloud and infrastructure, package publishing, database clients, interpreter code and script files, and Lemongrass itself.
+
+Every entry has a default mode: deny, ask or allow. The line it draws is the project's edge: a call that brings in something nobody on the project chose, sends something out, reaches outside the project, cannot be undone or touches credentials is denied or asked; restoring dependencies the project already declares, or running a tool already in `node_modules/.bin`, passes. A refusal names the rule and why the command matched. Every rule except the few that protect Lemongrass itself is switchable per project in the Safety section of Settings, held by the vault daemon and saved only with the vault passphrase; the hook reads it from the daemon, and the built-in defaults stay in force when the daemon is down. Writes into Claude Code's memory folders wait behind a sign word, and a held call runs once with `lgrass replay` after signing.
+
+### Agents ask you instead of stalling
+
+`lgrass ask` is how an agent asks the human for what only the human can give: a database channel, an HTTP channel or a command run. A call refused by an ask rule files the ask itself when it is one plain command; a call that chains commands or embeds code is refused without an ask and the agent is told to run the guarded command alone.
+
+- **One place to answer.** An ask raises an OS notification and waits in an ask dialog, which opens over whatever view is in front, with an in-place vault unlock. The dialog names who asks (the tab by its title, or the member and its workgroup), what for, and the rule that sent it.
+- **Commands.** The human executes the exact command through Lemongrass or declines it with a note. It runs in the background with a timeout the human picks (10 minutes, 1 hour or 4 hours) and can be stopped. A fixed never-execute list, not part of any policy, refuses commands such as removing `/` or the home directory whoever approves them.
+- **Channels.** A database ask names its tables and the operations it needs, and an HTTP ask its methods. The human picks the connection or rester and the duration; each requested table is checked against the picked connection, Approve waits until every table is found, and the human may only narrow what the agent declared. A table the human removes, with the reason, reaches the agent in the answer.
+- **The answer comes back.** The agent gets the channel's short id, the exit code and last lines of output, or the human's note. An answer that lands after the agent stopped waiting arrives as a notification in its tab.
+
+### A notification center
+
+A bell in the header bar opens a center that lists, newest first, the decisions waiting for the human, past asks and approvals with their answers, agent events (a long turn ending, a tab waiting on a prompt, a conflict submission) and app events (an update, a dependency problem, the vault locking, a failed fetch or push). Every OS notification the app raises lands there too, and a click goes to the thing itself. Items are kept for 7 days, up to 200.
 
 ### Project rules arrive at the start of every session
 
@@ -59,7 +74,9 @@ Built:
 - SSH tunnels for database connections, checked live against a real bastion.
 - Workgroups with Claude Code and Codex members, the thread layer, the approval modal and the workgroup pane. Codex tabs receive nudges and thread notices through the hooks `lgrassconf` registers for Codex. Its limits are under Limits.
 - Several Claude accounts, picked per tab and per workgroup thinker.
-- The guard for Claude Code, unit tested and denying live in a tab. The sealed-policy round trip through the Safety pane has not been run live.
+- The guard for Claude Code: the data catalog with deny, ask and allow defaults, interpreter and script-file checks, unit tested and checked live in a tab. The sealed-policy round trip through the Safety pane has not been run live.
+- `lgrass ask` with the ask dialog, the Decisions section and the grant view for database and HTTP channels, checked live for command, database and HTTP asks.
+- The notification center behind the header bell.
 - The bibliothek browser and editor, and the Git panel.
 - The biblio history: the watcher in the agent daemon, 90-day pruning, and `lgrass biblio log` and `show`.
 
@@ -70,7 +87,7 @@ In progress:
 
 Planned:
 
-- `lgrass ask`: an agent asks the human for a channel or a command, answered in an in-app modal opened from an OS notification.
+- An advisory reviewer on a command ask, a second opinion from a small model run outside Lemongrass.
 - An audit of `lgrass rester` calls and of `lgrass db` reads.
 - An investigator role for cheap, read-only workgroup members.
 
@@ -79,7 +96,9 @@ Limits:
 - Linux is the primary platform. The macOS build exists and Windows packaging is not wired.
 - An HTTP channel's scope is declared and checked against the request. The database scope is checked against what the parsed statement touches, which is a stronger guarantee.
 - Codex tabs start with no bypass flag and run under Codex's own sandbox and approvals. A write by `lgrass` to its database, such as a thread post, asks for sandbox approval, so a Codex thinker cannot post unattended yet. Codex tabs also get no orientation in their system prompt, only the laws summary from the `SessionStart` hook, and Codex asks for review of the hook definitions through `/hooks`.
-- The guard is verified on Claude Code only. Its hook also runs on Codex events, but no rule has been checked against what Codex sends. A Codex tab gets the default and global policy but not the project's, and the deletion exemption for the launch project is off for it. Cursor tabs have no hooks, so no guard.
+- The guard does not see what a build tool fetches as a side effect (`go build`, `cargo build`, npm lifecycle scripts). Builds are left unlimited on purpose.
+- On MySQL, a statement that calls a function is refused when the database user cannot read `performance_schema.user_defined_functions`, because the function check fails closed. Function-free reads still work.
+- The guard is verified on Claude Code only. A Codex tab cannot reach `lgrass ask` or a channel, since Codex's sandbox refuses the agent socket. Its hook also runs on Codex events, but no rule has been checked against what Codex sends. A Codex tab gets the default and global policy but not the project's, and the deletion exemption for the launch project is off for it. Cursor tabs have no hooks, so no guard.
 - A web channel's scope is stored and validated but not enforced in the browser, and a browser shared by a workgroup is not built.
 - The guard reads interpreter code as a tripwire against accident, not against deliberate evasion. Inline code (`python -c`, `node -e`, `php -r`, `perl -e`, `ruby -e`, `deno eval`), code piped or heredoc'd into an interpreter, and script files up to 256 KiB run by an interpreter or by shebang are checked for secret paths, destructive calls on paths that are not literals inside the project, and literal subprocess commands. A call built at runtime, `eval` inside the language, encoded payloads, imported modules and subprocess commands built from variables pass. A destructive shell command whose target comes from a variable is denied.
 - The node's `~/.lemongrass/node.json` holds token hashes and the ngrok authtoken at mode 0600. The guard keeps agents' tools away from it, with the interpreter caveat above. A token is shown once and only its hash is stored.
@@ -87,7 +106,7 @@ Limits:
 ## How it fits together
 
 - `ui/` is the Electron app: terminal panes, project and layout management, the bibliothek tree and reader, and the Vault tab.
-- `cmd/lgrass` is the Go CLI models and users call: session and thread coordination, `lgrass db`, `lgrass rester`, and `lgrass workgroup`.
+- `cmd/lgrass` is the Go CLI models and users call: session and thread coordination, `lgrass db`, `lgrass rester`, `lgrass ask`, and `lgrass workgroup`.
 - `cmd/lgrassd` is the binary only the app and the agents' hooks call, installed off `PATH`: the hooks and their gates, the vault, agent and node daemons, tab records and account management.
 - `cmd/lgrassconf` is a small Go daemon, a systemd user service on Linux and a LaunchAgent on macOS. It registers the Claude Code and Codex hooks, installs the Codex skills and keeps every Claude account's hooks and shared folders in place.
 - `internal/` holds the Go packages the three binaries share, such as the vault, the guard, the hook engine, the session store and the account manager. It is importable only from inside this repository.
@@ -105,6 +124,7 @@ The procedures an agent follows live in `lgrass how`, embedded in the `lgrass` b
 | `task close` | Close a finished task: verify it is done, compare git with the stated facts, update the books and `toc.md`, archive, and sweep stale references. |
 | `book write` | Where a book chapter goes, and how to write it. |
 | `laws write` | Write a standing law the user approved, and its summary line. |
+| `ask request` | How to ask the human with `lgrass ask`: the YAML for each type, the reason, and what each answer means. |
 | `keeper sweep` | Keep `biblio/` and the code in agreement: the structural drift it finds itself, then the checks that need reading. |
 | `leader create`, `leader addmember`, `thinker start`, `collaborator join` | Workgroup roles. |
 
