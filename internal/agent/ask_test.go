@@ -19,7 +19,7 @@ func TestIPCAskRelay(t *testing.T) {
 	}
 	agentClient := startTestAgent(t, vaultClient)
 
-	a, err := agentClient.CreateAsk(gatekeeper.AskRequest{Type: vault.AskRester, TabID: "tab-1", Cwd: t.TempDir(), Message: "GET on /orders"})
+	a, err := agentClient.CreateAsk(gatekeeper.AskRequest{Type: vault.AskRester, TabID: "tab-1", Cwd: t.TempDir(), Message: "GET on /orders", Methods: []string{"GET"}})
 	if err != nil || a.ID == "" {
 		t.Fatalf("CreateAsk = %+v, %v", a, err)
 	}

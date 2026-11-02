@@ -27,11 +27,13 @@ const (
 
 // askFile is the YAML a model writes and passes by path, so the shell never sees a command or reason and backticks, $(...) and quotes stay literal.
 type askFile struct {
-	Type    string   `yaml:"type"`
-	Tables  []string `yaml:"tables"`
-	Reason  string   `yaml:"reason"`
-	Message string   `yaml:"message"`
-	Command string   `yaml:"command"`
+	Type       string   `yaml:"type"`
+	Tables     []string `yaml:"tables"`
+	Operations []string `yaml:"operations"`
+	Reason     string   `yaml:"reason"`
+	Message    string   `yaml:"message"`
+	Methods    []string `yaml:"methods"`
+	Command    string   `yaml:"command"`
 }
 
 func cmdAsk(args []string) {
@@ -113,8 +115,8 @@ func parseAsk(data []byte) (gatekeeper.AskRequest, error) {
 	req := gatekeeper.AskRequest{Type: f.Type, Reason: strings.TrimSpace(f.Reason)}
 	switch f.Type {
 	case vault.AskDB:
-		if f.Message != "" || f.Command != "" {
-			return req, errors.New("lgrass ask: a db ask takes tables and reason only")
+		if f.Message != "" || f.Command != "" || len(f.Methods) > 0 {
+			return req, errors.New("lgrass ask: a db ask takes tables, operations and reason only")
 		}
 		if len(f.Tables) == 0 {
 			return req, errors.New("lgrass ask: a db ask needs tables, a list of the table names you need")
@@ -123,16 +125,28 @@ func parseAsk(data []byte) (gatekeeper.AskRequest, error) {
 			return req, errors.New("lgrass ask: a db ask needs a reason")
 		}
 		req.Tables = f.Tables
+		for _, op := range f.Operations {
+			req.Operations = append(req.Operations, strings.ToLower(strings.TrimSpace(op)))
+		}
+		if err := vault.CheckAskOperations(req.Operations); err != nil {
+			return req, fmt.Errorf("lgrass ask: operations: %w", err)
+		}
 	case vault.AskRester:
-		if len(f.Tables) > 0 || f.Command != "" {
-			return req, errors.New("lgrass ask: a rester ask takes message and an optional reason only")
+		if len(f.Tables) > 0 || len(f.Operations) > 0 || f.Command != "" {
+			return req, errors.New("lgrass ask: a rester ask takes message, methods and an optional reason only")
+		}
+		for _, m := range f.Methods {
+			req.Methods = append(req.Methods, strings.ToUpper(strings.TrimSpace(m)))
+		}
+		if err := vault.CheckAskMethods(req.Methods); err != nil {
+			return req, fmt.Errorf("lgrass ask: methods: %w", err)
 		}
 		req.Message = strings.TrimSpace(f.Message)
 		if req.Message == "" {
 			return req, errors.New("lgrass ask: a rester ask needs a message saying which rester, methods and paths you need")
 		}
 	case vault.AskCommand:
-		if len(f.Tables) > 0 || f.Message != "" {
+		if len(f.Tables) > 0 || len(f.Operations) > 0 || f.Message != "" || len(f.Methods) > 0 {
 			return req, errors.New("lgrass ask: a command ask takes command and reason only")
 		}
 		req.Command = strings.TrimSpace(f.Command)
@@ -157,9 +171,17 @@ func formatAsk(a vault.Ask) (string, int) {
 	case vault.AskAnswered:
 		switch a.Type {
 		case vault.AskDB:
-			return fmt.Sprintf("Ask %s answered: the user created db channel %s. Use it with lgrass db %s --sql \"<statement>\".", a.ID, a.ShortID, a.ShortID), askExitAnswered
+			text := fmt.Sprintf("Ask %s answered: the user created db channel %s. Use it with lgrass db %s --sql \"<statement>\".", a.ID, a.ShortID, a.ShortID)
+			if g := a.Granted; g != nil {
+				text += fmt.Sprintf("\nGranted tables: %s. Granted operations: %s.", strings.Join(g.Tables, ", "), strings.Join(g.Operations, ", "))
+			}
+			return text + removedLines(a.RemovedTables), askExitAnswered
 		case vault.AskRester:
-			return fmt.Sprintf("Ask %s answered: the user created rester channel %s. Start with lgrass rester %s info.", a.ID, a.ShortID, a.ShortID), askExitAnswered
+			text := fmt.Sprintf("Ask %s answered: the user created rester channel %s. Start with lgrass rester %s info.", a.ID, a.ShortID, a.ShortID)
+			if g := a.Granted; g != nil && len(g.Methods) > 0 {
+				text += fmt.Sprintf("\nGranted methods: %s.", strings.Join(g.Methods, ", "))
+			}
+			return text, askExitAnswered
 		}
 		return formatCommandResult(a), askExitAnswered
 	case vault.AskDeclined:
@@ -167,13 +189,22 @@ func formatAsk(a vault.Ask) (string, int) {
 		if note == "" {
 			note = "no note given"
 		}
-		return fmt.Sprintf("Ask %s declined by the user: %s\nDo not ask again with a variation of the same request.", a.ID, note), askExitDeclined
+		return fmt.Sprintf("Ask %s declined by the user: %s", a.ID, note) + removedLines(a.RemovedTables) + "\nDo not ask again with a variation of the same request.", askExitDeclined
 	case vault.AskExpired:
 		return fmt.Sprintf("Ask %s expired without an answer.", a.ID), askExitDeclined
 	case vault.AskRunning:
 		return fmt.Sprintf("Ask %s: the user is running the command and it has not finished. The result arrives as a notification; read it then with %s.", a.ID, show), askExitPending
 	}
 	return fmt.Sprintf("Ask %s has no answer yet. It stays open; the answer arrives as a notification, read it then with %s. Do not file it again.", a.ID, show), askExitPending
+}
+
+// removedLines names each requested table the user left out of a db ask, with why, so the model does not retry them on that channel.
+func removedLines(removed []vault.RemovedTable) string {
+	var b strings.Builder
+	for _, r := range removed {
+		fmt.Fprintf(&b, "\nRemoved table %s: %s.", r.Table, r.Reason)
+	}
+	return b.String()
 }
 
 func formatCommandResult(a vault.Ask) string {

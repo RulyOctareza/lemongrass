@@ -22,6 +22,8 @@ type Backend struct {
 	// Asks holds the models' asks in memory only; a daemon restart drops them and kills their running commands.
 	Asks *vault.AskStore
 	runs *askRuns
+	// listTables stands in for DB.ListTables in tests of channel asks.
+	listTables func(rootSecret, dbName string) ([]string, error)
 }
 
 // NewBackend opens the vault under dir, attaches both gates to it, and opens the shared

@@ -52,6 +52,12 @@ const (
 	askOpenMax    = 5
 )
 
+// AskDBOperations are the operations a db ask may declare: the strings dbgate.AllowStatement checks a channel's scope for, kept here because dbgate imports this package.
+var AskDBOperations = []string{"select", "explain", "show", "insert", "update", "delete", "performance"}
+
+// AskHTTPMethods are the methods a rester ask may declare.
+var AskHTTPMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+
 var (
 	ErrNoAsk         = errors.New("vault: no such ask")
 	ErrAskNotWaiting = errors.New("vault: the ask is no longer waiting for a decision")
@@ -59,14 +65,16 @@ var (
 
 // AskInput is what a caller files. TabID, Cwd and Path come from the caller's environment, not from text the model typed.
 type AskInput struct {
-	Type    string
-	TabID   string
-	Cwd     string
-	Path    string
-	Reason  string
-	Tables  []string
-	Message string
-	Command string
+	Type       string
+	TabID      string
+	Cwd        string
+	Path       string
+	Reason     string
+	Tables     []string
+	Operations []string
+	Message    string
+	Methods    []string
+	Command    string
 	// Rule is the guard rule that refused the call when the hook filed the ask itself.
 	Rule string
 }
@@ -81,23 +89,42 @@ type AskResult struct {
 	EndedAt    time.Time `json:"ended_at,omitempty"`
 }
 
+// AskGrant is what the human granted for a channel ask: never more than the model declared.
+type AskGrant struct {
+	Tables     []string `json:"tables,omitempty"`
+	Operations []string `json:"operations,omitempty"`
+	Methods    []string `json:"methods,omitempty"`
+}
+
+// RemovedTable is a requested table the human left out of a db ask's channel, with why.
+type RemovedTable struct {
+	Table  string `json:"table"`
+	Reason string `json:"reason"`
+}
+
 // Ask is one record as the app and the model see it.
 type Ask struct {
-	ID        string     `json:"id"`
-	Type      string     `json:"type"`
-	TabID     string     `json:"tab_id"`
-	Cwd       string     `json:"cwd"`
-	CreatedAt time.Time  `json:"created_at"`
-	State     string     `json:"state"`
-	Blocking  bool       `json:"blocking"`
-	Reason    string     `json:"reason,omitempty"`
-	Tables    []string   `json:"tables,omitempty"`
-	Message   string     `json:"message,omitempty"`
-	Command   string     `json:"command,omitempty"`
-	Rule      string     `json:"rule,omitempty"`
-	ShortID   string     `json:"short_id,omitempty"`
-	Note      string     `json:"note,omitempty"`
-	Result    *AskResult `json:"result,omitempty"`
+	ID        string    `json:"id"`
+	Type      string    `json:"type"`
+	TabID     string    `json:"tab_id"`
+	Cwd       string    `json:"cwd"`
+	CreatedAt time.Time `json:"created_at"`
+	State     string    `json:"state"`
+	Blocking  bool      `json:"blocking"`
+	Reason    string    `json:"reason,omitempty"`
+	Tables    []string  `json:"tables,omitempty"`
+	// Operations and Methods are what the model declared for a db or a rester ask.
+	Operations []string   `json:"operations,omitempty"`
+	Message    string     `json:"message,omitempty"`
+	Methods    []string   `json:"methods,omitempty"`
+	Command    string     `json:"command,omitempty"`
+	Rule       string     `json:"rule,omitempty"`
+	ShortID    string     `json:"short_id,omitempty"`
+	Note       string     `json:"note,omitempty"`
+	Result     *AskResult `json:"result,omitempty"`
+	// Granted and RemovedTables are set when a channel ask is answered or declined.
+	Granted       *AskGrant      `json:"granted,omitempty"`
+	RemovedTables []RemovedTable `json:"removed_tables,omitempty"`
 	// Path is the caller's PATH, which an executed command runs with.
 	Path string `json:"-"`
 }
@@ -179,8 +206,11 @@ func validateAsk(in AskInput) error {
 				return fmt.Errorf("vault: %q is not a table name", table)
 			}
 		}
-		if in.Message != "" || in.Command != "" {
-			return errors.New("vault: a db ask takes tables and a reason only")
+		if err := CheckAskOperations(in.Operations); err != nil {
+			return err
+		}
+		if in.Message != "" || in.Command != "" || len(in.Methods) > 0 {
+			return errors.New("vault: a db ask takes tables, operations and a reason only")
 		}
 	case AskRester:
 		if strings.TrimSpace(in.Message) == "" {
@@ -189,8 +219,11 @@ func validateAsk(in AskInput) error {
 		if err := capText("message", in.Message, MaxAskMessage); err != nil {
 			return err
 		}
-		if len(in.Tables) > 0 || in.Command != "" {
-			return errors.New("vault: a rester ask takes a message and an optional reason only")
+		if err := CheckAskMethods(in.Methods); err != nil {
+			return err
+		}
+		if len(in.Tables) > 0 || len(in.Operations) > 0 || in.Command != "" {
+			return errors.New("vault: a rester ask takes a message, methods and an optional reason only")
 		}
 	case AskCommand:
 		if err := needsReason(); err != nil && in.Rule == "" {
@@ -202,11 +235,42 @@ func validateAsk(in AskInput) error {
 		if err := capText("command", in.Command, MaxAskCommand); err != nil {
 			return err
 		}
-		if len(in.Tables) > 0 || in.Message != "" {
+		if len(in.Tables) > 0 || len(in.Operations) > 0 || in.Message != "" || len(in.Methods) > 0 {
 			return errors.New("vault: a command ask takes a command and a reason only")
 		}
 	default:
 		return fmt.Errorf("vault: unknown ask type %q, want db, rester or command", in.Type)
+	}
+	return nil
+}
+
+// CheckAskOperations accepts a db ask's declared operations: at least one, each known, none repeated.
+func CheckAskOperations(ops []string) error {
+	return checkDeclared("operation", ops, AskDBOperations)
+}
+
+// CheckAskMethods accepts a rester ask's declared methods: at least one, each known and upper case, none repeated.
+func CheckAskMethods(methods []string) error {
+	return checkDeclared("method", methods, AskHTTPMethods)
+}
+
+func checkDeclared(kind string, got, known []string) error {
+	if len(got) == 0 {
+		return fmt.Errorf("vault: the ask needs at least one %s, from %s", kind, strings.Join(known, ", "))
+	}
+	seen := map[string]bool{}
+	for _, v := range got {
+		ok := false
+		for _, k := range known {
+			ok = ok || v == k
+		}
+		if !ok {
+			return fmt.Errorf("vault: %q is not a known %s, want one of %s", v, kind, strings.Join(known, ", "))
+		}
+		if seen[v] {
+			return fmt.Errorf("vault: %s %q is listed twice", kind, v)
+		}
+		seen[v] = true
 	}
 	return nil
 }
@@ -290,7 +354,8 @@ func (s *AskStore) createLocked(in AskInput) (Ask, error) {
 	r := &askRecord{
 		Ask: Ask{
 			ID: id, Type: in.Type, TabID: in.TabID, Cwd: filepath.Clean(in.Cwd), CreatedAt: now, State: AskWaiting,
-			Reason: in.Reason, Tables: append([]string(nil), in.Tables...), Message: in.Message, Command: in.Command,
+			Reason: in.Reason, Tables: append([]string(nil), in.Tables...), Operations: append([]string(nil), in.Operations...),
+			Message: in.Message, Methods: append([]string(nil), in.Methods...), Command: in.Command,
 			Rule: in.Rule, Path: in.Path,
 		},
 		done: make(chan struct{}),
@@ -303,6 +368,17 @@ func (r *askRecord) snapshot() Ask {
 	a := r.Ask
 	a.Blocking = r.waiters > 0 && !r.Final()
 	a.Tables = append([]string(nil), r.Tables...)
+	a.Operations = append([]string(nil), r.Operations...)
+	a.Methods = append([]string(nil), r.Methods...)
+	a.RemovedTables = append([]RemovedTable(nil), r.RemovedTables...)
+	if r.Granted != nil {
+		g := AskGrant{
+			Tables:     append([]string(nil), r.Granted.Tables...),
+			Operations: append([]string(nil), r.Granted.Operations...),
+			Methods:    append([]string(nil), r.Granted.Methods...),
+		}
+		a.Granted = &g
+	}
 	if r.Result != nil {
 		result := *r.Result
 		a.Result = &result
@@ -523,8 +599,8 @@ func (s *AskStore) Count() (waiting, blocking int, newestID string) {
 	return waiting, blocking, newestID
 }
 
-// Decline ends a waiting ask with the human's note.
-func (s *AskStore) Decline(id, note string) error {
+// Decline ends a waiting ask with the human's note and, for a db ask, the tables the human removed and why.
+func (s *AskStore) Decline(id, note string, removed []RemovedTable) error {
 	if err := capText("note", note, MaxAskReason); err != nil {
 		return err
 	}
@@ -537,6 +613,7 @@ func (s *AskStore) Decline(id, note string) error {
 	if err == nil {
 		r.State = AskDeclined
 		r.Note = note
+		r.RemovedTables = append([]RemovedTable(nil), removed...)
 		s.finishLocked(r, &ev)
 	}
 	s.mu.Unlock()
@@ -561,8 +638,8 @@ func (s *AskStore) CheckChannelAsk(id, askType string) (Ask, error) {
 	return r.snapshot(), nil
 }
 
-// LinkChannel records that channel was created for the waiting channel ask id.
-func (s *AskStore) LinkChannel(id, askType string, channel ChannelID) error {
+// LinkChannel records that channel was created for the waiting channel ask id, with what it grants and the requested tables it leaves out.
+func (s *AskStore) LinkChannel(id, askType string, channel ChannelID, granted AskGrant, removed []RemovedTable) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err := s.lookupLocked(id)
@@ -576,6 +653,8 @@ func (s *AskStore) LinkChannel(id, askType string, channel ChannelID) error {
 		return ErrAskNotWaiting
 	}
 	r.channel = channel
+	r.Granted = &granted
+	r.RemovedTables = append([]RemovedTable(nil), removed...)
 	return nil
 }
 

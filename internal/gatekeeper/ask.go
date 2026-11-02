@@ -5,6 +5,7 @@ package gatekeeper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -35,15 +36,17 @@ const (
 const waitAskSlack = 30 * time.Second
 
 type createAskPayload struct {
-	Type    string   `json:"type"`
-	TabID   string   `json:"tab_id"`
-	Cwd     string   `json:"cwd"`
-	Path    string   `json:"path,omitempty"`
-	Reason  string   `json:"reason,omitempty"`
-	Tables  []string `json:"tables,omitempty"`
-	Message string   `json:"message,omitempty"`
-	Command string   `json:"command,omitempty"`
-	Rule    string   `json:"rule,omitempty"`
+	Type       string   `json:"type"`
+	TabID      string   `json:"tab_id"`
+	Cwd        string   `json:"cwd"`
+	Path       string   `json:"path,omitempty"`
+	Reason     string   `json:"reason,omitempty"`
+	Tables     []string `json:"tables,omitempty"`
+	Operations []string `json:"operations,omitempty"`
+	Message    string   `json:"message,omitempty"`
+	Methods    []string `json:"methods,omitempty"`
+	Command    string   `json:"command,omitempty"`
+	Rule       string   `json:"rule,omitempty"`
 }
 
 type waitAskPayload struct {
@@ -79,6 +82,9 @@ type declineAskPayload struct {
 	RootSecret string `json:"root_secret"`
 	ID         string `json:"id"`
 	Note       string `json:"note"`
+	// DBName and RemovedTables carry the tables the human removed from a db ask before declining it.
+	DBName        string   `json:"db_name,omitempty"`
+	RemovedTables []string `json:"removed_tables,omitempty"`
 }
 
 // AskVerdict is the guard's verdict for a command ask's command, shown on the card. Mode is ask or deny.
@@ -132,57 +138,128 @@ func (b *Backend) verifyRoot(rootSecret string) error {
 	return b.Service.VerifyPassphrase(rootSecret)
 }
 
-// CreateChannelForAsk creates a db channel for a waiting db ask, refusing a connection that lacks any table the model asked for, and links the channel to the ask.
+// CreateChannelForAsk creates a db channel for a waiting db ask. The human may drop requested tables and declared operations but never add any, every granted table must exist in the connection, and each requested table left out is recorded with why, for the model's answer.
 func (b *Backend) CreateChannelForAsk(askID, rootSecret, name, dbName string, scope vault.Scope, ttl time.Duration) (vault.Channel, error) {
 	ask, err := b.Asks.CheckChannelAsk(askID, vault.AskDB)
 	if err != nil {
 		return vault.Channel{}, err
 	}
-	have, err := b.DB.ListTables(rootSecret, dbName)
+	if len(scope.Tables) == 0 {
+		return vault.Channel{}, errors.New("gatekeeper: grant at least one table, or decline the ask")
+	}
+	if extra := notDeclared(scope.Tables, ask.Tables); len(extra) > 0 {
+		return vault.Channel{}, fmt.Errorf("gatekeeper: the ask did not request table %s; tables can be removed from an ask, not added", strings.Join(extra, ", "))
+	}
+	if extra := notDeclared(scope.Operations, ask.Operations); len(extra) > 0 {
+		return vault.Channel{}, fmt.Errorf("gatekeeper: the ask did not declare operation %s; operations can be removed from an ask, not added", strings.Join(extra, ", "))
+	}
+	have, err := b.connectionTables(rootSecret, dbName)
 	if err != nil {
 		return vault.Channel{}, err
 	}
-	if missing := missingTables(ask.Tables, have); len(missing) > 0 {
-		return vault.Channel{}, fmt.Errorf("gatekeeper: connection %s has no table %s, which the ask requests", dbName, strings.Join(missing, ", "))
+	if missing := notDeclared(scope.Tables, have); len(missing) > 0 {
+		return vault.Channel{}, fmt.Errorf("gatekeeper: connection %s has no table %s", dbName, strings.Join(missing, ", "))
 	}
+	removed := removedTables(notDeclared(ask.Tables, scope.Tables), dbName, have)
 	c, err := b.Service.CreateChannel(rootSecret, name, dbName, scope, ttl)
 	if err != nil {
 		return vault.Channel{}, err
 	}
-	if err := b.Asks.LinkChannel(askID, vault.AskDB, c.ID); err != nil {
+	grant := vault.AskGrant{Tables: append([]string(nil), scope.Tables...), Operations: append([]string(nil), scope.Operations...)}
+	if err := b.Asks.LinkChannel(askID, vault.AskDB, c.ID, grant, removed); err != nil {
 		return c, err
 	}
 	return c, nil
 }
 
-// CreateHTTPChannelForAsk creates an HTTP channel for a waiting rester ask and links it to the ask. A rester ask is free text, so there is nothing to check the channel against.
+// CreateHTTPChannelForAsk creates an HTTP channel for a waiting rester ask and links it to the ask. The human may drop declared methods but never add any.
 func (b *Backend) CreateHTTPChannelForAsk(askID, rootSecret, name, rester, environment, typ string, scope vault.HTTPScope, webScope *vault.WebScope, ttl time.Duration) (vault.HTTPChannel, error) {
-	if _, err := b.Asks.CheckChannelAsk(askID, vault.AskRester); err != nil {
+	ask, err := b.Asks.CheckChannelAsk(askID, vault.AskRester)
+	if err != nil {
 		return vault.HTTPChannel{}, err
+	}
+	methods := make([]string, len(scope.Methods))
+	for i, m := range scope.Methods {
+		methods[i] = strings.ToUpper(m)
+	}
+	if extra := notDeclared(methods, ask.Methods); len(extra) > 0 {
+		return vault.HTTPChannel{}, fmt.Errorf("gatekeeper: the ask did not declare method %s; methods can be removed from an ask, not added", strings.Join(extra, ", "))
 	}
 	c, err := b.Service.CreateHTTPChannel(rootSecret, name, rester, environment, typ, scope, webScope, ttl)
 	if err != nil {
 		return vault.HTTPChannel{}, err
 	}
-	if err := b.Asks.LinkChannel(askID, vault.AskRester, c.ID); err != nil {
+	if err := b.Asks.LinkChannel(askID, vault.AskRester, c.ID, vault.AskGrant{Methods: methods}, nil); err != nil {
 		return c, err
 	}
 	return c, nil
 }
 
-// missingTables lists the requested tables the connection lacks. Names compare without case, since MySQL on some platforms and Postgres unquoted identifiers fold case.
-func missingTables(requested, have []string) []string {
-	present := make(map[string]bool, len(have))
-	for _, t := range have {
-		present[strings.ToLower(t)] = true
+// DeclineAsk declines an ask with the human's note. For a db ask, removed names requested tables the human took out before declining; with dbName set their reasons come from that connection's tables.
+func (b *Backend) DeclineAsk(rootSecret, id, note, dbName string, removed []string) error {
+	var reasons []vault.RemovedTable
+	if len(removed) > 0 {
+		ask, err := b.Asks.Get(id)
+		if err != nil {
+			return err
+		}
+		if ask.Type != vault.AskDB {
+			return fmt.Errorf("gatekeeper: ask %s is a %s ask, only a db ask has tables to remove", id, ask.Type)
+		}
+		if extra := notDeclared(removed, ask.Tables); len(extra) > 0 {
+			return fmt.Errorf("gatekeeper: the ask did not request table %s", strings.Join(extra, ", "))
+		}
+		var have []string
+		if dbName != "" {
+			if have, err = b.connectionTables(rootSecret, dbName); err != nil {
+				return err
+			}
+		}
+		reasons = removedTables(removed, dbName, have)
 	}
-	var missing []string
-	for _, t := range requested {
-		if !present[strings.ToLower(t)] {
-			missing = append(missing, t)
+	return b.Asks.Decline(id, note, reasons)
+}
+
+// connectionTables lists a connection's tables; tests replace the lister, since a real listing needs a live database.
+func (b *Backend) connectionTables(rootSecret, dbName string) ([]string, error) {
+	if b.listTables != nil {
+		return b.listTables(rootSecret, dbName)
+	}
+	return b.DB.ListTables(rootSecret, dbName)
+}
+
+// removedTables gives each removed table its reason: missing from the connection the human picked, or simply left out.
+func removedTables(removed []string, dbName string, have []string) []vault.RemovedTable {
+	var out []vault.RemovedTable
+	missing := map[string]bool{}
+	if dbName != "" {
+		for _, t := range notDeclared(removed, have) {
+			missing[t] = true
 		}
 	}
-	return missing
+	for _, t := range removed {
+		reason := "removed by the user"
+		if missing[t] {
+			reason = "does not exist in connection " + dbName
+		}
+		out = append(out, vault.RemovedTable{Table: t, Reason: reason})
+	}
+	return out
+}
+
+// notDeclared lists the names in got that are not in allowed. Names compare without case, since MySQL on some platforms and Postgres unquoted identifiers fold case, and HTTP methods are case-insensitive.
+func notDeclared(got, allowed []string) []string {
+	present := make(map[string]bool, len(allowed))
+	for _, t := range allowed {
+		present[strings.ToLower(t)] = true
+	}
+	var extra []string
+	for _, t := range got {
+		if !present[strings.ToLower(t)] {
+			extra = append(extra, t)
+		}
+	}
+	return extra
 }
 
 // serveWaitAsk blocks on the ask for up to the requested wait and writes the ask back. A failed write sends the outcome to the tab as a nudge at once; a successful one still waits for lgrass's ack_ask, since the reply may pass through the agent.
@@ -218,7 +295,7 @@ func dispatchAsk(svc *Backend, adminLimiter *vault.FailureLimiter, req request) 
 		}
 		ask, err := svc.Asks.Create(vault.AskInput{
 			Type: p.Type, TabID: p.TabID, Cwd: p.Cwd, Path: p.Path, Reason: p.Reason,
-			Tables: p.Tables, Message: p.Message, Command: p.Command, Rule: p.Rule,
+			Tables: p.Tables, Operations: p.Operations, Message: p.Message, Methods: p.Methods, Command: p.Command, Rule: p.Rule,
 		})
 		if err != nil {
 			return errResponse(err), true
@@ -334,7 +411,7 @@ func dispatchAsk(svc *Backend, adminLimiter *vault.FailureLimiter, req request) 
 			if err := svc.verifyRoot(p.RootSecret); err != nil {
 				return response{}, err
 			}
-			return response{OK: true}, svc.Asks.Decline(p.ID, p.Note)
+			return response{OK: true}, svc.DeclineAsk(p.RootSecret, p.ID, p.Note, p.DBName, p.RemovedTables)
 		}), true
 	}
 	return response{}, false
@@ -405,6 +482,10 @@ func (c *Client) StopAsk(rootSecret, id string) error {
 
 func (c *Client) DeclineAsk(rootSecret, id, note string) error {
 	return c.call(opDeclineAsk, declineAskPayload{RootSecret: rootSecret, ID: id, Note: note}, nil)
+}
+
+func (c *Client) DeclineAskRemoving(rootSecret, id, note, dbName string, removed []string) error {
+	return c.call(opDeclineAsk, declineAskPayload{RootSecret: rootSecret, ID: id, Note: note, DBName: dbName, RemovedTables: removed}, nil)
 }
 
 func (c *Client) CreateChannelForAsk(rootSecret, askID, name, dbName string, scope vault.Scope, ttl time.Duration) (vault.Channel, error) {

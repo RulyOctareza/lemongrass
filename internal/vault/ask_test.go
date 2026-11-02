@@ -64,20 +64,27 @@ func TestAskCreateValidation(t *testing.T) {
 		in   AskInput
 		err  string
 	}{
-		{"db ok", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"orders"}, Reason: "r"}, ""},
-		{"rester ok", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "I need GET on /x"}, ""},
+		{"db ok", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"orders"}, Operations: []string{"select"}, Reason: "r"}, ""},
+		{"rester ok", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "I need GET on /x", Methods: []string{"GET"}}, ""},
 		{"command ok", commandAsk("t", "git push"), ""},
 		{"hook command needs no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "git push", Rule: "git-push"}, ""},
 		{"unknown type", AskInput{Type: "x", TabID: "t", Cwd: "/w"}, "unknown ask type"},
-		{"no tab", AskInput{Type: AskRester, Cwd: "/w", Message: "m"}, "tab id"},
-		{"relative cwd", AskInput{Type: AskRester, TabID: "t", Cwd: "w", Message: "m"}, "absolute"},
-		{"db no tables", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Reason: "r"}, "at least one table"},
+		{"db no operations", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Reason: "r"}, "at least one operation"},
+		{"db unknown operation", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"drop"}, Reason: "r"}, "is not a known operation"},
+		{"db repeated operation", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select", "select"}, Reason: "r"}, "twice"},
+		{"db with methods", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select"}, Methods: []string{"GET"}, Reason: "r"}, "tables, operations and a reason only"},
+		{"rester no methods", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "m"}, "at least one method"},
+		{"rester lower method", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "m", Methods: []string{"get"}}, "is not a known method"},
+		{"command with operations", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "r", Operations: []string{"select"}}, "command and a reason only"},
+		{"no tab", AskInput{Type: AskRester, Cwd: "/w", Message: "m", Methods: []string{"GET"}}, "tab id"},
+		{"relative cwd", AskInput{Type: AskRester, TabID: "t", Cwd: "w", Message: "m", Methods: []string{"GET"}}, "absolute"},
+		{"db no tables", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Operations: []string{"select"}, Reason: "r"}, "at least one table"},
 		{"db no reason", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}}, "needs a reason"},
-		{"db bad table", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a b"}, Reason: "r"}, "not a table name"},
-		{"db too many tables", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: make([]string, MaxAskTables+1), Reason: "r"}, "at most"},
-		{"db with command", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Reason: "r", Command: "x"}, "tables and a reason only"},
-		{"rester empty", AskInput{Type: AskRester, TabID: "t", Cwd: "/w"}, "needs a message"},
-		{"rester long", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: strings.Repeat("m", MaxAskMessage+1)}, "cap"},
+		{"db bad table", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a b"}, Operations: []string{"select"}, Reason: "r"}, "not a table name"},
+		{"db too many tables", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: make([]string, MaxAskTables+1), Operations: []string{"select"}, Reason: "r"}, "at most"},
+		{"db with command", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select"}, Reason: "r", Command: "x"}, "tables, operations and a reason only"},
+		{"rester empty", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Methods: []string{"GET"}}, "needs a message"},
+		{"rester long", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: strings.Repeat("m", MaxAskMessage+1), Methods: []string{"GET"}}, "cap"},
 		{"command empty", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Reason: "r"}, "needs a command"},
 		{"command long", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Reason: "r", Command: strings.Repeat("c", MaxAskCommand+1)}, "cap"},
 		{"command no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls"}, "needs a reason"},
@@ -135,7 +142,7 @@ func TestAskHookDedupeAndLimits(t *testing.T) {
 		if err != nil {
 			t.Fatalf("filing %d: %v", i, err)
 		}
-		if err := s2.Decline(a.ID, ""); err != nil {
+		if err := s2.Decline(a.ID, "", nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -150,7 +157,7 @@ func TestAskHookDedupeAndLimits(t *testing.T) {
 
 func TestAskWaitAnswered(t *testing.T) {
 	s, _, rec := newTestAskStore()
-	a, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"orders"}, Reason: "r"})
+	a, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"orders"}, Operations: []string{"select"}, Reason: "r"})
 	if err := s.AnswerChannel(a.ID, "ab12cd"); err == nil {
 		t.Fatal("answered a channel ask with no linked channel")
 	}
@@ -164,7 +171,7 @@ func TestAskWaitAnswered(t *testing.T) {
 		got <- w
 	}()
 	waitFor(t, func() bool { _, blocking, _ := s.Count(); return blocking == 1 })
-	if err := s.LinkChannel(a.ID, AskDB, "chan-1"); err != nil {
+	if err := s.LinkChannel(a.ID, AskDB, "chan-1", AskGrant{Tables: []string{"orders"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AnswerChannel(a.ID, "ab12cd"); err != nil {
@@ -184,7 +191,7 @@ func TestAskWaitAnswered(t *testing.T) {
 	if ids := rec.undeliveredIDs(); len(ids) != 0 {
 		t.Fatalf("an acknowledged outcome was also reported undelivered: %v", ids)
 	}
-	if err := s.Decline(a.ID, "late"); err != ErrAskNotWaiting {
+	if err := s.Decline(a.ID, "late", nil); err != ErrAskNotWaiting {
 		t.Fatalf("declining an answered ask = %v", err)
 	}
 }
@@ -196,7 +203,7 @@ func TestAskLateAnswerUndelivered(t *testing.T) {
 	if err != nil || w.State != AskWaiting || w.Blocking {
 		t.Fatalf("timed-out wait = %+v, %v", w, err)
 	}
-	if err := s.Decline(a.ID, "not now"); err != nil {
+	if err := s.Decline(a.ID, "not now", nil); err != nil {
 		t.Fatal(err)
 	}
 	if ids := rec.undeliveredIDs(); len(ids) != 1 || ids[0] != a.ID {
@@ -220,7 +227,7 @@ func TestAskUnacknowledgedOutcomeIsNudged(t *testing.T) {
 		got <- w
 	}()
 	waitFor(t, func() bool { _, blocking, _ := s.Count(); return blocking == 1 })
-	_ = s.Decline(a.ID, "no")
+	_ = s.Decline(a.ID, "no", nil)
 	<-got
 	if ids := rec.undeliveredIDs(); len(ids) != 0 {
 		t.Fatalf("reported before the grace period: %v", ids)
@@ -231,7 +238,7 @@ func TestAskUnacknowledgedOutcomeIsNudged(t *testing.T) {
 func TestAskWaiterWriteFailed(t *testing.T) {
 	s, _, rec := newTestAskStore()
 	a, _ := s.Create(commandAsk("t", "ls"))
-	_ = s.Decline(a.ID, "")
+	_ = s.Decline(a.ID, "", nil)
 	rec.undelivered = nil
 	w, _ := s.Wait(a.ID, "t", time.Second)
 	if w.State != AskDeclined {
@@ -245,7 +252,7 @@ func TestAskWaiterWriteFailed(t *testing.T) {
 
 func TestAskCommandRun(t *testing.T) {
 	s, _, rec := newTestAskStore()
-	db, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Reason: "r"})
+	db, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select"}, Reason: "r"})
 	if _, err := s.Start(db.ID); err == nil {
 		t.Fatal("started a db ask")
 	}

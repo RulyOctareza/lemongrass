@@ -4,6 +4,9 @@
 package gatekeeper
 
 import (
+	"errors"
+	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -163,48 +166,145 @@ func TestIPCAskNeverExecute(t *testing.T) {
 	}
 }
 
-func TestIPCAskChannel(t *testing.T) {
-	client := startAskServer(t)
+func startAskServerWithTables(t *testing.T, tables map[string][]string) *Client {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	svc, err := NewBackend(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.listTables = func(_, dbName string) ([]string, error) {
+		have, ok := tables[dbName]
+		if !ok {
+			return nil, errors.New("test: no such connection")
+		}
+		return have, nil
+	}
+	sockPath := filepath.Join(t.TempDir(), "vault.sock")
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go Serve(svc, l, vault.NewFailureLimiter(1000, time.Minute, time.Hour))
+	t.Cleanup(func() { l.Close() })
+	client := &Client{SocketPath: sockPath}
+	if err := client.SetPassphrase(testRootSecret); err != nil {
+		t.Fatal(err)
+	}
+	return client
+}
+
+func fileDBAsk(t *testing.T, client *Client, tables, ops []string) vault.Ask {
+	t.Helper()
+	a, err := client.CreateAsk(AskRequest{Type: vault.AskDB, TabID: "tab-1", Cwd: t.TempDir(), Tables: tables, Operations: ops, Reason: "report"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+func TestIPCAskDBChannelGrant(t *testing.T) {
+	client := startAskServerWithTables(t, map[string][]string{"shop": {"orders", "Customers"}})
+	if err := client.PutCredential(testRootSecret, "shop", []byte(unreachableConnString)); err != nil {
+		t.Fatal(err)
+	}
 	cmd := fileCommand(t, client, "tab-1", "ls")
-	if _, err := client.CreateChannelForAsk(testRootSecret, cmd.ID, "c", "conn", fullScope(), time.Hour); err == nil || !strings.Contains(err.Error(), "not a db ask") {
+	if _, err := client.CreateChannelForAsk(testRootSecret, cmd.ID, "c", "shop", vault.Scope{Tables: []string{"orders"}, Operations: []string{"select"}}, time.Hour); err == nil || !strings.Contains(err.Error(), "not a db ask") {
 		t.Fatalf("db channel for a command ask = %v", err)
 	}
 	if err := client.AnswerAsk(testRootSecret, cmd.ID, "abc123"); err == nil {
 		t.Fatal("answered a command ask with a channel")
 	}
 
-	if err := client.PutCredential(testRootSecret, "conn", []byte(unreachableConnString)); err != nil {
-		t.Fatal(err)
+	a := fileDBAsk(t, client, []string{"orders", "customers", "refunds"}, []string{"select", "show"})
+	refusals := []struct {
+		name  string
+		scope vault.Scope
+		want  string
+	}{
+		{"no tables", vault.Scope{Operations: []string{"select"}}, "at least one table"},
+		{"added table", vault.Scope{Tables: []string{"orders", "users"}, Operations: []string{"select"}}, "did not request table users"},
+		{"added operation", vault.Scope{Tables: []string{"orders"}, Operations: []string{"select", "delete"}}, "did not declare operation delete"},
+		{"missing table", vault.Scope{Tables: []string{"orders", "refunds"}, Operations: []string{"select"}}, "has no table refunds"},
 	}
-	db, err := client.CreateAsk(AskRequest{Type: vault.AskDB, TabID: "tab-1", Cwd: t.TempDir(), Tables: []string{"orders"}, Reason: "report"})
-	if err != nil {
-		t.Fatal(err)
+	for _, r := range refusals {
+		if _, err := client.CreateChannelForAsk(testRootSecret, a.ID, "c", "shop", r.scope, time.Hour); err == nil || !strings.Contains(err.Error(), r.want) {
+			t.Errorf("%s: CreateChannelForAsk = %v, want %q", r.name, err, r.want)
+		}
 	}
-	if _, err := client.CreateChannelForAsk(testRootSecret, db.ID, "c", "conn", fullScope(), time.Hour); err == nil {
-		t.Fatal("created a channel without listing the connection's tables")
-	}
-	if err := client.AnswerAsk(testRootSecret, db.ID, "abc123"); err == nil || !strings.Contains(err.Error(), "no channel was created") {
+	if err := client.AnswerAsk(testRootSecret, a.ID, "abc123"); err == nil || !strings.Contains(err.Error(), "no channel was created") {
 		t.Fatalf("AnswerAsk with no channel = %v", err)
 	}
 
+	scope := vault.Scope{Tables: []string{"orders", "customers"}, Operations: []string{"select"}}
+	if _, err := client.CreateChannelForAsk(testRootSecret, a.ID, "c", "shop", scope, time.Hour); err != nil {
+		t.Fatalf("CreateChannelForAsk: %v", err)
+	}
+	if err := client.AnswerAsk(testRootSecret, a.ID, "abc123"); err != nil {
+		t.Fatal(err)
+	}
+	r, err := client.AskResult(a.ID, "tab-1")
+	if err != nil || r.State != vault.AskAnswered || r.ShortID != "abc123" {
+		t.Fatalf("AskResult = %+v, %v", r, err)
+	}
+	if r.Granted == nil || strings.Join(r.Granted.Tables, ",") != "orders,customers" || strings.Join(r.Granted.Operations, ",") != "select" {
+		t.Fatalf("granted = %+v", r.Granted)
+	}
+	if len(r.RemovedTables) != 1 || r.RemovedTables[0] != (vault.RemovedTable{Table: "refunds", Reason: "does not exist in connection shop"}) {
+		t.Fatalf("removed = %+v", r.RemovedTables)
+	}
+}
+
+func TestIPCAskDBDeclineWithRemovedTables(t *testing.T) {
+	client := startAskServerWithTables(t, map[string][]string{"shop": {"orders"}})
+	a := fileDBAsk(t, client, []string{"orders", "refunds"}, []string{"select"})
+	if err := client.DeclineAskRemoving(testRootSecret, a.ID, "no", "shop", []string{"users"}); err == nil || !strings.Contains(err.Error(), "did not request table users") {
+		t.Fatalf("removing an unrequested table = %v", err)
+	}
+	if err := client.DeclineAskRemoving(testRootSecret, a.ID, "wrong database", "shop", []string{"refunds"}); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := client.AskResult(a.ID, "tab-1")
+	if r.State != vault.AskDeclined || len(r.RemovedTables) != 1 || r.RemovedTables[0].Reason != "does not exist in connection shop" {
+		t.Fatalf("declined = %+v", r)
+	}
+
+	b := fileDBAsk(t, client, []string{"orders", "refunds"}, []string{"select"})
+	if err := client.DeclineAskRemoving(testRootSecret, b.ID, "", "", []string{"orders"}); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := client.AskResult(b.ID, "tab-1"); len(r.RemovedTables) != 1 || r.RemovedTables[0].Reason != "removed by the user" {
+		t.Fatalf("declined without a connection = %+v", r.RemovedTables)
+	}
+	cmd := fileCommand(t, client, "tab-1", "ls")
+	if err := client.DeclineAskRemoving(testRootSecret, cmd.ID, "", "", []string{"orders"}); err == nil {
+		t.Fatal("removed tables from a command ask")
+	}
+}
+
+func TestIPCAskResterChannelGrant(t *testing.T) {
+	client := startAskServer(t)
 	domain := vaulttest.Domain{BaseURL: "http://127.0.0.1:1", LoginEndpoint: "/login", TokenPath: "t", FixedTTLSeconds: 60,
 		TokenPlacement: vault.TokenPlacement{Kind: vault.PlacementHeader, Name: "Authorization"},
 		Users:          []vault.ResterUser{{Name: "alice", Fields: map[string]string{"u": "alice"}}}}
 	if err := client.PutRester(testRootSecret, "api", domain.Rester()); err != nil {
 		t.Fatal(err)
 	}
-	rester, err := client.CreateAsk(AskRequest{Type: vault.AskRester, TabID: "tab-1", Cwd: t.TempDir(), Message: "GET on /orders"})
+	rester, err := client.CreateAsk(AskRequest{Type: vault.AskRester, TabID: "tab-1", Cwd: t.TempDir(), Message: "GET on /orders", Methods: []string{"GET", "POST"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.CreateHTTPChannelForAsk(testRootSecret, rester.ID, "c", "api", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET"}}, nil, time.Hour); err != nil {
+	if _, err := client.CreateHTTPChannelForAsk(testRootSecret, rester.ID, "c", "api", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET", "DELETE"}}, nil, time.Hour); err == nil || !strings.Contains(err.Error(), "did not declare method DELETE") {
+		t.Fatalf("added method = %v", err)
+	}
+	if _, err := client.CreateHTTPChannelForAsk(testRootSecret, rester.ID, "c", "api", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"get"}}, nil, time.Hour); err != nil {
 		t.Fatalf("CreateHTTPChannelForAsk: %v", err)
 	}
 	if err := client.AnswerAsk(testRootSecret, rester.ID, "abc123"); err != nil {
 		t.Fatalf("AnswerAsk: %v", err)
 	}
 	r, err := client.AskResult(rester.ID, "tab-1")
-	if err != nil || r.State != vault.AskAnswered || r.ShortID != "abc123" {
+	if err != nil || r.State != vault.AskAnswered || r.ShortID != "abc123" || r.Granted == nil || strings.Join(r.Granted.Methods, ",") != "GET" {
 		t.Fatalf("AskResult = %+v, %v", r, err)
 	}
 	if _, err := client.CreateHTTPChannelForAsk(testRootSecret, rester.ID, "c2", "api", vault.DefaultEnvironment, vault.TypeAPI, vault.HTTPScope{Methods: []string{"GET"}}, nil, time.Hour); err == nil {
@@ -212,9 +312,9 @@ func TestIPCAskChannel(t *testing.T) {
 	}
 }
 
-func TestMissingTables(t *testing.T) {
+func TestNotDeclared(t *testing.T) {
 	cases := []struct {
-		requested, have, want []string
+		got, allowed, want []string
 	}{
 		{[]string{"orders"}, []string{"orders", "customers"}, nil},
 		{[]string{"Orders"}, []string{"orders"}, nil},
@@ -222,9 +322,9 @@ func TestMissingTables(t *testing.T) {
 		{[]string{"a"}, nil, []string{"a"}},
 	}
 	for _, tc := range cases {
-		got := missingTables(tc.requested, tc.have)
+		got := notDeclared(tc.got, tc.allowed)
 		if strings.Join(got, ",") != strings.Join(tc.want, ",") {
-			t.Errorf("missingTables(%v, %v) = %v, want %v", tc.requested, tc.have, got, tc.want)
+			t.Errorf("notDeclared(%v, %v) = %v, want %v", tc.got, tc.allowed, got, tc.want)
 		}
 	}
 }
