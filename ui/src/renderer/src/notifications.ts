@@ -85,12 +85,11 @@ function who(tabId: string | undefined, closedTitle?: string): NamePart[] {
   return tabId ? tabParts(tabId, closedTitle) : [{ text: 'an agent' }]
 }
 
-// A group name is model-written like a tab title, so it is quoted and marked the same way.
+// A group name is model-written like a tab title, so it is marked the same way.
 function groupParts(name: string | undefined, adding: boolean): NamePart[] {
   return [
-    { text: adding ? 'new thinkers for workgroup "' : 'workgroup "' },
-    { text: name ?? '', mark: true },
-    { text: '"' }
+    { text: adding ? 'new thinkers for workgroup ' : 'workgroup ' },
+    { text: name ?? '', mark: true }
   ]
 }
 
