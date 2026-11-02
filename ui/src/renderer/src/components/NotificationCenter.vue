@@ -5,6 +5,7 @@
 import { computed, onMounted, watch } from 'vue'
 import AppButton from './AppButton.vue'
 import AppConfirmButton from './AppConfirmButton.vue'
+import MarkedText from './MarkedText.vue'
 import { ageNow } from '../ageClock'
 import { askState } from '../asks'
 import { formatAge } from '../relativeAge'
@@ -70,7 +71,7 @@ watch(
           class="row waiting"
           @click="row.open()"
         >
-          <span class="row-text">{{ row.sentence }}</span>
+          <MarkedText class="row-text" :parts="row.sentence" capitalize />
           <span class="row-age">{{ age(row) }}</span>
         </button>
       </template>
@@ -88,7 +89,7 @@ watch(
           <span v-if="row.unread" class="dot" aria-label="Unread" />
           <span class="row-main">
             <span v-if="row.title" class="row-title">{{ row.title }}</span>
-            <span class="row-text">{{ row.sentence }}</span>
+            <MarkedText class="row-text" :parts="row.sentence" capitalize />
           </span>
           <span class="row-age">{{ age(row) }}</span>
         </button>

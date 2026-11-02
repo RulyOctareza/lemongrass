@@ -13,10 +13,11 @@ import type {
 } from '../../preload/types'
 import * as tree from './layoutTree'
 import { askState, openAsk } from './asks'
-import { askSentence } from './components/decisions/askOrigin'
+import { askParts, askWhere } from './components/decisions/askOrigin'
 import { shellTitles } from './shellRegistry'
+import { cleanTitle, tabParts, type NamePart } from './tabNames'
 import { vaultSession } from './vaultSession'
-import { approvals, openApprovals, workgroupStateOf } from './workgroups'
+import { approvals, openApprovals } from './workgroups'
 import {
   focusTab,
   openConflict,
@@ -27,7 +28,7 @@ import {
 } from './workspace'
 
 // The notification center: stored items from main, plus waiting decisions read live, each said as
-// one plain sentence naming the tab by its title and the project by its name.
+// one sentence naming the tab as the ask dialog does (tabNames.ts) and the project by its name.
 
 export type SettingsSection = 'updates' | 'dependencies'
 
@@ -42,7 +43,7 @@ export interface CenterRow {
   // Waiting rows are live decisions; the rest are stored items.
   waiting: boolean
   title?: string
-  sentence: string
+  sentence: NamePart[]
   at: number
   unread: boolean
   open: () => void
@@ -63,18 +64,6 @@ export function registerCenterHost(next: CenterHost): void {
   host = next
 }
 
-const AGENT_NAMES: Record<string, string> = { claude: 'Claude', codex: 'Codex', agent: 'Cursor' }
-const ROLE_NAMES: Record<string, string> = {
-  leader: 'Leader',
-  thinker: 'Thinker',
-  collaborator: 'Collaborator'
-}
-
-// Agent CLIs prefix their terminal title with a status glyph, which is not part of the name.
-function cleanTitle(title: string): string {
-  return title.replace(/^[^\p{L}\p{N}]+/u, '').trim()
-}
-
 function liveTitle(tabId: string): string {
   const found = shellTabById(tabId)
   return found ? cleanTitle(shellTitles[tabId] ?? '') || found.tab.label : ''
@@ -92,23 +81,21 @@ function projectName(path: string | undefined): string {
   return projectOf(path)?.name ?? path.split('/').filter(Boolean).pop() ?? path
 }
 
-// "Thinker engine in vault-guard" for a workgroup member, "Claude in Fix login" otherwise, and the
-// title saved with the item once the tab is closed.
-export function tabWords(tabId: string | undefined, snapshot?: string): string {
-  if (!tabId) return 'an agent'
-  const found = shellTabById(tabId)
-  if (!found) return snapshot ? `the closed tab ${snapshot}` : 'an agent in a closed tab'
-  for (const group of workgroupStateOf(found.project.id).groups) {
-    const member = group.members.find((m) => m.tabId === tabId)
-    if (member) return `${ROLE_NAMES[member.role] ?? 'Member'} ${member.label} in ${group.name}`
-  }
-  const agent = AGENT_NAMES[found.tab.command] ?? 'An agent'
-  const title = liveTitle(tabId)
-  return title ? `${agent} in ${title}` : agent
+function who(tabId: string | undefined, closedTitle?: string): NamePart[] {
+  return tabId ? tabParts(tabId, closedTitle) : [{ text: 'an agent' }]
 }
 
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1)
+// A group name is model-written like a tab title, so it is quoted and marked the same way.
+function groupParts(name: string | undefined, adding: boolean): NamePart[] {
+  return [
+    { text: adding ? 'new thinkers for workgroup "' : 'workgroup "' },
+    { text: name ?? '', mark: true },
+    { text: '"' }
+  ]
+}
+
+function line(...parts: (string | NamePart[])[]): NamePart[] {
+  return parts.flatMap((part) => (typeof part === 'string' ? [{ text: part }] : part))
 }
 
 const ASK_THINGS: Record<string, string> = {
@@ -123,49 +110,54 @@ const DEP_PROBLEMS: Record<string, string> = {
   unknownVersion: 'has a version lemongrass cannot read'
 }
 
-export function sentenceOf(item: Notice): string {
-  const who = tabWords(item.tabId, item.tabTitle)
-  const where = projectName(item.projectPath)
+// Parts start lower case where a tab name leads; the center renders them capitalized.
+export function sentenceOf(item: Notice): NamePart[] {
+  const tab = who(item.tabId, item.tabTitle)
+  const where = ` in ${projectName(item.projectPath)}`
   switch (item.event) {
     case 'approval-answered': {
-      const what =
-        item.detail === 'add'
-          ? `new thinkers for workgroup ${item.subject}`
-          : `workgroup ${item.subject}`
-      if (item.outcome === 'approved') return `You approved ${what} from ${who} in ${where}.`
+      const what = groupParts(item.subject, item.detail === 'add')
+      if (item.outcome === 'approved')
+        return line('You approved ', what, ' from ', tab, `${where}.`)
       if (item.outcome === 'withdrawn')
-        return `${capitalize(who)} withdrew ${what} in ${where} before you answered.`
-      return `You declined ${what} from ${who} in ${where}.`
+        return line(tab, ' withdrew ', what, `${where} before you answered.`)
+      return line('You declined ', what, ' from ', tab, `${where}.`)
     }
     case 'ask-answered': {
       const thing = ASK_THINGS[item.detail ?? ''] ?? 'a request'
-      if (item.outcome === 'ran') return `You ran ${thing} for ${who} in ${where}.`
-      if (item.outcome === 'granted') return `You granted ${thing} to ${who} in ${where}.`
-      return `You declined ${thing} from ${who} in ${where}.`
+      if (item.outcome === 'ran') return line(`You ran ${thing} for `, tab, `${where}.`)
+      if (item.outcome === 'granted') return line(`You granted ${thing} to `, tab, `${where}.`)
+      return line(`You declined ${thing} from `, tab, `${where}.`)
     }
     case 'turn-ended':
-      return `${capitalize(who)} finished a ${item.detail}-minute turn in ${where}.`
+      return line(tab, ` finished a ${item.detail}-minute turn${where}.`)
     case 'tab-prompting':
-      return `${capitalize(who)} waits for your answer in ${where}.`
+      return line(tab, ` waits for your answer${where}.`)
     case 'conflict-submitted': {
       const count = Number(item.detail) || 1
       const files = count === 1 ? 'one conflicted file' : `${count} conflicted files`
-      return `${capitalize(who)} submitted resolutions for ${files} in ${where}.`
+      return line(tab, ` submitted resolutions for ${files}${where}.`)
     }
     case 'update-available':
-      return `lemongrass ${item.subject} is ready to install. You have ${item.detail} installed.`
+      return line(
+        `lemongrass ${item.subject} is ready to install. You have ${item.detail} installed.`
+      )
     case 'dep-problem':
-      return `${item.subject} ${DEP_PROBLEMS[item.detail ?? ''] ?? 'needs attention'}, and lemongrass needs it.`
+      return line(
+        `${item.subject} ${DEP_PROBLEMS[item.detail ?? ''] ?? 'needs attention'}, and lemongrass needs it.`
+      )
     case 'vault-locked':
-      return 'The vault locked after 5 minutes without use.'
+      return line('The vault locked after 5 minutes without use.')
     case 'git-failed': {
       const action = item.detail === 'push' ? 'Push' : 'Fetch'
-      return item.subject
-        ? `${action} failed in ${where}. Git said: ${item.subject}`
-        : `${action} failed in ${where}.`
+      return line(
+        item.subject
+          ? `${action} failed${where}. Git said: ${item.subject}`
+          : `${action} failed${where}.`
+      )
     }
     case 'popup':
-      return item.detail ?? ''
+      return line(item.detail ?? '')
   }
 }
 
@@ -228,13 +220,15 @@ function storedRow(item: Notice): CenterRow {
 }
 
 function approvalRow(request: WorkgroupPending): CenterRow {
-  const what = request.existingMembers
-    ? `new thinkers for workgroup ${request.groupName}`
-    : `workgroup ${request.groupName}`
   return {
     key: `approval:${request.requestId}`,
     waiting: true,
-    sentence: `${capitalize(tabWords(request.leaderTabId))} proposes ${what} in ${projectName(request.projectPath)} and waits for your approval.`,
+    sentence: line(
+      who(request.leaderTabId),
+      ' proposes ',
+      groupParts(request.groupName, !!request.existingMembers),
+      ` in ${projectName(request.projectPath)} and waits for your approval.`
+    ),
     at: request.createdAt,
     unread: true,
     open: () => {
@@ -244,11 +238,18 @@ function approvalRow(request: WorkgroupPending): CenterRow {
   }
 }
 
+// The dialog's headline leaves the project out; the center spans projects, so it goes before the full stop.
+function withProject(parts: NamePart[], where: string): NamePart[] {
+  const last = parts[parts.length - 1]
+  if (!last || last.mark) return [...parts, { text: ` in ${where}.` }]
+  return [...parts.slice(0, -1), { text: `${last.text.replace(/\.$/, '')} in ${where}.` }]
+}
+
 function askRow(ask: Ask): CenterRow {
   return {
     key: `ask:${ask.id}`,
     waiting: true,
-    sentence: askSentence(ask),
+    sentence: withProject(askParts(ask), askWhere(ask)),
     at: new Date(ask.created_at).getTime(),
     unread: true,
     open: () => {
@@ -263,10 +264,11 @@ function lockedAsksRow(waiting: number): CenterRow {
   return {
     key: 'asks:locked',
     waiting: true,
-    sentence:
+    sentence: line(
       waiting === 1
         ? 'An agent waits for your decision. Unlock the vault to read and answer it.'
-        : `${waiting} agent requests wait for your decision. Unlock the vault to read and answer them.`,
+        : `${waiting} agent requests wait for your decision. Unlock the vault to read and answer them.`
+    ),
     at: Date.now(),
     unread: true,
     open: () => {
