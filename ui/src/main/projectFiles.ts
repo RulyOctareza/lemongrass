@@ -165,6 +165,15 @@ export function registerProjectFileHandlers(getSender: () => WebContents | undef
     unwatchTree(projectPath, dir)
   )
 
+  // The project root's path inside its repository, such as "ui/", so the renderer can match
+  // repo-relative git status paths to project-relative ones. "" at the repo root or outside git.
+  ipcMain.handle('projectFiles:gitPrefix', async (_event, projectPath: string): Promise<string> => {
+    const root = realRoot(projectPath)
+    if (!root) return ''
+    const result = await run(root, ['rev-parse', '--show-prefix'], { env: projectGitEnv })
+    return result.code === 0 ? result.stdout.trim() : ''
+  })
+
   ipcMain.handle(
     'projectFiles:search',
     async (_event, projectPath: string, query: string): Promise<ProjectSearchResult> => {

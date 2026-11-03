@@ -239,6 +239,8 @@ interface Api {
     list: (projectPath: string, dir: string) => Promise<ProjectListResult>
     unwatch: (projectPath: string, dir: string) => void
     search: (projectPath: string, query: string) => Promise<ProjectSearchResult>
+    // The project root's prefix inside its repository, "sub/dir/", or "" at the root or outside git.
+    gitPrefix: (projectPath: string) => Promise<string>
     readFile: (projectPath: string, path: string) => Promise<ProjectFileResult | null>
     createFile: (projectPath: string, dir: string, name: string) => Promise<ProjectOpResult>
     createFolder: (projectPath: string, dir: string, name: string) => Promise<ProjectOpResult>

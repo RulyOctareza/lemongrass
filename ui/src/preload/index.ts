@@ -242,6 +242,8 @@ const projectFiles = {
     ipcRenderer.send('projectFiles:unwatch', projectPath, dir),
   search: (projectPath: string, query: string): Promise<ProjectSearchResult> =>
     ipcRenderer.invoke('projectFiles:search', projectPath, query),
+  gitPrefix: (projectPath: string): Promise<string> =>
+    ipcRenderer.invoke('projectFiles:gitPrefix', projectPath),
   readFile: (projectPath: string, path: string): Promise<ProjectFileResult | null> =>
     ipcRenderer.invoke('projectFiles:readFile', projectPath, path),
   createFile: (projectPath: string, dir: string, name: string): Promise<ProjectOpResult> =>
