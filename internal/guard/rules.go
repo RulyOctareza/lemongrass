@@ -4,6 +4,7 @@
 package guard
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -119,7 +120,7 @@ func broadRecursiveTarget(args []string, home string) bool {
 		case "", "~", "$HOME", "/*", "~/*", "$HOME/*", "/home", "/root", "/etc", "/usr", "/var", "/opt", "/boot", "/bin", "/lib", "/sbin":
 			return true
 		}
-		if home != "" && strings.TrimRight(arg, "/") == strings.TrimRight(home, "/") {
+		if home != "" && (strings.TrimRight(arg, "/") == strings.TrimRight(home, "/") || filepath.Clean(arg) == ResolveDir(home)) {
 			return true
 		}
 	}

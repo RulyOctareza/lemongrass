@@ -116,10 +116,11 @@ func memoryToolPaths(payload hookEvent) []string {
 	return paths
 }
 
-// isClaudeMemoryPath matches any project's memory directory under the projects directory of ~/.claude or of any ~/.claude-<account>, not only this project's, so a slug-algorithm mismatch or a sibling project's directory does not open a gap.
+// isClaudeMemoryPath matches any project's memory directory under the projects directory of ~/.claude or of any ~/.claude-<account>, not only this project's, so a slug-algorithm mismatch or a sibling project's directory does not open a gap. The home and the memory dir are resolved like the target, so a home reached through a symlink still matches.
 func isClaudeMemoryPath(p, cwd, home, projectMemDir string) bool {
+	home = guard.ResolveDir(home)
 	p = guard.ResolvePath(p, cwd, home)
-	if projectMemDir != "" && strings.HasPrefix(p+string(filepath.Separator), projectMemDir) {
+	if projectMemDir != "" && strings.HasPrefix(p+string(filepath.Separator), guard.ResolveDir(projectMemDir)+string(filepath.Separator)) {
 		return true
 	}
 	prefix := home + string(filepath.Separator)

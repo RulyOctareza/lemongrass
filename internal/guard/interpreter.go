@@ -48,7 +48,7 @@ func (c checker) programDir(script shellScript, at int) (string, bool) {
 			known = false
 			continue
 		}
-		dir = ResolvePath(target, dir, c.in.Home)
+		dir = ResolvePath(target, dir, c.home)
 	}
 	return dir, known
 }
@@ -361,7 +361,7 @@ func (c checker) literalPathReason(value, dir string, known bool) string {
 	if !known && !filepath.IsAbs(value) {
 		return "the working directory is unknown after a cd the guard cannot follow, so the relative path cannot be checked. Write it from the project root."
 	}
-	p := ResolvePath(value, dir, c.in.Home)
+	p := ResolvePath(value, dir, c.home)
 	location := filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p))
 	for _, candidate := range []string{location, resolveFully(p)} {
 		if reason := c.candidateCheck(value, candidate, dir, []string{dir}, false); reason != "" {

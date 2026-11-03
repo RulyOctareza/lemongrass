@@ -24,8 +24,13 @@ func TestRegisterCreatesEntryMatchingElectronUIShape(t *testing.T) {
 	if p.Name != filepath.Base(dir) {
 		t.Errorf("Name = %q, want %q (basename)", p.Name, filepath.Base(dir))
 	}
-	if p.Path != dir {
-		t.Errorf("Path = %q, want %q", p.Path, dir)
+	// The registry stores the realpath, as the Electron side does; the temp dir is a symlink on macOS.
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Path != want {
+		t.Errorf("Path = %q, want %q", p.Path, want)
 	}
 
 	resolved, err := Resolve(dir)

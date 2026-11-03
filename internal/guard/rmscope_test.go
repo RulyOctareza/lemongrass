@@ -10,11 +10,21 @@ import (
 	"testing"
 )
 
+// resolvedTempDir is t.TempDir() resolved through symlinks, since the guard reports resolved paths and the temp dir is a symlink on macOS (/tmp -> /private/tmp).
+func resolvedTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func rmProject(t *testing.T) (root, home, outside string) {
 	t.Helper()
-	home = t.TempDir()
+	home = resolvedTempDir(t)
 	root = filepath.Join(home, "work", "app")
-	outside = t.TempDir()
+	outside = resolvedTempDir(t)
 	for _, dir := range []string{"build/out", "sub", ".git/refs", "biblio/books"} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
 			t.Fatal(err)

@@ -21,7 +21,7 @@ func (c checker) scriptFileVerdicts(script shellScript, program shellProgram, di
 	if script.Depth >= maxScriptDepth || (!known && !filepath.IsAbs(program.File)) {
 		return nil
 	}
-	path := ResolvePath(program.File, dir, c.in.Home)
+	path := ResolvePath(program.File, dir, c.home)
 	text, ok := readScript(path, program.Lang == "")
 	if !ok {
 		return nil

@@ -22,6 +22,8 @@ func TestNeverExecute(t *testing.T) {
 		{"rm home glob", "rm -rf ~/*", true},
 		{"rm ssh", "rm ~/.ssh/id_ed25519", true},
 		{"rm system dir", "rm -rf /usr", true},
+		{"rm system dir slash", "rm -rf /usr/", true},
+		{"chmod -R system dir slash", "chmod -R 777 /etc/", true},
 		{"rm dynamic recursive", `rm -rf "$BUILD"/`, true},
 		{"rm dynamic plain", `rm "$FILE"`, false},
 		{"rm project dir", "rm -rf build", false},

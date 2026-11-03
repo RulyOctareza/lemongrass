@@ -39,7 +39,7 @@ func (c checker) deletionDirs(script shellScript) ([]string, string) {
 			return nil, "'" + shown + "' uses a variable or substitution, so the paths after it cannot be checked. Write the directory out."
 		}
 		for _, dir := range dirs {
-			located := ResolvePath(target, dir, c.in.Home)
+			located := ResolvePath(target, dir, c.home)
 			next := resolveFully(located)
 			if !withinOrEqual(next, root) {
 				if next != located {
@@ -108,7 +108,7 @@ func (c checker) targetsCheck(targets, dirs []string, isFind bool) string {
 			return "'" + target + "' uses a variable, substitution, braces or ~user, so where it lands is unknown until it runs. Write the path out."
 		}
 		for _, dir := range dirs {
-			resolved := []string{ResolvePath(target, dir, c.in.Home)}
+			resolved := []string{ResolvePath(target, dir, c.home)}
 			if strings.ContainsAny(target, "*?[") {
 				matches, err := filepath.Glob(resolved[0])
 				if err != nil {

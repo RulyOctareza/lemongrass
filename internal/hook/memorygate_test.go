@@ -14,6 +14,7 @@ func memoryGateFixture(t *testing.T) (home, projectPath string) {
 	t.Helper()
 	home = t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	projectPath = t.TempDir()
 	if err := os.MkdirAll(filepath.Join(projectPath, "biblio"), 0o755); err != nil {
 		t.Fatal(err)
@@ -124,5 +125,48 @@ func TestTouchesClaudeMemoryJudgesHeredocBodiesByConsumer(t *testing.T) {
 				t.Errorf("touchesClaudeMemory = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// A home reached through a symlink, with its memory directories already present, so the target resolves to the real path while the home is given through the link.
+func TestTouchesClaudeMemoryThroughSymlinkedHome(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(base, "var", "home", "ann")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(base, "var", "home"), filepath.Join(base, "home")); err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(base, "home", "ann")
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	projectPath := filepath.Join(real, "work", "app")
+	memDir, _ := claudeMemoryDir(projectPath)
+	otherMem := filepath.Join(home, ".claude-work", "projects", "-x", "memory")
+	for _, dir := range []string{memDir, otherMem} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	realMem := filepath.Join(real, ".claude", "projects", filepath.Base(filepath.Dir(memDir)), "memory")
+	for _, path := range []string{
+		filepath.Join(memDir, "a.md"),
+		filepath.Join(realMem, "a.md"),
+		filepath.Join(otherMem, "a.md"),
+		filepath.Join(real, ".claude-work", "projects", "-x", "memory", "a.md"),
+		"~/.claude/projects/-y/memory/a.md",
+	} {
+		payload := hookEvent{ToolName: "Write", ToolInput: json.RawMessage(`{"file_path":"` + path + `"}`)}
+		if !touchesClaudeMemory(payload, projectPath) {
+			t.Errorf("a Write to %s through the symlinked home %s was not caught", path, home)
+		}
+	}
+	payload := hookEvent{ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"cat > a.md"}`), Cwd: realMem}
+	if !touchesClaudeMemory(payload, projectPath) {
+		t.Errorf("a shell write from the resolved memory dir %s was not caught", realMem)
 	}
 }

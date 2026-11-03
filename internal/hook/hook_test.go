@@ -108,10 +108,12 @@ func TestClaudeMemoryDirFollowsTheConfigDirOfAnAccount(t *testing.T) {
 	}
 }
 
+// The home is under the temp dir, so once the memory gate is signed the temp-write gate still denies the same Write; this test checks only the memory gate. CLAUDE_CONFIG_DIR is cleared so the memory dir does not come from the shell running the tests.
 func TestMemoryFeedbackDenyUntilSigned(t *testing.T) {
 	store := openHookTestStore(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	projectPath := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(projectPath, "biblio"), 0o755); err != nil {
 		t.Fatal(err)
@@ -141,9 +143,12 @@ func TestMemoryFeedbackDenyUntilSigned(t *testing.T) {
 		t.Fatalf("Sign: %v", err)
 	}
 
+	if deny := memoryFeedbackDeny(store, payload, projectPath); deny != "" {
+		t.Errorf("memoryFeedbackDeny after signing = %q, want none", deny)
+	}
 	result = hookPreToolUse(store, payload, projectPath)
-	if result.PermissionDecision == "deny" {
-		t.Errorf("PermissionDecision = %q, want no deny after signing", result.PermissionDecision)
+	if strings.Contains(result.PermissionDecisionReason, "i-write-memory") {
+		t.Errorf("PermissionDecisionReason after signing = %q, want no memory-gate deny", result.PermissionDecisionReason)
 	}
 }
 

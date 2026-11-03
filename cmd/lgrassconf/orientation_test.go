@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -87,6 +88,8 @@ func TestMatchingOrientationIsNotRewritten(t *testing.T) {
 
 func TestWatcherRestoresEditedOrientation(t *testing.T) {
 	k, _ := fakeHome(t)
+	var passes atomic.Int64
+	k.passed = func() { passes.Add(1) }
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { k.run(ctx); close(done) }()
@@ -98,13 +101,19 @@ func TestWatcherRestoresEditedOrientation(t *testing.T) {
 		data, err := os.ReadFile(path)
 		return err == nil && string(data) == want
 	}
-	waitFor(t, "initial install", restored)
+	// Each change waits for a pass that ends after it, so the next change lands only once that pass has armed its watches.
+	restoredAfter := func(n int64) func() bool {
+		return func() bool { return passes.Load() > n && restored() }
+	}
+	waitFor(t, "initial install", restoredAfter(0))
+	n := passes.Load()
 	if err := os.WriteFile(path, []byte("edited"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "orientation restored after an edit", restored)
+	waitFor(t, "orientation restored after an edit", restoredAfter(n))
+	n = passes.Load()
 	if err := os.RemoveAll(k.orientationDir()); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "orientation restored after deletion", restored)
+	waitFor(t, "orientation restored after deletion", restoredAfter(n))
 }

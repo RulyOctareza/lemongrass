@@ -34,7 +34,7 @@ func TempWrite(in Input, roots []string) string {
 		project = resolveFully(in.ProjectRoot)
 	}
 	for _, p := range in.Paths {
-		if landsInTemp(ResolvePath(p, in.Cwd, in.Home), roots, project) {
+		if landsInTemp(ResolvePath(p, in.Cwd, ResolveDir(in.Home)), roots, project) {
 			return p
 		}
 	}

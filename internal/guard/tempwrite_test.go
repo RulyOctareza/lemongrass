@@ -11,7 +11,7 @@ import (
 
 func tempWriteSetup(t *testing.T) (project, tmp, home string) {
 	t.Helper()
-	base := t.TempDir()
+	base := resolvedTempDir(t)
 	project = filepath.Join(base, "proj")
 	tmp = filepath.Join(base, "tmp")
 	home = filepath.Join(base, "home")

@@ -81,10 +81,12 @@ var deviceRedirectPrefixes = []string{"/dev/sd", "/dev/nvme", "/dev/hd", "/dev/v
 type checker struct {
 	in     Input
 	policy Policy
+	// home is in.Home resolved by ResolveDir, for every ~ expansion and comparison with a resolved path; matchEnv keeps in.Home as given, since its checks compare raw arguments.
+	home string
 }
 
 func Decide(in Input, policy Policy) *Verdict {
-	c := checker{in: in, policy: policy}
+	c := checker{in: in, policy: policy, home: ResolveDir(in.Home)}
 	if in.Tool == "Bash" {
 		return c.bash()
 	}
@@ -191,18 +193,18 @@ func (c checker) redirectVerdicts(script shellScript) []Verdict {
 
 func (c checker) pathChecks(candidate string, guardApplies bool) []Verdict {
 	var found []Verdict
-	resolved := ResolvePath(candidate, c.in.Cwd, c.in.Home)
+	resolved := ResolvePath(candidate, c.in.Cwd, c.home)
 	if hasSecretComponent(candidate) || hasSecretComponent(resolved) {
 		found = append(found, secretVerdict())
 	}
-	if c.policy.blocksPath(resolved, c.in.Home) {
+	if c.policy.blocksPath(resolved, c.home) {
 		found = append(found, Verdict{RuleID: "custom-path", Description: "a path the user blocked", Mode: ModeDeny})
 	}
 	if guardApplies && mentionsGuard(candidate, resolved) {
 		found = append(found, guardVerdict())
 	}
 	if guardApplies {
-		found = append(found, writePathVerdicts(candidate, resolved, c.in.Home)...)
+		found = append(found, writePathVerdicts(candidate, resolved, c.home)...)
 	}
 	return found
 }
@@ -217,7 +219,7 @@ func (c checker) pathCandidates(arg string) []string {
 		if !strings.ContainsAny(candidate, "*?[") {
 			continue
 		}
-		if matches, err := filepath.Glob(ResolvePath(candidate, c.in.Cwd, c.in.Home)); err == nil {
+		if matches, err := filepath.Glob(ResolvePath(candidate, c.in.Cwd, c.home)); err == nil {
 			expanded = append(expanded, matches...)
 		}
 	}
@@ -375,8 +377,7 @@ func ResolvePath(p, cwd, home string) string {
 	case !filepath.IsAbs(p) && cwd != "":
 		p = filepath.Join(cwd, p)
 	}
-	if resolved, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
-		p = filepath.Join(resolved, filepath.Base(p))
-	}
-	return filepath.Clean(p)
+	// The parent is resolved through its deepest existing ancestor, as ResolveDir resolves the home, so a path into a directory that does not exist yet is spelled the same way as the home it is compared with. Cleaning first drops a trailing slash, which would otherwise make the path its own parent and double its last component.
+	p = filepath.Clean(p)
+	return filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p))
 }

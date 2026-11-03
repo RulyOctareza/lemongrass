@@ -47,7 +47,7 @@ func NeverExecute(command, cwd, home string) (string, bool) {
 	if err != nil {
 		return "it cannot be parsed, so lemongrass cannot check what it runs", true
 	}
-	n := neverExec{cwd: cwd, home: filepath.Clean(home)}
+	n := newNeverExec(cwd, home)
 	for _, call := range script.Calls {
 		if call.Dynamic {
 			return "its command name is computed at runtime, so lemongrass cannot check what it runs", true
@@ -60,7 +60,7 @@ func NeverExecute(command, cwd, home string) (string, bool) {
 		if !redirect.Write {
 			continue
 		}
-		target := ResolvePath(redirect.Path, cwd, home)
+		target := ResolvePath(redirect.Path, cwd, n.home)
 		for _, prefix := range neverExecDevicePrefixes {
 			if strings.HasPrefix(target, prefix) {
 				return "it writes to a raw disk device", true
@@ -76,6 +76,20 @@ func NeverExecute(command, cwd, home string) (string, bool) {
 type neverExec struct {
 	cwd  string
 	home string
+	// homeLink is the home spelled with only its parent resolved, as ResolvePath leaves a literal path to it. It differs from home only when the home itself is a symlink, and is protected like the home, since rm -r /home/u/ through such a link removes the real home.
+	homeLink string
+}
+
+func newNeverExec(cwd, home string) neverExec {
+	n := neverExec{cwd: cwd, home: ResolveDir(home)}
+	if n.home != "" {
+		n.homeLink = ResolvePath(home, "", "")
+	}
+	return n
+}
+
+func (n neverExec) isHome(resolved string) bool {
+	return n.home != "" && n.home != "." && (resolved == n.home || resolved == n.homeLink)
 }
 
 func (n neverExec) call(call shellCall) string {
@@ -167,7 +181,7 @@ func (n neverExec) recursivePermissions(call shellCall) string {
 	}
 	for _, target := range operands(call.Args) {
 		resolved := ResolvePath(target, n.cwd, n.home)
-		if systemTopDirs[resolved] || resolved == n.home || n.insideSSH(resolved) {
+		if systemTopDirs[resolved] || n.isHome(resolved) || n.insideSSH(resolved) {
 			return call.Name + " -R changes ownership or permissions across " + resolved
 		}
 	}
@@ -194,9 +208,9 @@ func (n neverExec) protectedTarget(target string, recursive bool) string {
 		return "targets /"
 	case systemTopDirs[resolved]:
 		return "targets the system directory " + resolved
-	case n.home != "" && n.home != "." && resolved == n.home:
+	case n.isHome(resolved):
 		return "targets the home directory"
-	case n.home != "" && n.home != "." && filepath.Dir(resolved) == n.home && strings.ContainsAny(filepath.Base(target), "*?["):
+	case n.isHome(filepath.Dir(resolved)) && strings.ContainsAny(filepath.Base(target), "*?["):
 		return "targets everything in the home directory"
 	case n.insideSSH(resolved):
 		return "targets ~/.ssh"

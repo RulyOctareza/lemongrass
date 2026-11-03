@@ -113,6 +113,9 @@ func (k *keeper) run(ctx context.Context) error {
 		}
 		k.addWatches(w)
 		relevant = k.relevant()
+		if k.passed != nil {
+			k.passed()
+		}
 	}
 	pass()
 

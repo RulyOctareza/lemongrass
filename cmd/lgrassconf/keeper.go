@@ -61,6 +61,8 @@ type keeper struct {
 	skills      []skillFile
 	orientation []skillFile
 	plugin      []skillFile
+	// passed, when set, runs after each watcher pass has reconciled and armed its watches. Tests use it to change a file only once the watch on it is armed, since a reconcile writes files before addWatches runs and kqueue arms a directory watch slowly; nil in production.
+	passed func()
 }
 
 func newKeeper(home string) *keeper {
