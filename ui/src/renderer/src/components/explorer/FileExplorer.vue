@@ -161,7 +161,7 @@ const entryRows = computed(() =>
 
 const gitMarks = computed(() =>
   view.value.columns.git
-    ? gitMarksByPath(gitStateOf(props.project.id).status?.files ?? [])
+    ? gitMarksByPath(gitStateOf(props.project.id).status?.files ?? [], state.value.gitPrefix)
     : new Map<string, GitFileGroup>()
 )
 

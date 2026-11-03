@@ -25,3 +25,17 @@ test('a folder carries the most pressing change below it', () => {
   assert.equal(marks.get('docs'), 'deleted')
   assert.equal(marks.get('other'), undefined)
 })
+
+test('a project inside a repository keeps only its own files, prefix stripped', () => {
+  const marks = gitMarksByPath(
+    [
+      { path: 'ui/src/a.ts', group: 'changed' },
+      { path: 'go/main.go', group: 'changed' }
+    ],
+    'ui/'
+  )
+  assert.equal(marks.get('src/a.ts'), 'changed')
+  assert.equal(marks.get('src'), 'changed')
+  assert.equal(marks.has('go/main.go'), false)
+  assert.equal(marks.size, 2)
+})

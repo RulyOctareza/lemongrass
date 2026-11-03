@@ -67,16 +67,21 @@ const GIT_RANK: GitFileGroup[] = [
   'deleted'
 ]
 
+// Git reports paths from the repository root; prefix is the project root's place in it ('' at
+// the repository root, else 'sub/dir/'), so files outside the project drop out.
 export function gitMarksByPath(
-  files: { path: string; group: GitFileGroup }[]
+  files: { path: string; group: GitFileGroup }[],
+  prefix = ''
 ): Map<string, GitFileGroup> {
   const marks = new Map<string, GitFileGroup>()
   const stronger = (a: GitFileGroup, b: GitFileGroup | undefined): boolean =>
     b === undefined || GIT_RANK.indexOf(a) < GIT_RANK.indexOf(b)
   for (const file of files) {
-    marks.set(file.path, file.group)
-    for (let at = file.path.lastIndexOf('/'); at > 0; at = file.path.lastIndexOf('/', at - 1)) {
-      const dir = file.path.slice(0, at)
+    if (!file.path.startsWith(prefix)) continue
+    const path = file.path.slice(prefix.length)
+    marks.set(path, file.group)
+    for (let at = path.lastIndexOf('/'); at > 0; at = path.lastIndexOf('/', at - 1)) {
+      const dir = path.slice(0, at)
       if (stronger(file.group, marks.get(dir))) marks.set(dir, file.group)
     }
   }

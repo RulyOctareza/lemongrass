@@ -12,6 +12,8 @@ export interface ExplorerState {
   expanded: Record<string, true>
   selected: string | null
   rootMissing: boolean
+  // The project root's path inside its git repository, for the git column.
+  gitPrefix: string
 }
 
 const states = reactive<Record<string, ExplorerState>>({})
@@ -29,7 +31,13 @@ const attached = new Set<string>()
 
 export function explorerOf(projectId: string): ExplorerState {
   if (!states[projectId]) {
-    states[projectId] = { listings: {}, expanded: {}, selected: null, rootMissing: false }
+    states[projectId] = {
+      listings: {},
+      expanded: {},
+      selected: null,
+      rootMissing: false,
+      gitPrefix: ''
+    }
   }
   return states[projectId]
 }
@@ -76,6 +84,7 @@ export async function attachExplorer(project: ProjectRef): Promise<void> {
   if (attached.has(project.path)) return
   attached.add(project.path)
   const state = explorerOf(project.id)
+  void window.api.projectFiles.gitPrefix(project.path).then((prefix) => (state.gitPrefix = prefix))
   const dirs = ['', ...Object.keys(state.expanded).filter((dir) => isVisible(state, dir))]
   await Promise.all(dirs.map((dir) => listDir(project, dir)))
 }
