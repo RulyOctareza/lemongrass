@@ -482,6 +482,14 @@ const windowControls = {
   toggleMaximize: (): void => ipcRenderer.send('window:toggle-maximize'),
   close: (): void => ipcRenderer.send('window:close'),
   isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:is-maximized'),
+  isFullScreen: (): Promise<boolean> => ipcRenderer.invoke('window:is-full-screen'),
+  setHeaderHeight: (dip: number): void => ipcRenderer.send('window:header-height', dip),
+  onFullScreenChange: (callback: (fullScreen: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, fullScreen: boolean): void =>
+      callback(fullScreen)
+    ipcRenderer.on('window:full-screen', listener)
+    return () => ipcRenderer.removeListener('window:full-screen', listener)
+  },
   onMaximizedChange: (callback: (maximized: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, maximized: boolean): void =>
       callback(maximized)

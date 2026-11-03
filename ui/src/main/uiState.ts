@@ -20,6 +20,15 @@ export interface UiState {
   lastProjectId?: string
   zoomFactor?: number
   startup?: 'lastProject' | 'projectSelector'
+  // Where the header draws minimize, maximize and close on Linux and Windows. macOS ignores it and shows its own traffic lights.
+  windowControls?: 'right' | 'left'
+  // The sidebar's Biblio or Files view, and the file explorer's view options.
+  sidebarView?: 'biblio' | 'files'
+  explorer?: {
+    columns: { size: boolean; modified: boolean; git: boolean }
+    density: 'compact' | 'comfortable'
+    hideIgnored: boolean
+  }
   window?: WindowState
   // The app version the "Optimizing lemongrass" layer last completed for. Main alone writes it, through deps:setupDone.
   setupVersion?: string

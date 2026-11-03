@@ -422,6 +422,10 @@ interface Api {
     toggleMaximize: () => void
     close: () => void
     isMaximized: () => Promise<boolean>
+    isFullScreen: () => Promise<boolean>
+    // The header's height in device pixels, so main can center the macOS traffic lights on it.
+    setHeaderHeight: (dip: number) => void
+    onFullScreenChange: (callback: (fullScreen: boolean) => void) => () => void
     onMaximizedChange: (callback: (maximized: boolean) => void) => () => void
     onClosing: (callback: () => void) => () => void
   }

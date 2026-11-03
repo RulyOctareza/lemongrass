@@ -31,6 +31,7 @@ import {
   savedZoomFactor
 } from './windowState'
 import { registerBiblioHandlers, registerBiblioImageScheme, closeBiblioWatchers } from './biblio'
+import { registerProjectFileHandlers, closeProjectFileWatchers } from './projectFiles'
 import { registerGitHandlers } from './git'
 import { registerReviewHandlers } from './review'
 import { registerConflictAgentHandlers } from './conflictAgent'
@@ -39,7 +40,11 @@ import { registerDeviceHandlers, stopAllDevices } from './device'
 import { registerVaultHandlers } from './vault'
 import { registerResterClientHandlers } from './resterClient'
 import { registerNodeHandlers } from './node'
-import { registerWindowControlHandlers, wireMaximizeEvents } from './windowControls'
+import {
+  registerWindowControlHandlers,
+  windowChromeOptions,
+  wireMaximizeEvents
+} from './windowControls'
 import { installLgrass, installLgrassd, installLgrassconf } from './lgrassInstall'
 import { ensureDaemonsRunning, killDaemons } from './daemons'
 import { migrateStore } from './storeMigrate'
@@ -52,16 +57,17 @@ let mainWindow: BrowserWindow | undefined
 function createWindow(): void {
   let closing = false
   const bounds = savedWindowBounds()
+  const zoomFactor = savedZoomFactor(bounds)
   const win = new BrowserWindow({
     ...bounds,
     show: false,
-    frame: false,
+    ...windowChromeOptions(zoomFactor),
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      zoomFactor: savedZoomFactor(bounds)
+      zoomFactor
     }
   })
   mainWindow = win
@@ -137,6 +143,7 @@ app.whenReady().then(async () => {
   registerUiStateHandlers(() => mainWindow)
   registerTabSessionHandlers(lgrassdPath)
   registerBiblioHandlers(() => mainWindow?.webContents)
+  registerProjectFileHandlers(() => mainWindow?.webContents)
   registerGitHandlers(lgrassdPath)
   registerReviewHandlers()
   registerDeviceHandlers(() => mainWindow?.webContents)
@@ -168,6 +175,7 @@ app.on('window-all-closed', () => {
   stopAllDevices()
   killDaemons()
   closeBiblioWatchers()
+  closeProjectFileWatchers()
   if (process.platform !== 'darwin') {
     app.quit()
   }

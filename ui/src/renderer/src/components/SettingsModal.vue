@@ -18,6 +18,8 @@ import UpdatesSection from './updates/UpdatesSection.vue'
 import DepsSection from './deps/DepsSection.vue'
 import CreditsSection from './credits/CreditsSection.vue'
 import GeneralSection from './general/GeneralSection.vue'
+import AppearanceSection from './appearance/AppearanceSection.vue'
+import { isMac } from '../windowControls'
 import UsageMeters from './UsageMeters.vue'
 import AppCheckbox from './AppCheckbox.vue'
 import { claudeUsage, refreshUsage, usageStore } from '../usage'
@@ -36,7 +38,8 @@ const emit = defineEmits<{
   close: []
 }>()
 
-type Section = 'general' | 'claude' | 'codex' | 'safety' | 'updates' | 'dependencies' | 'credits'
+type Section =
+  'general' | 'appearance' | 'claude' | 'codex' | 'safety' | 'updates' | 'dependencies' | 'credits'
 
 const section = ref<Section>(props.initialSection ?? 'general')
 
@@ -106,6 +109,16 @@ async function onRemove(name: string): Promise<void> {
         >
           General
         </button>
+        <!-- Window controls is its only choice, and macOS always shows the native lights. -->
+        <button
+          v-if="!isMac"
+          type="button"
+          class="settings-nav-item"
+          :class="{ selected: section === 'appearance' }"
+          @click="section = 'appearance'"
+        >
+          Appearance
+        </button>
         <button type="button" class="settings-nav-item" @click="section = 'claude'">
           Accounts
         </button>
@@ -162,6 +175,11 @@ async function onRemove(name: string): Promise<void> {
       <section v-if="section === 'general'" class="settings-section">
         <h4 class="settings-title">General</h4>
         <GeneralSection />
+      </section>
+
+      <section v-else-if="section === 'appearance'" class="settings-section">
+        <h4 class="settings-title">Appearance</h4>
+        <AppearanceSection />
       </section>
 
       <section v-else-if="section === 'safety'" class="settings-section settings-section--fixed">

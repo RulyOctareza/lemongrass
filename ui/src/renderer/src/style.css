@@ -108,6 +108,13 @@
   --color-success-muted: rgba(74, 222, 128, 0.14);
   --color-error-muted:   rgba(248, 113, 113, 0.14);
 
+  /* Window controls, left macOS style (Linux and Windows) */
+  --color-window-close:    #FF5F57;
+  --color-window-minimize: #FEBC2E;
+  --color-window-maximize: #28C840;
+  --color-window-glyph:    rgba(0, 0, 0, 0.55);
+  --color-window-inactive: #4A4A4A;
+
   /* Shadows */
   --shadow-sm:         0 1px 2px rgba(0,0,0,0.4);
   --shadow-md:         0 4px 12px rgba(0,0,0,0.5);
