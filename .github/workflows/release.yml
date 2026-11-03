@@ -44,16 +44,7 @@ jobs:
             fi
             npm --prefix ui ci
             make dist-linux
-            rc=0
-            npm --prefix ui run build:rpm -- --x64 --publish never || rc=$?
-            # TEMPORARY diagnostic for the rpmbuild exit 127: removed once a run proves the cause.
-            lib="$(ls -d /tmp/.cache/electron-builder/fpm@*/fpm-*/ruby-*-portable/lib 2>/dev/null | head -n1 || true)"
-            echo "diagnostic: rpmbuild with LD_LIBRARY_PATH=$lib"
-            LD_LIBRARY_PATH="$lib" /usr/bin/rpmbuild --version || echo "diagnostic: exit $?"
-            echo "diagnostic: rpmbuild without it"
-            /usr/bin/rpmbuild --version || echo "diagnostic: exit $?"
-            echo "diagnostic: rpmbuild on PATH is $(command -v rpmbuild)"
-            [ "$rc" -eq 0 ]
+            npm --prefix ui run build:rpm -- --x64 --publish never
             scripts/check-glibc-floor.sh ui/dist/linux-unpacked
           '
 
