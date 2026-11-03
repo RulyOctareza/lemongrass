@@ -23,6 +23,13 @@ RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-l
     && tar -xzf /tmp/go.tar.gz -C /usr/local \
     && rm /tmp/node.tar.xz /tmp/go.tar.gz
 
+# electron-builder's bundled fpm runs on a portable Ruby whose launcher exports LD_LIBRARY_PATH to its own
+# libcrypto.so.1.1, libssl.so.1.1 and libz.so.1, and fpm starts rpmbuild with that environment. This image's rpmbuild
+# links the system OpenSSL 1.1 and zlib, so it would load the portable copies instead and fail to start (exit 127).
+# The wrapper sits ahead of /usr/bin on PATH and starts the real rpmbuild without that variable.
+RUN printf '#!/bin/sh\nunset LD_LIBRARY_PATH\nexec /usr/bin/rpmbuild "$@"\n' > /usr/local/bin/rpmbuild \
+    && chmod 755 /usr/local/bin/rpmbuild
+
 # The checkout is mounted at /src, and git refuses a repository owned by another user than the one running it,
 # which is the case whenever the container runs as root over a checkout the host user owns.
 RUN git config --system --add safe.directory /src \
