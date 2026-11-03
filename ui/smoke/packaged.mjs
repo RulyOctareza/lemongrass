@@ -25,7 +25,7 @@ import * as path from 'node:path'
 const STEP_TIMEOUT = 60_000
 // Above the sum of every bounded step, so it only fires on a hang nothing else catches. The workflow step's own
 // timeout sits above this one.
-const RUN_TIMEOUT = 10 * 60_000
+const RUN_TIMEOUT = 12 * 60_000
 
 function executableFor(target) {
   const resolved = path.resolve(target)
@@ -204,6 +204,28 @@ async function main() {
 
     log('waiting for the header')
     await page.locator('.header-bar').waitFor({ timeout: STEP_TIMEOUT })
+
+    // A fresh install opens the dependency setup layer (deps/SetupLayer.vue) over everything once its check has run.
+    // It is screenshotted, since what it says on macOS is worth seeing, then passed with Continue like a user would.
+    log('waiting for the first-start setup layer')
+    const setup = page.locator('.modal-overlay .setup')
+    const setupShown = await setup
+      .waitFor({ timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (setupShown) {
+      await page.waitForTimeout(2_000)
+      await page
+        .screenshot({ path: path.join(outDir, 'setup.png'), timeout: 15_000 })
+        .catch((err) => log(`no setup screenshot: ${err.message}`))
+      log('setup layer shown, pressing Continue')
+      await page
+        .getByRole('button', { name: 'Continue', exact: true })
+        .click({ timeout: STEP_TIMEOUT })
+      await setup.waitFor({ state: 'detached', timeout: STEP_TIMEOUT })
+    } else {
+      log('no setup layer')
+    }
 
     log('opening the shell picker')
     await page.getByRole('button', { name: '+ New shell' }).click({ timeout: STEP_TIMEOUT })
