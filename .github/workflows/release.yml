@@ -1,6 +1,6 @@
-# Builds the x86_64 rpm for a pushed v<version> tag, versioned from the tag, and publishes it with its SHA256SUMS as
-# a GitHub Release. A manual run (Run workflow) builds and checks the rpm from the chosen branch and attaches it to the
-# run as an artifact, publishing nothing.
+# Builds the x86_64 rpm and the arm64 and x64 macOS dmgs for a pushed v<version> tag, versioned from the tag, and
+# publishes them with one SHA256SUMS as a GitHub Release. A manual run (Run workflow) builds and checks every package
+# from the chosen branch and attaches them to the run as an artifact, publishing nothing.
 # The in-app updater reads the latest release and verifies the rpm against SHA256SUMS, so both asset names are fixed.
 name: Release
 
@@ -23,8 +23,9 @@ jobs:
 
       # The package is built inside this image, never on the runner's own OS, because the image's glibc is the oldest
       # glibc the rpm starts on (build/rpm/Containerfile). A runner image upgrade then changes nothing in the package.
+      # docker looks only for a file named Dockerfile, so the Containerfile is passed with -f.
       - name: Build the package image
-        run: docker build -t lemongrass-rpm-build --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)" build/rpm
+        run: docker build -f build/rpm/Containerfile -t lemongrass-rpm-build --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)" build/rpm
 
       # The tag is the only source of the version. main keeps 0.0.0-dev in ui/package.json, and a tag run writes the
       # tag's version into the CI checkout only, where the Makefile and electron-builder both read it. npm rejects a
@@ -47,18 +48,99 @@ jobs:
             scripts/check-glibc-floor.sh ui/dist/linux-unpacked
           '
 
-      - name: Write SHA256SUMS
-        working-directory: ui/dist
-        run: sha256sum lemongrass-*.x86_64.rpm > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: ui/dist/lemongrass-*.x86_64.rpm
+          if-no-files-found: error
 
-      - name: Attach rpm to the run
+  mac:
+    name: mac
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # The same Node as build/rpm/Containerfile, so both packages are built by one toolchain.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.22.2
+
+      # The version comes from the tag exactly as in the rpm job.
+      # There is no signing identity on CI, and with none electron-builder skips signing, which leaves an arm64 app
+      # macOS reports as damaged. identity=- signs ad hoc instead, and hardened runtime is off because an ad-hoc
+      # signature with it fails library validation at launch. The dmg is still not notarized, so Gatekeeper asks the
+      # user to clear quarantine once.
+      # npm ci builds node-pty's build/Release/pty.node for the runner's arch only, and node-pty loads that before its
+      # prebuilds, so it is rebuilt for each arch before that arch is packaged.
+      - name: Build dmgs
+        env:
+          STAMP: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          set -eu
+          if [ -n "$STAMP" ]; then
+            npm --prefix ui version "${STAMP#v}" --no-git-tag-version --allow-same-version
+          fi
+          npm --prefix ui ci
+          make dist-darwin
+          npm --prefix ui run build
+          cd ui
+          for arch in arm64 x64; do
+            npx electron-builder install-app-deps --arch "$arch"
+            npx electron-builder --mac dmg --"$arch" --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false
+          done
+
+      # Fails the job when an app carries a pty.node or an lgrass binary built for the other arch, which would only
+      # surface as a broken terminal on the user's Mac.
+      - name: Check each app's arch
+        working-directory: ui/dist
+        run: |
+          set -eu
+          for pair in mac-arm64:arm64 mac:x86_64; do
+            app="${pair%%:*}/Lemongrass.app"
+            want="${pair##*:}"
+            for bin in "$app/Contents/Resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node" \
+                       "$app/Contents/MacOS/Lemongrass"; do
+              got="$(lipo -archs "$bin")"
+              echo "$bin: $got"
+              [ "$got" = "$want" ] || { echo "expected $want" >&2; exit 1; }
+            done
+            codesign --verify --deep --strict "$app"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: ui/dist/lemongrass-*.dmg
+          if-no-files-found: error
+
+  # One job writes SHA256SUMS over every package, so the rpm and mac jobs never race to upload the same asset.
+  release:
+    name: release
+    needs: [rpm, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Write SHA256SUMS
+        working-directory: release
+        run: sha256sum lemongrass-* > SHA256SUMS
+
+      - name: Attach packages to the run
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: lemongrass-rpm
-          path: |
-            ui/dist/lemongrass-*.x86_64.rpm
-            ui/dist/SHA256SUMS
+          name: lemongrass-release
+          path: release/*
           if-no-files-found: error
 
       # Uploads into the tag's release when one already exists and creates it otherwise, so a re-run or a release
@@ -68,8 +150,6 @@ jobs:
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            ui/dist/lemongrass-*.x86_64.rpm
-            ui/dist/SHA256SUMS
+          files: release/*
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
