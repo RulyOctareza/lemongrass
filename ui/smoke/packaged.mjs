@@ -23,6 +23,9 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 
 const STEP_TIMEOUT = 60_000
+// Above the sum of every bounded step, so it only fires on a hang nothing else catches. The workflow step's own
+// timeout sits above this one.
+const RUN_TIMEOUT = 10 * 60_000
 
 function executableFor(target) {
   const resolved = path.resolve(target)
@@ -116,12 +119,41 @@ function killLeftovers(home) {
   for (const p of processTable()) {
     if (p.pid === process.pid || !p.command.includes(home)) continue
     try {
-      process.kill(p.pid, 'SIGTERM')
-      console.log(`smoke: stopped leftover ${p.pid} ${p.command}`)
+      process.kill(p.pid, 'SIGKILL')
+      log(`stopped leftover ${p.pid} ${p.command}`)
     } catch {
       // already gone
     }
   }
+}
+
+// Kills the app and everything under it, deepest first, so no shell or helper outlives the run.
+function killTree(rootPid) {
+  const table = processTable()
+  const order = [rootPid]
+  for (let i = 0; i < order.length; i++) {
+    for (const p of table) if (p.ppid === order[i] && !order.includes(p.pid)) order.push(p.pid)
+  }
+  for (const pid of order.reverse()) {
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {
+      // already gone
+    }
+  }
+}
+
+function log(message) {
+  console.log(`${new Date().toISOString()} smoke: ${message}`)
+}
+
+// Settles within ms whatever the promise does, so no step can hold the run.
+function bounded(promise, ms, label) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} did not finish within ${ms / 1000}s`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
 async function main() {
@@ -137,10 +169,20 @@ async function main() {
   const home = seedHome()
   const pageErrors = []
   let app = null
+  let appPid = null
   let page = null
   let failed = false
 
+  // The last resort when something below hangs past every bound: kill everything the run started and fail.
+  const watchdog = setTimeout(() => {
+    log(`FAILED: the whole run passed ${RUN_TIMEOUT / 1000}s, killing the app`)
+    if (appPid) killTree(appPid)
+    killLeftovers(home)
+    process.exit(1)
+  }, RUN_TIMEOUT)
+
   try {
+    log('launching the app')
     app = await electron.launch({
       executablePath: executableFor(target),
       // A linux-unpacked chrome-sandbox is not setuid root, so Electron refuses to start with the sandbox on.
@@ -148,9 +190,11 @@ async function main() {
       env: appEnv(home),
       timeout: STEP_TIMEOUT
     })
+    appPid = app.process().pid
     app.process().stdout?.pipe(mainLog)
     app.process().stderr?.pipe(mainLog)
 
+    log(`waiting for the first window (app pid ${appPid})`)
     page = await app.firstWindow({ timeout: STEP_TIMEOUT })
     page.on('console', (msg) => pageLog.write(`[${msg.type()}] ${msg.text()}\n`))
     page.on('pageerror', (err) => {
@@ -158,49 +202,66 @@ async function main() {
       pageLog.write(`[pageerror] ${err.stack ?? err.message}\n`)
     })
 
+    log('waiting for the header')
     await page.locator('.header-bar').waitFor({ timeout: STEP_TIMEOUT })
-    console.log('smoke: header shown')
 
+    log('opening the shell picker')
     await page.getByRole('button', { name: '+ New shell' }).click({ timeout: STEP_TIMEOUT })
+    log('picking Shell')
     await page
       .locator('.agent-option')
       .filter({ has: page.locator('.agent-label', { hasText: /^Shell$/ }) })
       .click({ timeout: STEP_TIMEOUT })
     await page.getByRole('button', { name: 'Open', exact: true }).click({ timeout: STEP_TIMEOUT })
+    log('waiting for the terminal')
     await page.locator('.terminal-pane .xterm').waitFor({ timeout: STEP_TIMEOUT })
     // Gives the shell time to print its prompt before the screenshot, and a failed spawn time to show.
     await page.waitForTimeout(3_000)
-    if ((await page.locator('.restore-failure').count()) > 0)
+    if (
+      (await bounded(page.locator('.restore-failure').count(), 10_000, 'counting start failures')) >
+      0
+    )
       throw new Error('the Shell tab shows a start failure')
-    console.log('smoke: terminal tab open')
     // The Shell tab runs zsh, which macOS always has. Elsewhere a missing zsh only skips this check.
     if (hasZsh()) {
-      const shell = await waitForShellUnder(app.process().pid)
+      log('looking for the zsh process under the app')
+      const shell = await waitForShellUnder(appPid)
       if (!shell) throw new Error('no zsh process started under the app')
-      console.log(`smoke: shell running, pid ${shell.pid}`)
+      log(`shell running, pid ${shell.pid}`)
     } else {
-      console.log('smoke: zsh not installed here, shell process check skipped')
+      log('zsh not installed here, shell process check skipped')
     }
 
     if (pageErrors.length > 0) throw new Error(`renderer errors: ${pageErrors.join(' | ')}`)
   } catch (err) {
     failed = true
-    console.error(`smoke: FAILED: ${err.message}`)
+    log(`FAILED: ${err.message}`)
   } finally {
     if (page) {
       const shot = path.join(outDir, failed ? 'smoke-failed.png' : 'smoke.png')
-      await page.screenshot({ path: shot }).catch(() => {})
-      console.log(`smoke: screenshot ${shot}`)
+      log('taking the screenshot')
+      await page
+        .screenshot({ path: shot, timeout: 15_000 })
+        .catch((err) => log(`no screenshot: ${err.message}`))
+      log(`screenshot ${shot}`)
     }
-    if (app) await app.close().catch(() => {})
+    // On macOS closing the last window leaves the app running, and its quit path waits on its shells, so a close can
+    // hang. It gets a few seconds, then the app's whole process tree is killed.
+    if (app) {
+      log('closing the app')
+      await bounded(app.close(), 10_000, 'closing the app').catch((err) => log(err.message))
+    }
+    if (appPid) killTree(appPid)
     killLeftovers(home)
     // The temp home is left in place for a look by hand, and its daemon logs go out with the screenshot.
     const logs = path.join(home, '.lemongrass', 'logs')
     if (fs.existsSync(logs)) fs.cpSync(logs, path.join(outDir, 'lgrassd-logs'), { recursive: true })
-    console.log(`smoke: temp home ${home}`)
+    log(`temp home ${home}`)
     mainLog.end()
     pageLog.end()
   }
+  clearTimeout(watchdog)
+  log(failed ? 'failed' : 'passed')
   process.exit(failed ? 1 : 0)
 }
 

@@ -95,7 +95,10 @@ jobs:
           done
           ls -l lemongrass-*.dmg
 
+      # The script bounds every step and kills the app after 10 minutes; this timeout only backs that up, so the
+      # upload below still runs after a hang.
       - name: Smoke run
+        timeout-minutes: 12
         run: node ui/smoke/packaged.mjs ui/dist/mac-arm64/Lemongrass.app ui/smoke/out
 
       - name: Keep the smoke screenshot and logs
