@@ -2,12 +2,16 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import AppModal from '../AppModal.vue'
 import AppButton from '../AppButton.vue'
+import MarkedText from '../MarkedText.vue'
 import DepRow from './DepRow.vue'
 import { depsStore } from '../../deps'
-import { listText } from '../../depsView'
+import type { NamePart } from '../../tabNames'
+
+// A check that finishes sooner than this never shows the spinner, so a cached check does not flash it.
+const SPINNER_DELAY_MS = 300
 
 // Closing without Continue hides the layer for this run only; setupVersion stays unsaved, so it
 // shows again on the next startup.
@@ -17,12 +21,28 @@ const state = computed(() => depsStore.state)
 const open = computed(() => !hidden.value && !!state.value?.setupDue)
 const required = computed(() => state.value?.report?.deps.filter((dep) => dep.required) ?? [])
 const pending = computed(() => required.value.filter((dep) => dep.status !== 'ok'))
-const optionalMissing = computed(
-  () =>
-    state.value?.report?.deps
-      .filter((dep) => !dep.required && dep.status !== 'ok')
-      .map((dep) => dep.name) ?? []
+const waiting = computed(() => state.value?.phase === 'checking' && !state.value.report)
+
+const spinnerShown = ref(false)
+let spinnerTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  waiting,
+  (now) => {
+    clearTimeout(spinnerTimer)
+    spinnerShown.value = false
+    if (now) spinnerTimer = setTimeout(() => (spinnerShown.value = true), SPINNER_DELAY_MS)
+  },
+  { immediate: true }
 )
+onBeforeUnmount(() => clearTimeout(spinnerTimer))
+
+const manageParts: NamePart[] = [
+  { text: 'You can manage other dependencies in ' },
+  { text: 'Settings', mark: true },
+  { text: ', under ' },
+  { text: 'Dependencies', mark: true },
+  { text: '.' }
+]
 
 // The install button carries the weight while a required dependency is pending, so Continue steps down.
 const continueVariant = computed(() =>
@@ -40,14 +60,16 @@ async function finish(): Promise<void> {
     v-if="open && state"
     scope="app"
     size="md"
-    title="Optimizing lemongrass"
+    title="Dependency Check"
     @close="hidden = true"
   >
     <div class="setup">
-      <div v-if="state.phase === 'checking' && !state.report" class="setup-checking">
-        <span class="setup-spinner" />
-        <p class="settings-text">Checking the tools lemongrass uses from your system.</p>
-      </div>
+      <template v-if="waiting">
+        <div v-if="spinnerShown" class="setup-checking">
+          <span class="setup-spinner" />
+          <p class="settings-text">Optimizing Lemongrass</p>
+        </div>
+      </template>
 
       <template v-else-if="state.phase === 'failed' && !state.report">
         <p class="settings-error">{{ state.message }}</p>
@@ -65,11 +87,7 @@ async function finish(): Promise<void> {
           <DepRow v-for="dep in required" :key="dep.name" :dep="dep" :state="state" />
         </ul>
         <p v-if="state.unsupported" class="settings-text">{{ state.unsupported }}</p>
-        <p v-if="optionalMissing.length" class="settings-text">
-          {{ listText(optionalMissing) }} {{ optionalMissing.length === 1 ? 'is' : 'are' }}
-          optional. Settings, under Dependencies, installs
-          {{ optionalMissing.length === 1 ? 'it' : 'them' }}.
-        </p>
+        <p class="settings-text"><MarkedText :parts="manageParts" /></p>
       </template>
     </div>
 

@@ -26,6 +26,7 @@ import { claudeUsage, refreshUsage, usageStore } from '../usage'
 import type { Project, StatusLineChainState } from '../../../preload/types'
 import AppInput from './AppInput.vue'
 import AppEmptyState from './AppEmptyState.vue'
+import SettingsIcon from './SettingsIcon.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -107,6 +108,7 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'general' }"
           @click="section = 'general'"
         >
+          <SettingsIcon name="general" />
           General
         </button>
         <!-- Window controls is its only choice, and macOS always shows the native lights. -->
@@ -117,9 +119,11 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'appearance' }"
           @click="section = 'appearance'"
         >
+          <SettingsIcon name="appearance" />
           Appearance
         </button>
         <button type="button" class="settings-nav-item" @click="section = 'claude'">
+          <SettingsIcon name="accounts" />
           Accounts
         </button>
         <button
@@ -128,6 +132,7 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'claude' }"
           @click="section = 'claude'"
         >
+          <SettingsIcon name="claude" />
           Claude
         </button>
         <button
@@ -136,6 +141,7 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'codex' }"
           @click="section = 'codex'"
         >
+          <SettingsIcon name="codex" />
           Codex
         </button>
         <button
@@ -144,6 +150,7 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'safety' }"
           @click="section = 'safety'"
         >
+          <SettingsIcon name="safety" />
           Safety
         </button>
         <button
@@ -152,6 +159,7 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'updates' }"
           @click="section = 'updates'"
         >
+          <SettingsIcon name="updates" />
           Updates
         </button>
         <button
@@ -160,6 +168,7 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'dependencies' }"
           @click="section = 'dependencies'"
         >
+          <SettingsIcon name="dependencies" />
           Dependencies
         </button>
         <button
@@ -168,6 +177,7 @@ async function onRemove(name: string): Promise<void> {
           :class="{ selected: section === 'credits' }"
           @click="section = 'credits'"
         >
+          <SettingsIcon name="credits" />
           Credits
         </button>
       </aside>
