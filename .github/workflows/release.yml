@@ -23,8 +23,9 @@ jobs:
 
       # The package is built inside this image, never on the runner's own OS, because the image's glibc is the oldest
       # glibc the rpm starts on (build/rpm/Containerfile). A runner image upgrade then changes nothing in the package.
+      # docker looks only for a file named Dockerfile, so the Containerfile is passed with -f.
       - name: Build the package image
-        run: docker build -t lemongrass-rpm-build --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)" build/rpm
+        run: docker build -f build/rpm/Containerfile -t lemongrass-rpm-build --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)" build/rpm
 
       # The tag is the only source of the version. main keeps 0.0.0-dev in ui/package.json, and a tag run writes the
       # tag's version into the CI checkout only, where the Makefile and electron-builder both read it. npm rejects a
