@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -193,33 +194,62 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timed out waiting for: %s", what)
 }
 
-func TestWatcherHealsDriftWithoutAnyOtherProcess(t *testing.T) {
-	k, lgrass := fakeHome(t)
+// watchedKeeper runs a keeper's watcher for one test and counts its started and finished passes.
+type watchedKeeper struct {
+	started, finished atomic.Int64
+}
+
+// startWatcher runs k's watcher until the test ends.
+func startWatcher(t *testing.T, k *keeper) *watchedKeeper {
+	t.Helper()
+	w := &watchedKeeper{}
+	k.onPass = func(finished bool) {
+		if finished {
+			w.finished.Add(1)
+		} else {
+			w.started.Add(1)
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { k.run(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+	t.Cleanup(func() { cancel(); <-done })
+	return w
+}
+
+// waitFor waits until cond holds with at least one pass done and none in flight. A pass writes files before it arms its watches, so a test that changed a file as soon as the file looked right could change it before the watch on it was armed, which kqueue does slowly, and the change would go unseen until the safety tick.
+func (w *watchedKeeper) waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	waitFor(t, what, func() bool {
+		finished := w.finished.Load()
+		return finished > 0 && cond() && w.started.Load() == finished
+	})
+}
+
+func TestWatcherHealsDriftWithoutAnyOtherProcess(t *testing.T) {
+	k, lgrass := fakeHome(t)
+	w := startWatcher(t, k)
 
 	healthy := func() bool {
 		data, err := os.ReadFile(k.claudeSettingsPath())
 		return err == nil && strings.Contains(string(data), lgrass+" hook PreToolUse") && !strings.Contains(string(data), "Write|Edit")
 	}
-	waitFor(t, "initial registration", healthy)
+	w.waitFor(t, "initial registration", healthy)
 
 	drifted := `{"hooks":{"PreToolUse":[{"matcher":"Write|Edit","hooks":[{"type":"command","command":"` + lgrass + ` hook PreToolUse"}]}]}}`
 	if err := agentconf.WriteAtomic(k.claudeSettingsPath(), []byte(drifted), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "matcher healed after drift", healthy)
+	w.waitFor(t, "matcher healed after drift", healthy)
 
 	if err := os.RemoveAll(filepath.Dir(leaderSkillPath(k, codex))); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "skill restored after deletion", func() bool {
+	w.waitFor(t, "skill restored after deletion", func() bool {
 		data, err := os.ReadFile(leaderSkillPath(k, codex))
 		return err == nil && string(data) == embeddedLeaderSkill(t, codex)
 	})
-	waitFor(t, "Codex hooks registered", func() bool {
+	w.waitFor(t, "Codex hooks registered", func() bool {
 		data, err := os.ReadFile(k.codexHooksPath())
 		return err == nil && strings.Contains(string(data), "LGRASS_HOOK_VENDOR=codex "+lgrass+" hook PreToolUse")
 	})
@@ -228,23 +258,20 @@ func TestWatcherHealsDriftWithoutAnyOtherProcess(t *testing.T) {
 func TestWatcherRegistersHooksWhenLgrassAppears(t *testing.T) {
 	k, lgrass := fakeHome(t)
 	os.Remove(lgrass)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { k.run(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+	w := startWatcher(t, k)
 
-	waitFor(t, "skill installed", func() bool { _, err := os.Stat(leaderSkillPath(k, codex)); return err == nil })
+	w.waitFor(t, "skill installed", func() bool { _, err := os.Stat(leaderSkillPath(k, codex)); return err == nil })
 	if _, err := os.Stat(k.claudeSettingsPath()); err == nil {
 		t.Fatal("settings written before the binary existed")
 	}
 	if err := os.WriteFile(lgrass, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "hooks registered after binary appeared", func() bool {
+	w.waitFor(t, "hooks registered after binary appeared", func() bool {
 		data, err := os.ReadFile(k.claudeSettingsPath())
 		return err == nil && strings.Contains(string(data), lgrass+" hook SessionStart")
 	})
-	waitFor(t, "Codex hooks registered after binary appeared", func() bool {
+	w.waitFor(t, "Codex hooks registered after binary appeared", func() bool {
 		data, err := os.ReadFile(k.codexHooksPath())
 		return err == nil && strings.Contains(string(data), "LGRASS_HOOK_VENDOR=codex "+lgrass+" hook SessionStart")
 	})

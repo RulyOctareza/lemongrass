@@ -108,13 +108,16 @@ func (k *keeper) run(ctx context.Context) error {
 
 	var relevant map[string]bool
 	pass := func() {
+		if k.onPass != nil {
+			k.onPass(false)
+		}
 		if err := k.reconcile(); err != nil {
 			log.Printf("reconcile: %v", err)
 		}
 		k.addWatches(w)
 		relevant = k.relevant()
-		if k.passed != nil {
-			k.passed()
+		if k.onPass != nil {
+			k.onPass(true)
 		}
 	}
 	pass()

@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
@@ -14,12 +13,9 @@ import (
 
 func TestWatcherHealsAccountSettingsAndPicksUpANewAccount(t *testing.T) {
 	k, lgrass := fakeHome(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { k.run(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+	w := startWatcher(t, k)
 
-	waitFor(t, "primary registered", func() bool {
+	w.waitFor(t, "primary registered", func() bool {
 		data, err := os.ReadFile(k.claudeSettingsPath())
 		return err == nil && strings.Contains(string(data), lgrass+" hook Stop")
 	})
@@ -30,11 +26,11 @@ func TestWatcherHealsAccountSettingsAndPicksUpANewAccount(t *testing.T) {
 		data, err := os.ReadFile(k.accounts().SettingsPath("work"))
 		return err == nil && strings.Contains(string(data), lgrass+" hook PreToolUse") && !strings.Contains(string(data), "Write|Edit")
 	}
-	waitFor(t, "account registered", hooked)
+	w.waitFor(t, "account registered", hooked)
 
 	drifted := `{"hooks":{"PreToolUse":[{"matcher":"Write|Edit","hooks":[{"type":"command","command":"` + lgrass + ` hook PreToolUse"}]}]}}`
 	if err := agentconf.WriteAtomic(k.accounts().SettingsPath("work"), []byte(drifted), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "account matcher healed after drift", hooked)
+	w.waitFor(t, "account matcher healed after drift", hooked)
 }
