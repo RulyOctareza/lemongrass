@@ -31,6 +31,12 @@ import type {
   UiState,
   BiblioTree,
   BiblioFileResult,
+  ProjectFileResult,
+  ProjectFilesChange,
+  ProjectListResult,
+  ProjectOpResult,
+  ProjectOpsResult,
+  ProjectSearchResult,
   ScratchpadImageResult,
   ImageFileResult,
   GitStatus,
@@ -225,6 +231,40 @@ const biblio = {
       callback(projectPath)
     ipcRenderer.on('biblio:changed', listener)
     return () => ipcRenderer.removeListener('biblio:changed', listener)
+  }
+}
+
+// Project files for the sidebar explorer; every path is project-relative with '/' separators.
+const projectFiles = {
+  list: (projectPath: string, dir: string): Promise<ProjectListResult> =>
+    ipcRenderer.invoke('projectFiles:list', projectPath, dir),
+  unwatch: (projectPath: string, dir: string): void =>
+    ipcRenderer.send('projectFiles:unwatch', projectPath, dir),
+  search: (projectPath: string, query: string): Promise<ProjectSearchResult> =>
+    ipcRenderer.invoke('projectFiles:search', projectPath, query),
+  readFile: (projectPath: string, path: string): Promise<ProjectFileResult | null> =>
+    ipcRenderer.invoke('projectFiles:readFile', projectPath, path),
+  createFile: (projectPath: string, dir: string, name: string): Promise<ProjectOpResult> =>
+    ipcRenderer.invoke('projectFiles:createFile', projectPath, dir, name),
+  createFolder: (projectPath: string, dir: string, name: string): Promise<ProjectOpResult> =>
+    ipcRenderer.invoke('projectFiles:createFolder', projectPath, dir, name),
+  rename: (projectPath: string, path: string, newName: string): Promise<ProjectOpResult> =>
+    ipcRenderer.invoke('projectFiles:rename', projectPath, path, newName),
+  move: (projectPath: string, paths: string[], destDir: string): Promise<ProjectOpsResult> =>
+    ipcRenderer.invoke('projectFiles:move', projectPath, paths, destDir),
+  copy: (projectPath: string, paths: string[], destDir: string): Promise<ProjectOpsResult> =>
+    ipcRenderer.invoke('projectFiles:copy', projectPath, paths, destDir),
+  duplicate: (projectPath: string, path: string): Promise<ProjectOpResult> =>
+    ipcRenderer.invoke('projectFiles:duplicate', projectPath, path),
+  trash: (projectPath: string, paths: string[]): Promise<ProjectOpsResult> =>
+    ipcRenderer.invoke('projectFiles:trash', projectPath, paths),
+  reveal: (projectPath: string, path: string): void =>
+    ipcRenderer.send('projectFiles:reveal', projectPath, path),
+  onChanged: (callback: (change: ProjectFilesChange) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: ProjectFilesChange): void =>
+      callback(change)
+    ipcRenderer.on('projectFiles:changed', listener)
+    return () => ipcRenderer.removeListener('projectFiles:changed', listener)
   }
 }
 
@@ -667,6 +707,7 @@ const api = {
   uiState,
   tabSessions,
   biblio,
+  projectFiles,
   git,
   review,
   conflictAgent,

@@ -39,6 +39,13 @@ export interface UiState {
   lastProjectId?: string
   zoomFactor?: number
   startup?: 'lastProject' | 'projectSelector'
+  windowControls?: 'right' | 'left'
+  sidebarView?: 'biblio' | 'files'
+  explorer?: {
+    columns: { size: boolean; modified: boolean; git: boolean }
+    density: 'compact' | 'comfortable'
+    hideIgnored: boolean
+  }
 }
 
 export interface BiblioNode {
@@ -66,6 +73,50 @@ export type BiblioFileResult =
 export interface BiblioTree {
   toc: BiblioNode | null
   children: BiblioNode[]
+}
+
+// Project files for the sidebar explorer. Paths are project-relative with '/' separators, '' is
+// the root; .git and biblio are never listed or touched.
+export interface ProjectEntry {
+  name: string
+  path: string
+  // A symlink reports its target's type; a broken one is a file.
+  type: 'dir' | 'file'
+  symlink?: true
+  // Gitignored by `git check-ignore`; always false outside a git repository.
+  ignored: boolean
+  sizeBytes?: number
+  modifiedMs: number
+}
+
+export type ProjectListResult =
+  { entries: ProjectEntry[] } | { error: 'notFound' | 'outside' | 'failed' }
+
+export interface ProjectSearchHit {
+  path: string
+  type: 'dir' | 'file'
+  // Found under a gitignored folder the query named.
+  ignored?: true
+}
+
+export interface ProjectSearchResult {
+  paths: ProjectSearchHit[]
+  truncated: boolean
+}
+
+export type ProjectFileResult = BiblioFileResult
+
+export type ProjectOpError =
+  'exists' | 'notFound' | 'outside' | 'invalidName' | 'intoItself' | 'failed'
+
+export type ProjectOpResult = { ok: true; path: string } | { error: ProjectOpError }
+
+export type ProjectOpsResult =
+  { ok: true; paths: string[] } | { error: ProjectOpError; done: string[] }
+
+export interface ProjectFilesChange {
+  projectPath: string
+  dir: string
 }
 
 export interface VaultScope {
@@ -700,6 +751,8 @@ export interface ResterClientRun {
 
 export type WorkspaceTab =
   | { id: string; kind: 'doc'; path: string }
+  // A project file opened read-only from the explorer; path is project-relative.
+  | { id: string; kind: 'file'; path: string }
   | { id: string; kind: 'diff'; path: string }
   | { id: string; kind: 'conflict'; path: string }
   | { id: string; kind: 'history' }

@@ -30,6 +30,12 @@ import type {
   UiState,
   BiblioTree,
   BiblioFileResult,
+  ProjectFileResult,
+  ProjectFilesChange,
+  ProjectListResult,
+  ProjectOpResult,
+  ProjectOpsResult,
+  ProjectSearchResult,
   ScratchpadImageResult,
   ImageFileResult,
   GitStatus,
@@ -228,6 +234,21 @@ interface Api {
     readImageFile: (filePath: string) => Promise<ImageFileResult>
     archiveScratchpad: (projectPath: string, relativePath: string) => Promise<boolean>
     onChanged: (callback: (projectPath: string) => void) => () => void
+  }
+  projectFiles: {
+    list: (projectPath: string, dir: string) => Promise<ProjectListResult>
+    unwatch: (projectPath: string, dir: string) => void
+    search: (projectPath: string, query: string) => Promise<ProjectSearchResult>
+    readFile: (projectPath: string, path: string) => Promise<ProjectFileResult | null>
+    createFile: (projectPath: string, dir: string, name: string) => Promise<ProjectOpResult>
+    createFolder: (projectPath: string, dir: string, name: string) => Promise<ProjectOpResult>
+    rename: (projectPath: string, path: string, newName: string) => Promise<ProjectOpResult>
+    move: (projectPath: string, paths: string[], destDir: string) => Promise<ProjectOpsResult>
+    copy: (projectPath: string, paths: string[], destDir: string) => Promise<ProjectOpsResult>
+    duplicate: (projectPath: string, path: string) => Promise<ProjectOpResult>
+    trash: (projectPath: string, paths: string[]) => Promise<ProjectOpsResult>
+    reveal: (projectPath: string, path: string) => void
+    onChanged: (callback: (change: ProjectFilesChange) => void) => () => void
   }
   git: {
     status: (projectPath: string) => Promise<GitStatus>

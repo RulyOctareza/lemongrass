@@ -19,6 +19,7 @@ import {
   type FSWatcher
 } from 'fs'
 import { dirname, extname, join, posix, relative, resolve, sep } from 'path'
+import { PROJECT_FILE_SCHEME } from './projectFiles'
 
 const IMAGES_DIR = 'images'
 const IMAGE_SCHEME = 'biblio-image'
@@ -137,10 +138,15 @@ function resolveInBiblio(biblioRoot: string, relativePath: string): string | nul
   return resolved
 }
 
-// Must run before the app is ready.
+// Must run before the app is ready. Electron honours only one registerSchemesAsPrivileged call,
+// so the explorer's project-file scheme is registered here too.
 export function registerBiblioImageScheme(): void {
   protocol.registerSchemesAsPrivileged([
-    { scheme: IMAGE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } }
+    { scheme: IMAGE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+    {
+      scheme: PROJECT_FILE_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true }
+    }
   ])
 }
 
