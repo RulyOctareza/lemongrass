@@ -80,37 +80,55 @@ function processTable() {
   }
 }
 
-// The terminal is drawn on a WebGL canvas, so the page cannot show whether the shell started. A zsh process under the
-// app does: node-pty starts it through spawn-helper, which fails when the helper is not executable.
-async function waitForShellUnder(rootPid) {
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    const table = processTable()
-    const tree = new Set([rootPid])
-    let grew = true
-    while (grew) {
-      grew = false
-      for (const p of table) {
-        if (!tree.has(p.pid) && tree.has(p.ppid)) {
-          tree.add(p.pid)
-          grew = true
-        }
+function processesUnder(rootPid) {
+  const table = processTable()
+  const tree = new Set([rootPid])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const p of table) {
+      if (!tree.has(p.pid) && tree.has(p.ppid)) {
+        tree.add(p.pid)
+        grew = true
       }
     }
-    const shell = table.find((p) => tree.has(p.pid) && /^-?(\S*\/)?zsh(\s|$)/.test(p.command))
+  }
+  return table.filter((p) => p.pid !== rootPid && tree.has(p.pid))
+}
+
+// The terminal is drawn on a WebGL canvas, so the page cannot show whether the shell started. The shell process under
+// the app does: node-pty starts it through spawn-helper, which fails when the helper is not executable.
+async function waitForShellUnder(rootPid, name) {
+  const pattern = new RegExp(`^-?(\\S*/)?${name}(\\s|$)`)
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    const shell = processesUnder(rootPid).find((p) => pattern.test(p.command))
     if (shell) return shell
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return null
 }
 
-function hasZsh() {
+function executable(file) {
   try {
-    execFileSync('sh', ['-c', 'command -v zsh'], { stdio: 'ignore' })
+    fs.accessSync(file, fs.constants.X_OK)
     return true
   } catch {
     return false
   }
+}
+
+// The name of the program the Shell tab runs, picked the way ui/src/main/shellBinary.ts picks it: the login shell from
+// SHELL, else the first of zsh, bash and sh on PATH. On a CI runner that is often bash, not zsh.
+function expectedShell(env) {
+  if (env.SHELL && path.isAbsolute(env.SHELL) && executable(env.SHELL))
+    return path.basename(env.SHELL)
+  for (const name of ['zsh', 'bash', 'sh']) {
+    for (const dir of (env.PATH ?? '').split(path.delimiter)) {
+      if (dir && executable(path.join(dir, name))) return name
+    }
+  }
+  return null
 }
 
 // lgrassd and the keeper are started detached, so they outlive the app. Only processes whose command line holds the
@@ -244,15 +262,15 @@ async function main() {
       0
     )
       throw new Error('the Shell tab shows a start failure')
-    // The Shell tab runs zsh, which macOS always has. Elsewhere a missing zsh only skips this check.
-    if (hasZsh()) {
-      log('looking for the zsh process under the app')
-      const shell = await waitForShellUnder(appPid)
-      if (!shell) throw new Error('no zsh process started under the app')
-      log(`shell running, pid ${shell.pid}`)
-    } else {
-      log('zsh not installed here, shell process check skipped')
+    const shellName = expectedShell(appEnv(home))
+    if (!shellName) throw new Error('no shell for the Shell tab on this machine')
+    log(`looking for the ${shellName} process under the app`)
+    const shell = await waitForShellUnder(appPid, shellName)
+    if (!shell) {
+      for (const p of processesUnder(appPid)) log(`  under the app: ${p.pid} ${p.command}`)
+      throw new Error(`no ${shellName} process started under the app`)
     }
+    log(`shell running, pid ${shell.pid} ${shell.command}`)
 
     if (pageErrors.length > 0) throw new Error(`renderer errors: ${pageErrors.join(' | ')}`)
   } catch (err) {
