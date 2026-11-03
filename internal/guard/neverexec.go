@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // The never-execute list is lemongrass's own and sits outside the policy: no user setting relaxes it, and it binds a command the human executes from an ask, where the policy's deny and ask rules do not apply. It covers catastrophic accidents only, so anything a human may reasonably mean to run stays executable.
@@ -14,6 +15,21 @@ import (
 var systemTopDirs = map[string]bool{
 	"/": true, "/bin": true, "/boot": true, "/dev": true, "/etc": true, "/home": true, "/lib": true, "/lib64": true,
 	"/opt": true, "/proc": true, "/root": true, "/sbin": true, "/srv": true, "/sys": true, "/usr": true, "/var": true,
+}
+
+// resolvedSystemTopDirs holds the system directories that are symlinks on this machine under their resolved spelling, such as /private/etc on macOS or /usr/bin for a merged /bin, since a path written with a trailing slash resolves through them.
+var resolvedSystemTopDirs = sync.OnceValue(func() map[string]bool {
+	resolved := map[string]bool{}
+	for dir := range systemTopDirs {
+		if target := resolveFully(dir); target != dir {
+			resolved[target] = true
+		}
+	}
+	return resolved
+})
+
+func isSystemTopDir(p string) bool {
+	return systemTopDirs[p] || resolvedSystemTopDirs()[p]
 }
 
 var privilegeWrappers = map[string]bool{"sudo": true, "doas": true, "pkexec": true, "run0": true}
@@ -76,7 +92,7 @@ func NeverExecute(command, cwd, home string) (string, bool) {
 type neverExec struct {
 	cwd  string
 	home string
-	// homeLink is the home spelled with only its parent resolved, as ResolvePath leaves a literal path to it. It differs from home only when the home itself is a symlink, and is protected like the home, since rm -r /home/u/ through such a link removes the real home.
+	// homeLink is the home spelled with only its parent resolved, as ResolvePath leaves a literal path to it. It differs from home only when the home itself is a symlink, and is protected like the home, so the link to it cannot be removed either.
 	homeLink string
 }
 
@@ -181,7 +197,7 @@ func (n neverExec) recursivePermissions(call shellCall) string {
 	}
 	for _, target := range operands(call.Args) {
 		resolved := ResolvePath(target, n.cwd, n.home)
-		if systemTopDirs[resolved] || n.isHome(resolved) || n.insideSSH(resolved) {
+		if isSystemTopDir(resolved) || n.isHome(resolved) || n.insideSSH(resolved) {
 			return call.Name + " -R changes ownership or permissions across " + resolved
 		}
 	}
@@ -206,7 +222,7 @@ func (n neverExec) protectedTarget(target string, recursive bool) string {
 	switch {
 	case resolved == "/":
 		return "targets /"
-	case systemTopDirs[resolved]:
+	case isSystemTopDir(resolved):
 		return "targets the system directory " + resolved
 	case n.isHome(resolved):
 		return "targets the home directory"
