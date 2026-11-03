@@ -1,0 +1,107 @@
+# Checks lemongrass on a real Mac in two jobs: the Go tests on darwin, and the arm64 and x64 dmgs built exactly as the
+# release's mac job builds them (release.yml), with their arch, signature and bundle checks and a smoke run of the arm64
+# app (ui/smoke/packaged.mjs), whose screenshot and logs are kept as an artifact. Runs on pushes to ci/** branches and
+# on Run workflow, never on main, so a Mac change is tried on a ci/ branch before it merges.
+name: Mac check
+
+on:
+  push:
+    branches: ['ci/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Separate from the package job, so a failing test never hides whether the package builds and starts.
+  go-test:
+    name: go-test
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # The tests open unix sockets under t.TempDir(). macOS's per-user temp path is long enough that those socket paths
+      # pass the 104-byte limit and bind fails, so the temp dirs go under /tmp.
+      - name: Go tests on darwin
+        env:
+          TMPDIR: /tmp
+        run: go test ./...
+
+  mac-check:
+    name: mac-check
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.22.2
+
+      # The same commands as the Build dmgs step of the release's mac job, without the tag's version.
+      - name: Build dmgs
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          set -eu
+          npm --prefix ui ci
+          make dist-darwin
+          npm --prefix ui run build
+          cd ui
+          for arch in arm64 x64; do
+            npx electron-builder install-app-deps --arch "$arch"
+            npx electron-builder --mac dmg --"$arch" --publish never
+          done
+
+      # The release job's arch and signature check, plus the bundle: Info.plist, the Go binaries for both arches, and
+      # node-pty's spawn-helper, which starts every terminal and must be built for the app's arch and executable.
+      - name: Check each app
+        working-directory: ui/dist
+        run: |
+          set -eu
+          for pair in mac-arm64:arm64 mac:x86_64; do
+            app="${pair%%:*}/Lemongrass.app"
+            want="${pair##*:}"
+            pty="$app/Contents/Resources/app.asar.unpacked/node_modules/node-pty/build/Release"
+            for bin in "$pty/pty.node" "$pty/spawn-helper" "$app/Contents/MacOS/Lemongrass"; do
+              got="$(lipo -archs "$bin")"
+              echo "$bin: $got"
+              [ "$got" = "$want" ] || { echo "expected $want" >&2; exit 1; }
+            done
+            test -x "$pty/spawn-helper" || { echo "not executable: $pty/spawn-helper" >&2; exit 1; }
+            codesign --verify --deep --strict "$app"
+            plutil -lint "$app/Contents/Info.plist"
+            for bin in lgrass lgrassd lgrassconf; do
+              [ "$(lipo -archs "$app/Contents/Resources/bin/darwin-arm64/$bin")" = arm64 ]
+              [ "$(lipo -archs "$app/Contents/Resources/bin/darwin-amd64/$bin")" = x86_64 ]
+            done
+          done
+          ls -l lemongrass-*.dmg
+
+      - name: Smoke run
+        run: node ui/smoke/packaged.mjs ui/dist/mac-arm64/Lemongrass.app ui/smoke/out
+
+      - name: Keep the smoke screenshot and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-smoke
+          path: ui/smoke/out
+          if-no-files-found: warn

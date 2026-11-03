@@ -56,7 +56,9 @@ jobs:
 
   mac:
     name: mac
-    runs-on: macos-latest
+    # Pinned, so a change of the macos-latest image never changes the package unannounced. arm64; the x64 app is
+    # packaged from the same runner.
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v5
         with:
@@ -72,10 +74,9 @@ jobs:
           node-version: 24.22.2
 
       # The version comes from the tag exactly as in the rpm job.
-      # There is no signing identity on CI, and with none electron-builder skips signing, which leaves an arm64 app
-      # macOS reports as damaged. identity=- signs ad hoc instead, and hardened runtime is off because an ad-hoc
-      # signature with it fails library validation at launch. The dmg is still not notarized, so Gatekeeper asks the
-      # user to clear quarantine once.
+      # The apps are signed ad hoc, set in the mac block of ui/electron-builder.yml so a local make build-mac matches.
+      # The dmg is still not notarized, so Gatekeeper asks the user to clear quarantine once.
+      # mac-check.yml builds with the same commands, so a change here goes there too.
       # npm ci builds node-pty's build/Release/pty.node for the runner's arch only, and node-pty loads that before its
       # prebuilds, so it is rebuilt for each arch before that arch is packaged.
       - name: Build dmgs
@@ -93,7 +94,7 @@ jobs:
           cd ui
           for arch in arm64 x64; do
             npx electron-builder install-app-deps --arch "$arch"
-            npx electron-builder --mac dmg --"$arch" --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false
+            npx electron-builder --mac dmg --"$arch" --publish never
           done
 
       # Fails the job when an app carries a pty.node or an lgrass binary built for the other arch, which would only

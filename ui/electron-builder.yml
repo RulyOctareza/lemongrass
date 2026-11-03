@@ -27,10 +27,17 @@ mac:
   target:
     - dmg
     - zip
+  # Ad-hoc signature until there is a Developer ID: with no identity electron-builder skips signing, and macOS calls
+  # the unsigned arm64 app damaged. The hardened runtime stays off with it, since its library validation rejects the
+  # ad-hoc signed Electron framework at launch; it only matters for notarization, which needs the Developer ID anyway.
+  identity: '-'
+  hardenedRuntime: false
   entitlementsInherit: build/entitlements.mac.plist
+  # A map, not a list: electron-builder merges this object into Info.plist key by key, and a list would land as keys
+  # "0", "1" and "length".
   extendInfo:
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
   extraResources:
     - from: "../dist/darwin-amd64/lgrass"

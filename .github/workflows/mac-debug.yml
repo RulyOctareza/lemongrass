@@ -1,0 +1,56 @@
+# Keeps a macOS runner up with an SSH session, for chasing a Mac failure by hand. Run it from the Actions tab with the
+# branch to debug; the job's log prints the ssh command once the session is up. The checkout already has the UI
+# dependencies installed and the darwin binaries built, so `make build-mac MAC_BUILD_FLAGS='--publish never'` and
+# `node ui/smoke/packaged.mjs ui/dist/mac-arm64/Lemongrass.app` are the next steps. Shell only, no screen.
+# `touch continue` in the checkout ends the session early; otherwise it ends after the chosen hours.
+name: Mac debug
+
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: Hours the session stays open
+        type: choice
+        options: ['1', '2', '3', '4', '5']
+        default: '2'
+
+permissions:
+  contents: read
+
+jobs:
+  mac-debug:
+    name: mac-debug
+    runs-on: macos-14
+    # GitHub stops any job on a hosted runner at 6 hours, so the session tops out at 5 to leave room for the setup.
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      # A failure here still opens the session, since a broken install may be the very thing to debug.
+      - name: Prepare the checkout
+        continue-on-error: true
+        run: |
+          npm --prefix ui ci
+          make dist-darwin
+
+      # Only the SSH keys on the GitHub account of whoever started the run are let in. The repo is public, so an
+      # open session would hand a shell to anyone reading the log.
+      - name: SSH session
+        uses: mxschmitt/action-tmate@v3
+        # Expressions have no arithmetic, so the hours map to minutes through a lookup.
+        timeout-minutes: ${{ fromJSON('{"1":60,"2":120,"3":180,"4":240,"5":300}')[inputs.hours] }}
+        with:
+          limit-access-to-actor: true
