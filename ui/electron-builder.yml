@@ -46,7 +46,8 @@ mac:
     - from: "../dist/darwin-arm64/lgrassconf"
       to: "bin/darwin-arm64/lgrassconf"
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  # The release builds one dmg per arch into the same directory, so the arch keeps them from overwriting each other.
+  artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   target:
     - AppImage
