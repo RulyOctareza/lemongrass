@@ -364,9 +364,11 @@ func mentionsGuard(raw, resolved string) bool {
 	return false
 }
 
-// ResolvePath expands ~ and $HOME, anchors a relative path at cwd, and resolves symlinks in the parent directory.
+// ResolvePath expands ~ and $HOME, anchors a relative path at cwd, and resolves symlinks in the parent directory, or in the whole path when it is written with a trailing slash.
 func ResolvePath(p, cwd, home string) string {
 	p = strings.TrimSpace(p)
+	// A trailing slash makes the OS follow the last component when it is a symlink, so rm -r link/ reaches what link points to.
+	follow := strings.HasSuffix(p, "/") && filepath.Clean(p) != "/"
 	switch {
 	case p == "~" || strings.HasPrefix(p, "~/"):
 		p = filepath.Join(home, strings.TrimPrefix(p, "~"))
@@ -377,7 +379,10 @@ func ResolvePath(p, cwd, home string) string {
 	case !filepath.IsAbs(p) && cwd != "":
 		p = filepath.Join(cwd, p)
 	}
-	// The parent is resolved through its deepest existing ancestor, as ResolveDir resolves the home, so a path into a directory that does not exist yet is spelled the same way as the home it is compared with. Cleaning first drops a trailing slash, which would otherwise make the path its own parent and double its last component.
+	// Symlinks are resolved through the deepest existing ancestor, as ResolveDir resolves the home, so a path into a directory that does not exist yet is spelled the same way as the home it is compared with. Cleaning first drops a trailing slash, which would otherwise make the path its own parent and double its last component.
 	p = filepath.Clean(p)
+	if follow {
+		return resolveFully(p)
+	}
 	return filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p))
 }
