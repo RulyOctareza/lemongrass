@@ -115,6 +115,34 @@
   --color-window-glyph:    rgba(0, 0, 0, 0.55);
   --color-window-inactive: #4A4A4A;
 
+  /* File explorer icons, by file family (fileIcons.ts). Amber stays out, it marks focus. */
+  --color-icon-ts:         var(--color-sapphire);
+  --color-icon-js:         oklch(0.86 0.15 100);
+  --color-icon-go:         var(--color-teal);
+  --color-icon-python:     var(--color-info);
+  --color-icon-rust:       var(--color-orange);
+  --color-icon-component:  var(--color-jade);
+  --color-icon-code:       var(--color-violet);
+  --color-icon-shell:      var(--color-jade-dim);
+  --color-icon-markup:     var(--color-coral);
+  --color-icon-style:      var(--color-fuchsia);
+  --color-icon-config:     var(--color-gray-300);
+  --color-icon-data:       oklch(0.80 0.10 75);
+  --color-icon-image:      oklch(0.74 0.14 350);
+  --color-icon-archive:    oklch(0.70 0.07 60);
+  --color-icon-doc:        var(--color-gray-200);
+  --color-icon-lock:       var(--color-gray-400);
+  --color-icon-file:       var(--color-fg-muted);
+  --color-icon-folder:          var(--color-gray-300);
+  --color-icon-folder-src:      var(--color-sapphire);
+  --color-icon-folder-test:     var(--color-jade);
+  --color-icon-folder-deps:     var(--color-gray-400);
+  --color-icon-folder-build:    var(--color-orange);
+  --color-icon-folder-assets:   var(--color-icon-image);
+  --color-icon-folder-docs:     var(--color-gray-200);
+  --color-icon-folder-tooling:  var(--color-violet);
+  --color-icon-folder-scripts:  var(--color-jade-dim);
+
   /* Shadows */
   --shadow-sm:         0 1px 2px rgba(0,0,0,0.4);
   --shadow-md:         0 4px 12px rgba(0,0,0,0.5);

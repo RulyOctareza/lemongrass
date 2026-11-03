@@ -21,11 +21,12 @@ import {
   closeTab,
   closeTabsInPane,
   docTabCount,
+  documentPath,
+  isDocumentTab,
   focusPane,
   openInNewShell,
   openWeb,
   placeTab,
-  projectRelativePath,
   tabBand,
   type ProjectRef
 } from '../workspace'
@@ -232,7 +233,7 @@ const DOC_ICON = [
 const WARNING_ICON = ['M7 3v5.2', 'M7 10.8v.1']
 
 const closeActions = computed(() => {
-  const paneHasDocs = props.leaf.tabs.some((t) => t.kind === 'doc')
+  const paneHasDocs = props.leaf.tabs.some(isDocumentTab)
   return [
     {
       key: 'other',
@@ -304,9 +305,10 @@ function menuCopyTabId(): void {
 
 async function copyPath(tabId: string): Promise<void> {
   const tab = props.leaf.tabs.find((t) => t.id === tabId)
-  if (tab?.kind !== 'doc') return
+  const path = tab ? documentPath(tab) : null
+  if (path === null) return
   try {
-    await navigator.clipboard.writeText(projectRelativePath(tab.path))
+    await navigator.clipboard.writeText(path)
   } catch {
     return
   }
@@ -462,7 +464,7 @@ onBeforeUnmount(() => {
             <path d="M1.5 7h11" />
           </svg>
         </button>
-        <template v-if="activeTab?.kind === 'doc'">
+        <template v-if="activeTab && isDocumentTab(activeTab)">
           <span class="action-divider" />
           <button
             class="pane-action"
@@ -612,7 +614,7 @@ onBeforeUnmount(() => {
         </svg>
         {{ direction.label }}
       </button>
-      <template v-if="menuTab.kind === 'doc'">
+      <template v-if="isDocumentTab(menuTab)">
         <p class="menu-heading">Split into new pane</p>
         <button
           v-for="direction in MENU_DIRECTIONS"

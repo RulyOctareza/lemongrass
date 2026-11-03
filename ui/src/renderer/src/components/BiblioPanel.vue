@@ -2,18 +2,18 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import AppModal from './AppModal.vue'
 import BiblioTreeItem from './BiblioTreeItem.vue'
-import DeviceEntry from './DeviceEntry.vue'
-import GitPanel from './GitPanel.vue'
 import MarkdownEditor from './MarkdownEditor.vue'
-import NodeEntry from './NodeEntry.vue'
-import ResterClientEntry from './ResterClientEntry.vue'
-import VaultEntry from './VaultEntry.vue'
-import WorkgroupPanel from './WorkgroupPanel.vue'
+import SearchRows from './treeSearch/SearchRows.vue'
+import TreeSearchBar from './treeSearch/TreeSearchBar.vue'
 import { activePath, closeUnder, openFile, type ProjectRef } from '../workspace'
-import type { BiblioTree } from '../../../preload/types'
+import { biblioExpandedOf } from '../explorerStore'
+import { biblioIconOf } from '../biblioIcons'
+import { useTreeSearch } from '../useTreeSearch'
+import type { SearchCandidate, SearchNode, SearchRow } from '../treeSearch'
+import type { BiblioNode, BiblioTree } from '../../../preload/types'
 import AppButton from './AppButton.vue'
 import AppInput from './AppInput.vue'
 import AppEmptyState from './AppEmptyState.vue'
@@ -25,13 +25,64 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   refresh: []
-  openVault: []
 }>()
 
 const selectedPath = computed((): string | null => activePath(props.project.id))
 
+const expandedPaths = computed(() => biblioExpandedOf(props.project.id))
+
 function selectFile(path: string): void {
   openFile(props.project, path)
+}
+
+function toggleDir(path: string): void {
+  const expanded = biblioExpandedOf(props.project.id)
+  if (expanded[path]) delete expanded[path]
+  else expanded[path] = true
+}
+
+function expandDir(path: string): void {
+  biblioExpandedOf(props.project.id)[path] = true
+}
+
+const panel = ref<HTMLElement | null>(null)
+
+function collect(nodes: BiblioNode[], out: SearchCandidate[]): SearchCandidate[] {
+  for (const node of nodes) {
+    out.push({ path: node.path, type: node.type })
+    if (node.children) collect(node.children, out)
+  }
+  return out
+}
+
+// A folder result opens the folders down to it in the tree and leaves the search; a file opens
+// in the focused pane and the search stays, so the next match is one arrow away.
+function openResult(row: SearchRow): void {
+  if (row.node.type === 'file') {
+    selectFile(row.node.path)
+    return
+  }
+  const segments = row.node.path.split('/')
+  for (let i = 1; i <= segments.length; i++) expandDir(segments.slice(0, i).join('/'))
+  search.close()
+}
+
+const search = useTreeSearch({
+  panel,
+  candidates: () => ({
+    items: collect(props.tree?.toc ? [props.tree.toc] : [], collect(props.tree?.children ?? [], []))
+  }),
+  open: openResult
+})
+
+// The tree refetches when biblio/ changes on disk, and an open search follows it.
+watch(
+  () => props.tree,
+  () => search.refresh()
+)
+
+function resultLabel(node: SearchNode): string {
+  return node.type === 'file' ? node.name.replace(/\.md$/, '') : node.name
 }
 
 async function archiveScratchpad(taskPath: string): Promise<void> {
@@ -111,83 +162,63 @@ async function submitCreate(): Promise<void> {
   emit('refresh')
   selectFile(path)
 }
-
-const treeWidth = ref(240)
-let dragStartX = 0
-let dragStartWidth = 0
-
-function onGutterDown(event: PointerEvent): void {
-  dragStartX = event.clientX
-  dragStartWidth = treeWidth.value
-  window.addEventListener('pointermove', onGutterMove)
-  window.addEventListener('pointerup', onGutterUp)
-}
-
-function onGutterMove(event: PointerEvent): void {
-  const delta = event.clientX - dragStartX
-  treeWidth.value = Math.min(480, Math.max(180, dragStartWidth + delta))
-}
-
-function onGutterUp(): void {
-  window.removeEventListener('pointermove', onGutterMove)
-  window.removeEventListener('pointerup', onGutterUp)
-}
 </script>
 
 <template>
-  <div class="biblio-pane">
-    <div class="biblio-tree" :style="{ width: `${treeWidth}px` }">
-      <div class="tree-scroll">
-        <button
-          v-if="tree?.toc"
-          class="toc-item"
-          :class="{ active: tree.toc.path === selectedPath }"
-          @click="selectFile(tree.toc.path)"
+  <div ref="panel" class="biblio-view" tabindex="0" @keydown="search.onPanelKeydown">
+    <div class="tree-scroll">
+      <button
+        v-if="tree?.toc"
+        class="toc-item"
+        :class="{ active: tree.toc.path === selectedPath }"
+        @click="selectFile(tree.toc.path)"
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
         >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 14 14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="2" y1="3" x2="12" y2="3" />
-            <line x1="2" y1="7" x2="12" y2="7" />
-            <line x1="2" y1="11" x2="8" y2="11" />
-          </svg>
-          <span>Table of Content</span>
-        </button>
+          <line x1="2" y1="3" x2="12" y2="3" />
+          <line x1="2" y1="7" x2="12" y2="7" />
+          <line x1="2" y1="11" x2="8" y2="11" />
+        </svg>
+        <span>Table of Content</span>
+      </button>
 
-        <div class="tree-groups">
-          <template v-if="tree?.children?.length">
-            <BiblioTreeItem
-              v-for="child in tree.children"
-              :key="child.path"
-              :node="child"
-              :selected-path="selectedPath"
-              :depth="0"
-              @select="selectFile"
-              @add-scratchpad="openCreateForm"
-              @add-scratchpad-file="openCreateFileForm"
-              @archive-scratchpad="archiveScratchpad"
-            />
-          </template>
-          <AppEmptyState v-else class="tree-empty" size="sm" title="Nothing in biblio/ yet." />
-        </div>
+      <TreeSearchBar v-if="search.open.value" :search="search" placeholder="Search biblio" />
+
+      <SearchRows
+        v-if="search.active.value"
+        :search="search"
+        :icon-of="(node) => biblioIconOf(node.path, node.type)"
+        :label-of="resultLabel"
+        :active-path="selectedPath"
+      />
+      <div v-else class="tree-groups">
+        <template v-if="tree?.children?.length">
+          <BiblioTreeItem
+            v-for="child in tree.children"
+            :key="child.path"
+            :node="child"
+            :selected-path="selectedPath"
+            :depth="0"
+            :expanded-paths="expandedPaths"
+            @select="selectFile"
+            @toggle="toggleDir"
+            @expand="expandDir"
+            @add-scratchpad="openCreateForm"
+            @add-scratchpad-file="openCreateFileForm"
+            @archive-scratchpad="archiveScratchpad"
+          />
+        </template>
+        <AppEmptyState v-else class="tree-empty" size="sm" title="Nothing in biblio/ yet." />
       </div>
-
-      <WorkgroupPanel :project="project" />
-      <GitPanel :project="project" />
-      <VaultEntry @open="emit('openVault')" />
-      <DeviceEntry :project="project" />
-      <ResterClientEntry :project="project" />
-      <NodeEntry />
     </div>
-
-    <div class="biblio-gutter" @pointerdown="onGutterDown" />
 
     <AppModal
       v-if="showCreateForm"
@@ -218,18 +249,12 @@ function onGutterUp(): void {
 </template>
 
 <style scoped>
-.biblio-pane {
-  flex-shrink: 0;
-  min-height: 0;
-  display: flex;
-}
-
-.biblio-tree {
-  flex-shrink: 0;
+.biblio-view {
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-1);
+  outline: none;
 }
 
 .tree-scroll {
@@ -272,19 +297,6 @@ function onGutterUp(): void {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.biblio-gutter {
-  flex-shrink: 0;
-  width: 4px;
-  cursor: col-resize;
-  background: var(--color-border-subtle);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.biblio-gutter:hover,
-.biblio-gutter:active {
-  background: var(--color-amber);
 }
 
 .tree-empty {

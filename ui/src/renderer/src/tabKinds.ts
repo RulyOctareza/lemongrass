@@ -6,6 +6,7 @@ import ConflictView from './components/conflict/ConflictView.vue'
 import DeviceView from './components/DeviceView.vue'
 import DiffViewer from './components/DiffViewer.vue'
 import DocView from './components/DocView.vue'
+import FileView from './components/FileView.vue'
 import HistoryView from './components/HistoryView.vue'
 import ResterClientView from './components/resterClient/ResterClientView.vue'
 import ShellView from './components/ShellView.vue'
@@ -51,8 +52,9 @@ interface TabKind<T extends WorkspaceTab> {
   bodyProps: (tab: T, ctx: TabContext) => Record<string, unknown>
 }
 
-function pathLabel(path: string): TabLabel {
-  const segments = path.replace(/\.md$/, '').split('/')
+// A biblio doc drops its .md suffix like the biblio tree does; a project file keeps its full name.
+function pathLabel(path: string, keepSuffix = false): TabLabel {
+  const segments = (keepSuffix ? path : path.replace(/\.md$/, '')).split('/')
   return { prefix: segments[segments.length - 2], text: segments[segments.length - 1] }
 }
 
@@ -84,6 +86,15 @@ const kinds: { [K in KindName]: TabKind<TabOf<K>> } = {
     label: (tab) => pathLabel(tab.path),
     title: (tab) => tab.path,
     body: DocView,
+    keepAlive: false,
+    bodyProps: (tab, ctx) => ({ project: ctx.project, tab })
+  },
+  // A project file opened from the sidebar explorer, read-only; path is project-relative.
+  file: {
+    icon: [],
+    label: (tab) => pathLabel(tab.path, true),
+    title: (tab) => tab.path,
+    body: FileView,
     keepAlive: false,
     bodyProps: (tab, ctx) => ({ project: ctx.project, tab })
   },

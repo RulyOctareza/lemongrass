@@ -57,9 +57,13 @@ export interface DocEntry {
 interface Workspace {
   layout: WorkspaceLayoutState
   docs: Record<string, DocEntry>
+  // Project files open in 'file' tabs, by project-relative path. Kept apart from docs, whose paths
+  // are relative to biblio/, so the same relative path in both never shares an entry.
+  files: Record<string, DocEntry>
 }
 
 type DocTab = Extract<WorkspaceTab, { kind: 'doc' }>
+type FileTab = Extract<WorkspaceTab, { kind: 'file' }>
 type DiffTab = Extract<WorkspaceTab, { kind: 'diff' }>
 type ConflictTab = Extract<WorkspaceTab, { kind: 'conflict' }>
 type HistoryTab = Extract<WorkspaceTab, { kind: 'history' }>
@@ -118,6 +122,22 @@ export function projectRelativePath(path: string): string {
 
 function newDocTab(path: string): DocTab {
   return { id: crypto.randomUUID(), kind: 'doc', path }
+}
+
+function newFileTab(path: string): FileTab {
+  return { id: crypto.randomUUID(), kind: 'file', path }
+}
+
+// A document tab is a biblio doc or a project file: both read a file and can be split or cloned.
+export function isDocumentTab(tab: WorkspaceTab): tab is DocTab | FileTab {
+  return tab.kind === 'doc' || tab.kind === 'file'
+}
+
+// The project-relative path a document tab shows, for Copy path and Read in a new shell.
+export function documentPath(tab: WorkspaceTab): string | null {
+  if (tab.kind === 'doc') return projectRelativePath(tab.path)
+  if (tab.kind === 'file') return tab.path
+  return null
 }
 
 function newDiffTab(path: string): DiffTab {
@@ -214,6 +234,11 @@ function openPaths(projectId: string): string[] {
   return [...new Set(paths)]
 }
 
+function openFilePaths(projectId: string): string[] {
+  const paths = tabsOf(projectId).flatMap((tab) => (tab.kind === 'file' ? [tab.path] : []))
+  return [...new Set(paths)]
+}
+
 export function isTabOpen(projectId: string, tabId: string): boolean {
   return workspaces[projectId] ? tabsOf(projectId).some((tab) => tab.id === tabId) : false
 }
@@ -277,7 +302,7 @@ export function liveShellCount(projectId: string): number {
 }
 
 export function docTabCount(projectId: string): number {
-  return workspaces[projectId] ? tabsOf(projectId).filter((t) => t.kind === 'doc').length : 0
+  return workspaces[projectId] ? tabsOf(projectId).filter(isDocumentTab).length : 0
 }
 
 async function loadDoc(project: ProjectRef, path: string, force = false): Promise<void> {
@@ -412,6 +437,10 @@ function pruneDocs(project: ProjectRef): void {
     flushDoc(project, path)
     delete workspace.docs[path]
   }
+  const usedFiles = new Set(openFilePaths(project.id))
+  for (const path of Object.keys(workspace.files)) {
+    if (!usedFiles.has(path)) delete workspace.files[path]
+  }
 }
 
 function commit(
@@ -452,6 +481,7 @@ async function restoreShellSessions(
 }
 
 async function init(project: ProjectRef): Promise<void> {
+  subscribeFileChanges()
   const saved = await window.api.workspaceLayouts.load(project.id)
   await window.api.tabSessions.clear(project.path)
   await restoreShellSessions(project, saved?.root ?? null)
@@ -461,7 +491,8 @@ async function init(project: ProjectRef): Promise<void> {
       focusedPaneId: saved?.focusedPaneId ?? null,
       groupColors: saved?.groupColors ?? {}
     },
-    docs: {}
+    docs: {},
+    files: {}
   }
   const layout = workspaces[project.id].layout
   const leaves = tree.allLeaves(layout.root)
@@ -469,6 +500,7 @@ async function init(project: ProjectRef): Promise<void> {
     layout.focusedPaneId = leaves[0]?.id ?? null
   }
   await Promise.all(openPaths(project.id).map((path) => loadDoc(project, path)))
+  await Promise.all(openFilePaths(project.id).map((path) => loadProjectFile(project, path)))
   watch(
     () => workspaces[project.id].layout,
     () => scheduleLayoutSave(project.id),
@@ -499,27 +531,127 @@ export function activePath(projectId: string): string | null {
   return tab?.kind === 'doc' ? tab.path : null
 }
 
-export function openFile(project: ProjectRef, path: string): void {
+// Focuses the tab that shows a path, in the focused pane first and otherwise wherever it is, or
+// adds one to the focused pane. A tree click never creates a duplicate.
+function openPathTab(
+  project: ProjectRef,
+  shows: (tab: WorkspaceTab) => boolean,
+  create: () => WorkspaceTab,
+  load: () => void
+): void {
   const layout = workspaces[project.id].layout
   const root = layout.root
   if (!root) {
-    const leaf = tree.createLeaf<WorkspaceTab>([newDocTab(path)])
+    const leaf = tree.createLeaf<WorkspaceTab>([create()])
     commit(project, leaf, leaf.id)
-    void loadDoc(project, path)
+    load()
     return
   }
   const leaves = tree.allLeaves(root)
   const focused = leaves.find((leaf) => leaf.id === layout.focusedPaneId) ?? leaves[0]
-  const hasPath = (leaf: (typeof leaves)[number]): boolean =>
-    leaf.tabs.some((tab) => tab.kind === 'doc' && tab.path === path)
+  const hasPath = (leaf: (typeof leaves)[number]): boolean => leaf.tabs.some(shows)
   const holder = hasPath(focused) ? focused : leaves.find(hasPath)
   if (holder) {
-    const tab = holder.tabs.find((t) => t.kind === 'doc' && t.path === path)!
+    const tab = holder.tabs.find(shows)!
     commit(project, tree.setActiveTab(root, holder.id, tab.id), holder.id)
     return
   }
-  commit(project, tree.addTab(root, focused.id, newDocTab(path)), focused.id)
-  void loadDoc(project, path)
+  commit(project, tree.addTab(root, focused.id, create()), focused.id)
+  load()
+}
+
+export function openFile(project: ProjectRef, path: string): void {
+  openPathTab(
+    project,
+    (tab) => tab.kind === 'doc' && tab.path === path,
+    () => newDocTab(path),
+    () => void loadDoc(project, path)
+  )
+}
+
+export function openProjectFile(project: ProjectRef, path: string): void {
+  openPathTab(
+    project,
+    (tab) => tab.kind === 'file' && tab.path === path,
+    () => newFileTab(path),
+    () => void loadProjectFile(project, path)
+  )
+}
+
+export function activeFilePath(projectId: string): string | null {
+  const layout = workspaces[projectId]?.layout
+  if (!layout) return null
+  const leaf = tree.findLeaf(layout.root, layout.focusedPaneId)
+  const tab = leaf?.tabs.find((t) => t.id === leaf.activeTabId)
+  return tab?.kind === 'file' ? tab.path : null
+}
+
+// Reads a project file into its entry. A loaded entry is reread only when forced, which the file
+// view does on every show so a tab whose folder has no watch is still current when looked at.
+export async function loadProjectFile(
+  project: ProjectRef,
+  path: string,
+  force = false
+): Promise<void> {
+  const workspace = workspaces[project.id]
+  if (!workspace) return
+  const existing = workspace.files[path]
+  if (existing && existing.status !== 'missing' && !force) return
+  if (!existing) {
+    workspace.files[path] = {
+      kind: 'text',
+      editable: false,
+      content: '',
+      html: '',
+      imageVersion: 0,
+      status: 'loading',
+      baseline: ''
+    }
+  }
+  const result = await window.api.projectFiles.readFile(project.path, path)
+  const entry = workspaces[project.id]?.files[path]
+  if (!entry) return
+  if (result === null) {
+    entry.status = 'missing'
+    return
+  }
+  entry.kind = result.kind
+  entry.content = result.kind === 'text' ? result.text : ''
+  entry.imageVersion = result.kind === 'image' ? result.modifiedMs : 0
+  entry.status = 'ready'
+}
+
+// Points file tabs at a renamed or moved path, the path itself and anything under it.
+export function retargetFileTabs(project: ProjectRef, from: string, to: string): void {
+  const workspace = workspaces[project.id]
+  if (!workspace) return
+  const moved = (path: string): string | null =>
+    path === from ? to : path.startsWith(`${from}/`) ? to + path.slice(from.length) : null
+  for (const tab of tabsOf(project.id)) {
+    if (tab.kind !== 'file') continue
+    const next = moved(tab.path)
+    if (next === null) continue
+    tab.path = next
+    void loadProjectFile(project, next, true)
+  }
+  pruneDocs(project)
+}
+
+let fileChangesSubscribed = false
+
+// A watched folder changed: reread the open files in it.
+function subscribeFileChanges(): void {
+  if (fileChangesSubscribed) return
+  fileChangesSubscribed = true
+  window.api.projectFiles.onChanged((change) => {
+    const project = projectRefByPath(change.projectPath)
+    const workspace = project && workspaces[project.id]
+    if (!workspace) return
+    for (const path of Object.keys(workspace.files)) {
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
+      if (dir === change.dir) void loadProjectFile(project, path, true)
+    }
+  })
 }
 
 export function activeDiffPath(projectId: string): string | null {
@@ -812,12 +944,13 @@ function openInNewShellWithAgent(
 ): void {
   const root = workspaces[project.id].layout.root
   const source = tree.findLeaf(root, paneId)?.tabs.find((tab) => tab.id === tabId)
-  if (!root || source?.kind !== 'doc') return
+  const path = source ? documentPath(source) : null
+  if (!root || path === null) return
   const tab = newShellTab(project, agent, account)
   // The 'shell' agent spawns zsh directly, which treats a positional prompt argument as a script path to source.
   if (agent.id !== 'shell') {
     setShellArgs(tab.id, [
-      `Read ${projectRelativePath(source.path)} and discuss it with the user. Discussing does not replace your usual procedure: orient yourself first, as your instructions say.`
+      `Read ${path} and discuss it with the user. Discussing does not replace your usual procedure: orient yourself first, as your instructions say.`
     ])
   }
   const next = tree.splitWithTab(root, paneId, 'right', tab)
@@ -868,7 +1001,7 @@ export function placeTab(
   const root = workspaces[project.id].layout.root
   if (!root) return
   const source = tree.findLeaf(root, fromPaneId)?.tabs.find((tab) => tab.id === tabId)
-  if (!source || (duplicate && source.kind !== 'doc')) return
+  if (!source || (duplicate && !isDocumentTab(source))) return
   const result = tree.placeTab(root, fromPaneId, tabId, toPaneId, zone, duplicate)
   if (!result) return
   commit(project, result.root, tree.findLeafByTab(result.root, result.placed.id)?.id)
@@ -900,7 +1033,7 @@ export function closeUnder(project: ProjectRef, prefix: string): void {
 }
 
 export function closeAllDocuments(project: ProjectRef): void {
-  closeMatching(project, (tab) => tab.kind === 'doc')
+  closeMatching(project, isDocumentTab)
 }
 
 export function closeAllTabs(project: ProjectRef): void {
@@ -916,7 +1049,7 @@ export function closeTabsInPane(project: ProjectRef, paneId: string): void {
 }
 
 export function closeDocumentsInPane(project: ProjectRef, paneId: string): void {
-  closeMatching(project, (tab) => tab.kind === 'doc', paneId)
+  closeMatching(project, isDocumentTab, paneId)
 }
 
 onShellAccountChange((tabId, account) => {

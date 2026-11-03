@@ -2,34 +2,32 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import TabIcon from './TabIcon.vue'
+import { archiveIcon, biblioDirShapes, biblioFileShapes } from '../biblioIcons'
 import type { BiblioNode } from '../../../preload/types'
 
+// The expanded folders live in the panel, by path, so a search result can open the folders above
+// it and the tree keeps its shape across a switch to the Files view and back.
 const props = defineProps<{
   node: BiblioNode
   selectedPath: string | null
   depth: number
+  expandedPaths: Record<string, true>
 }>()
 
 const emit = defineEmits<{
   select: [path: string]
+  toggle: [path: string]
+  expand: [path: string]
   'add-scratchpad': []
   'add-scratchpad-file': [folderPath: string]
   'archive-scratchpad': [taskPath: string]
 }>()
 
-const expanded = ref(false)
+const expanded = computed((): boolean => !!props.expandedPaths[props.node.path])
 
-// Only the four top-level category dirs get a distinct icon -- anything
-// nested (a book's own folder, handover/archive) reads as a plain folder.
-const CATEGORY_ICONS = new Set(['books', 'handover', 'laws', 'scratchpad'])
-
-const iconName = computed((): string => {
-  if (props.node.type === 'file') return 'file'
-  if (props.depth === 0 && CATEGORY_ICONS.has(props.node.name)) return props.node.name
-  if (props.node.path === 'scratchpad/archive') return 'archive'
-  return 'folder'
-})
+const isArchive = computed((): boolean => props.node.path === 'scratchpad/archive')
 
 const isTopLevelScratchpad = computed(
   (): boolean => props.depth === 0 && props.node.name === 'scratchpad'
@@ -47,7 +45,7 @@ const showAddButton = computed(
 )
 
 function onAddClick(): void {
-  expanded.value = true
+  emit('expand', props.node.path)
   if (isTopLevelScratchpad.value) {
     emit('add-scratchpad')
   } else {
@@ -62,13 +60,6 @@ const isArchivableScratchpadTask = computed((): boolean => {
   const segments = props.node.path.split('/')
   return segments.length === 2 && segments[0] === 'scratchpad' && segments[1] !== 'archive'
 })
-
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp)$/i
-
-const fileIcon = computed((): string => {
-  if (props.node.type !== 'file' || props.node.name.endsWith('.md')) return 'page'
-  return IMAGE_FILE.test(props.node.name) ? 'image' : 'code'
-})
 </script>
 
 <template>
@@ -80,41 +71,20 @@ const fileIcon = computed((): string => {
     @click="emit('select', node.path)"
   >
     <span class="indent" />
-    <svg
-      class="icon"
-      width="13"
-      height="13"
-      viewBox="0 0 14 14"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <template v-if="fileIcon === 'image'">
-        <rect x="1.5" y="2.5" width="11" height="9" rx="1" />
-        <circle cx="5" cy="5.5" r="1" />
-        <path d="M1.5 10l3.5-3 2.5 2 2-1.5 3 2.5" />
-      </template>
-      <template v-else>
-        <path d="M3 1.5h5l3 3v8H3z" />
-        <path d="M8 1.5v3h3" />
-        <path v-if="fileIcon === 'code'" d="M6 7.5 4.75 9 6 10.5M8 7.5 9.25 9 8 10.5" />
-      </template>
-    </svg>
+    <TabIcon class="icon" :shapes="biblioFileShapes(node.name)" />
     <span class="label">{{ node.name.replace(/\.md$/, '') }}</span>
   </button>
 
   <div
     v-else
     class="dir-row"
-    :class="{ 'archive-row': iconName === 'archive' }"
-    :style="iconName === 'archive' ? { marginLeft: `${depth * 14}px`, width: 'auto' } : undefined"
+    :class="{ 'archive-row': isArchive }"
+    :style="isArchive ? { marginLeft: `${depth * 14}px`, width: 'auto' } : undefined"
   >
     <button
       class="tree-item tree-item-main"
-      :style="iconName === 'archive' ? undefined : { paddingLeft: `${depth * 14 + 10}px` }"
-      @click="expanded = !expanded"
+      :style="isArchive ? undefined : { paddingLeft: `${depth * 14 + 10}px` }"
+      @click="emit('toggle', node.path)"
     >
       <svg
         class="indent chevron"
@@ -131,94 +101,7 @@ const fileIcon = computed((): string => {
         <path d="M2 1.5 6.5 4.5 2 7.5" />
       </svg>
 
-      <svg
-        v-if="iconName === 'books'"
-        class="icon"
-        width="13"
-        height="13"
-        viewBox="0 0 14 14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <rect x="2" y="1.5" width="10" height="11" rx="1" />
-        <line x1="5" y1="1.5" x2="5" y2="12.5" />
-      </svg>
-      <svg
-        v-else-if="iconName === 'laws'"
-        class="icon"
-        width="13"
-        height="13"
-        viewBox="0 0 14 14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M7 1 12 3 12 7 7 13 2 7 2 3 Z" />
-      </svg>
-      <svg
-        v-else-if="iconName === 'handover'"
-        class="icon"
-        width="13"
-        height="13"
-        viewBox="0 0 14 14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M1.5 4.5h9M8 2.5l2.5 2-2.5 2" />
-        <path d="M12.5 9.5h-9M6 11.5l-2.5-2 2.5-2" />
-      </svg>
-      <svg
-        v-else-if="iconName === 'archive'"
-        class="icon"
-        width="13"
-        height="13"
-        viewBox="0 0 14 14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <rect x="1.5" y="2" width="11" height="3" rx="0.5" />
-        <path d="M2.5 5v6a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V5" />
-        <line x1="5.5" y1="7.5" x2="8.5" y2="7.5" />
-      </svg>
-      <svg
-        v-else-if="iconName === 'scratchpad'"
-        class="icon"
-        width="13"
-        height="13"
-        viewBox="0 0 14 14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M9.5 1.5 12.5 4.5 5 12H2V9z" />
-      </svg>
-      <svg
-        v-else
-        class="icon"
-        width="13"
-        height="13"
-        viewBox="0 0 14 14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M1.5 3.5h4l1.5 2h5.5v6h-11z" />
-      </svg>
+      <TabIcon class="icon" :shapes="biblioDirShapes(node.path)" />
 
       <span class="label">{{ node.name }}</span>
     </button>
@@ -228,20 +111,7 @@ const fileIcon = computed((): string => {
       title="Archive"
       @click.stop="emit('archive-scratchpad', node.path)"
     >
-      <svg
-        width="11"
-        height="11"
-        viewBox="0 0 14 14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <rect x="1.5" y="2" width="11" height="3" rx="0.5" />
-        <path d="M2.5 5v6a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V5" />
-        <line x1="5.5" y1="7.5" x2="8.5" y2="7.5" />
-      </svg>
+      <TabIcon :shapes="archiveIcon" class="small-icon" />
     </button>
     <button
       v-if="showAddButton"
@@ -271,7 +141,10 @@ const fileIcon = computed((): string => {
       :node="child"
       :selected-path="selectedPath"
       :depth="depth + 1"
+      :expanded-paths="expandedPaths"
       @select="(path) => emit('select', path)"
+      @toggle="(path) => emit('toggle', path)"
+      @expand="(path) => emit('expand', path)"
       @add-scratchpad="emit('add-scratchpad')"
       @add-scratchpad-file="(folderPath) => emit('add-scratchpad-file', folderPath)"
       @archive-scratchpad="(taskPath) => emit('archive-scratchpad', taskPath)"
@@ -387,6 +260,11 @@ const fileIcon = computed((): string => {
 
 .chevron.expanded {
   transform: rotate(90deg);
+}
+
+.small-icon {
+  width: 11px;
+  height: 11px;
 }
 
 .icon {
