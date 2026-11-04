@@ -27,7 +27,7 @@ func TestWorkTaskResumesFromFirstOpenItem(t *testing.T) {
 	task(t, root, "feat", "- [x] one", "- [ ] two.", "- [ ] three")
 	writeFile(t, root, "biblio/handover/whiteboard.md", "1. feat [x] -> feat.md\n")
 	out := render(t, root, "work", "task", "feat")
-	wantAll(t, out, "Resume task feat: 2 of 3", `"two"`, "biblio/handover/feat.md", "While you work")
+	wantAll(t, out, "Resume task feat: 2 of 3", `"two"`, "biblio/handover/feat.md", "While you work", "**Books first.**", "before you judge, extend or build on a plan", "stop and tell the user what is stale")
 	if strings.Contains(out, "Plan first") {
 		t.Error("resume carries the new-PRD steps")
 	}
@@ -36,7 +36,7 @@ func TestWorkTaskResumesFromFirstOpenItem(t *testing.T) {
 func TestWorkTaskDraftsMissingPlans(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "biblio/scratchpad/feat/prd.md", "# T\n\n## Problem\n\nx\n")
-	wantAll(t, render(t, root, "work", "task", "feat"), "has no Plans items", "draft them")
+	wantAll(t, render(t, root, "work", "task", "feat"), "has no Plans items", "**Books first.**", "stop and tell the user what is stale", "draft Plans")
 }
 
 func TestWorkTaskAllDone(t *testing.T) {
@@ -75,7 +75,7 @@ func TestWorkResearchAndDebugBranch(t *testing.T) {
 
 func TestWorkDiscussionIsAManual(t *testing.T) {
 	root := t.TempDir()
-	wantAll(t, render(t, root, "work", "discussion"), "Gather context before you answer", "notes.md", "lgrass how work task <slug>")
+	wantAll(t, render(t, root, "work", "discussion"), "1. **Books first.** Read `biblio/books/toc.md`", "needs none of this", "notes.md", "lgrass how work task <slug>")
 	if _, err := Render(root, []string{"work", "discussion", "x"}); err == nil {
 		t.Error("discussion accepted an argument")
 	}

@@ -67,7 +67,8 @@ func workTask(root string, args []string) (string, error) {
 	if f.archived {
 		return archivedNotice(slug), nil
 	}
-	vars := map[string]string{"slug": slug, "handover": handoverLead(f), "existing": ""}
+	// books and prdcheck are fragments of their own so a resumed or research-made PRD gets the same books step and stale check as a new task.
+	vars := map[string]string{"slug": slug, "handover": handoverLead(f), "existing": "", "books": fragment("work/books.md", nil), "prdcheck": fragment("work/prdcheck.md", nil)}
 
 	var b strings.Builder
 	switch {
@@ -96,6 +97,14 @@ func workTask(root string, args []string) (string, error) {
 	}
 	b.WriteString("\n\n" + fragment("work/shared.md", vars) + "\n")
 	return b.String(), nil
+}
+
+// workDiscussion is a manual, but its books step is the shared fragment so the rule for reading books lives in one file.
+func workDiscussion(_ string, args []string) (string, error) {
+	if len(args) > 0 {
+		return "", fmt.Errorf("how: work/discussion takes no arguments")
+	}
+	return fragment("work/discussion.md", map[string]string{"books": fragment("work/books.md", nil)}) + "\n", nil
 }
 
 func workResearch(root string, args []string) (string, error) {

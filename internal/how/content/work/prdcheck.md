@@ -1,0 +1,1 @@
+Check the PRD against the books and the current code before acting on it or judging it. A PRD can go stale while the project moves on. When something in it is stale, stop and tell the user what is stale before planning, asking or building.

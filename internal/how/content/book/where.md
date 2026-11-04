@@ -1,6 +1,6 @@
 # Writing a book chapter
 
-You read `biblio/books/toc.md` when the task started. Reread it only if it is not in this session. Pick where the chapter goes, preferring the earlier option:
+Pick where the chapter goes from `biblio/books/toc.md`, preferring the earlier option:
 
 1. **An existing chapter covers the subject.** Correct or extend it in place.
 2. **A book's tags cover the subject.** Add a chapter to that book.

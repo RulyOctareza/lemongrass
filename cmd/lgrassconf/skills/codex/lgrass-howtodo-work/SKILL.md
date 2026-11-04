@@ -5,7 +5,7 @@ description: Use at the start of any task, before reading source, planning or ed
 
 ## 1. Find the books
 
-Read `biblio/books/toc.md` and open every book whose name or tags relate to the task, then the chapters whose names fit. Do this before reading source. Say which books you read. Go to the code only for what no book covers, and where code and a book disagree, the code wins and the chapter is corrected at closing.
+Read `biblio/books/toc.md` and open every book whose name or tags relate to any part this work reaches, then the chapters whose names fit, before reading source and before you judge, extend or build on a plan. Say which books you read. This is not done once: when the plan grows into another part of the project, when the human corrects or questions you, or when a fault leads somewhere new, go back to the toc before the code. The books are the labels and the code is the cables. Where they disagree the code wins, since it is what runs, and the chapter is corrected at closing, but tracing code is the slowest way to learn it and never tells why it is shaped that way. Go to the code for what no book covers and to confirm the lines you change. A question you can answer without opening any source needs none of this.
 
 If a PRD was already given, check it against the books and the current code before acting on it. When something in it is stale, stop and tell the user what is stale before planning, asking or building.
 

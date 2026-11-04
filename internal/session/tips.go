@@ -14,7 +14,7 @@ var bibliothekTips = []string{
 	"bibliothek tip: finishing a task includes writing its book chapter, same as running its tests.",
 	"bibliothek tip: memory only ever points at biblio/handover/<task>.md or biblio/books/toc.md -- never a hardcoded book path.",
 	"bibliothek tip: a task directory has reserved names such as prd.md and activities.md, and takes any other important file the work needs. It becomes the permanent record in the archive once the task closes.",
-	"bibliothek tip: check biblio/books/toc.md before researching something from scratch -- it might already be covered.",
+	"bibliothek tip: before touching a part of the project you have not read about this session, open its book from biblio/books/toc.md. A chapter costs a fraction of the code it explains, and only the chapter tells you why it is wired that way.",
 	"bibliothek tip: a handover's Status section is the truth, its Log is history only -- don't read the Log for current state.",
 	"bibliothek tip: once a handover's work is done, archive it -- biblio/handover/ should only ever hold what's still in flight.",
 	"bibliothek tip: tags are one word each -- a compound idea is multiple tags, not one hyphenated tag.",

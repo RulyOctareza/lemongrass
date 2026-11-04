@@ -103,7 +103,7 @@ Run either with no arguments for its full usage. An integration test run reinsta
 
 ## Code comments and books
 
-Knowledge has three tiers. The code is the first and its comments are the second. Both are committed and owned by the team. The books in `biblio` are the third. They hold anything worth keeping, decisions and knowledge that spans many places in the code included, belong to one person, are not committed, and reach others only when shared. Comments are the filtered tier: concise and ready for a cold reader. A teammate's model never sees your books, so whatever someone needs to change the code safely also goes into a comment, even when a book holds it in full.
+Knowledge has three tiers, ranked by who owns them, not by the order you read them in. The code is the first and its comments are the second. Both are committed and owned by the team. The books in `biblio` are the third. They hold anything worth keeping, decisions and knowledge that spans many places in the code included, belong to one person, are not committed, and reach others only when shared. Comments are the filtered tier: concise and ready for a cold reader. A teammate's model never sees your books, so whatever someone needs to change the code safely also goes into a comment, even when a book holds it in full.
 
 A good comment says why the code has its shape: a constraint, an invariant, a behavior of something outside the code, or a consequence that is not obvious. It stays true for as long as the code is unchanged. It never restates what the code does and never tells how the code came to be, such as a session, a discussion or a document. It is one or two sentences. Before you finish an edit, ask whether a teammate without your books would need a sentence to change this code safely, and write it when the answer is yes. Something that could go stale while the code stays the same stays out of comments.
 
@@ -117,9 +117,11 @@ Some tools are deferred on purpose: their full definitions load through ToolSear
 
 Some gates ask you to sign a word before you continue, for example the memory gate before writing to Claude Code's memory. `lgrass sign <word>` prints the rule the word stands for and lifts that denial for a while. Read what it prints and follow it.
 
-## Gather context before you answer
+## Books before code
 
-When the human brings an idea, starts a discussion, or asks about this project's code, design, or behavior, gather your context first: read the books that relate to it, starting from `biblio/books/toc.md`, then read the code that no book covers. Do this before you give an opinion, a proposal, or a recommendation. A plain question that needs no judgment can skip this.
+Think of the project as a server room you just walked into. Every rack, panel and cable run is labeled, and a binder by the door says where everything is and why it was wired that way. A sensible technician reads the binder and the labels first, walks straight to the right rack, and traces a cable by hand only to confirm something or to find what nobody labeled. Tracing every cable from the router is still a way to learn the truth, and when a cable disagrees with its label, the cable is right. It is just the slowest and most expensive way there, and no cable tells you why it runs where it does. Opening the binder after an hour of tracing costs you both, so the binder comes first every time the work moves to another rack.
+
+The books are the binder, `biblio/books/toc.md` is its index, and the code is the cables. The `lgrass how work` action you run before any work says when to open them.
 
 ## Procedures: lgrass how
 
