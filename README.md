@@ -93,7 +93,7 @@ Planned:
 
 Limits:
 
-- Linux is the primary platform. The macOS build exists and Windows packaging is not wired.
+- Linux is the primary platform. Releases carry macOS dmgs for arm64 and x64, but the app is not notarized, so a browser-downloaded dmg needs the steps under Install, and it does not update itself on macOS. Windows packaging is not wired.
 - An HTTP channel's scope is declared and checked against the request. The database scope is checked against what the parsed statement touches, which is a stronger guarantee.
 - Codex tabs start with no bypass flag and run under Codex's own sandbox and approvals. A write by `lgrass` to its database, such as a thread post, asks for sandbox approval, so a Codex thinker cannot post unattended yet. Codex tabs also get no orientation in their system prompt, only the laws summary from the `SessionStart` hook, and Codex asks for review of the hook definitions through `/hooks`.
 - The guard does not see what a build tool fetches as a side effect (`go build`, `cargo build`, npm lifecycle scripts). Builds are left unlimited on purpose.
@@ -140,9 +140,9 @@ On macOS, run:
 curl -fsSL https://raw.githubusercontent.com/faizalv/lemongrass/main/scripts/install-mac.sh | bash
 ```
 
-It downloads the dmg for your Mac's chip from the newest release, checks it against the release's `SHA256SUMS`, quits a running Lemongrass, puts the app in `/Applications` and opens it. Run it again to update. `LEMONGRASS_VERSION=v0.4.0-rc.1` before `bash` installs a given tag.
+It downloads the dmg for your Mac's chip from the newest release, checks it against the release's `SHA256SUMS`, quits a running Lemongrass, puts the app in `/Applications` and opens it. The app does not update itself on macOS, so run it again to update. `LEMONGRASS_VERSION=v0.4.0-rc.1` before `bash` installs a given tag.
 
-The app is signed but not notarized by Apple yet, so a dmg downloaded with a browser opens to "Apple could not verify Lemongrass is free of malware". The installer avoids that. With the dmg, click Done, then either open System Settings > Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Lemongrass.app`. The dmg carries a text file with the same steps. Either is needed once per version.
+The app is signed ad hoc, not with an Apple Developer ID, and is not notarized, so a dmg downloaded with a browser opens to "Apple could not verify Lemongrass is free of malware". The installer avoids that. With the dmg, click Done, then either open System Settings > Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Lemongrass.app`. The dmg carries a text file with the same steps. Either is needed once per version.
 
 ## Build
 
@@ -162,7 +162,7 @@ Same cross-compile, then builds only the rpm (needs `rpmbuild`), for Fedora and 
 make build-mac
 ```
 
-Cross-compiles `lgrass`, `lgrassd` and `lgrassconf` for `darwin/amd64` and `darwin/arm64`, then packages a macOS `.app`, `.dmg` and `.zip` via electron-builder. On first launch the app copies the matching arch binaries into `~/.local/bin` and runs `lgrassconf install` (LaunchAgent). Notarization is off by default.
+Cross-compiles `lgrass`, `lgrassd` and `lgrassconf` for `darwin/amd64` and `darwin/arm64`, then packages a macOS `.app`, `.dmg` and `.zip` via electron-builder. On first launch the app copies the matching arch binaries into `~/.local/bin` and runs `lgrassconf install` (LaunchAgent). The app is signed ad hoc and not notarized, since both need an Apple Developer ID.
 
 Windows packaging is not wired up yet.
 
