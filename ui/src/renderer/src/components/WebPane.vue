@@ -22,6 +22,9 @@ let pendingFrame = 0
 let dragging = false
 
 const shown = computed(() => (state.value?.open ? state.value : null))
+// After a flush of the active user or a failed login the browser stays open with no page to show, so the host
+// would be an empty dark area without its own empty state.
+const noUser = computed(() => shown.value !== null && shown.value.user === '')
 
 // The view is a native surface above the DOM, so it only stays attached while nothing in the page is drawn over the host.
 function covered(rect: DOMRect): boolean {
@@ -151,7 +154,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="web-pane">
     <div class="web-bar">
-      <span class="web-url" :title="shown?.url">{{ shown?.url ?? 'No page open' }}</span>
+      <span class="web-url" :title="shown?.url">{{ shown?.url || 'No page open' }}</span>
       <span v-if="shown?.title" class="web-title" :title="shown.title">{{ shown.title }}</span>
       <span v-if="shown?.user" class="web-user">as {{ shown.user }}</span>
       <span class="web-watch">Watch only</span>
@@ -162,6 +165,12 @@ onBeforeUnmount(() => {
         layout="fill"
         title="No page open yet."
         detail="The browser appears here when an agent in that shell tab opens a page."
+      />
+      <AppEmptyState
+        v-else-if="noUser"
+        layout="fill"
+        title="No user is active."
+        detail="The page appears again when the agent opens it as a user."
       />
     </div>
   </div>
