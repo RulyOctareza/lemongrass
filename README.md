@@ -93,7 +93,7 @@ Planned:
 
 Limits:
 
-- Linux is the primary platform. Releases carry macOS dmgs for arm64 and x64, but the app is not notarized, so a browser-downloaded dmg needs the steps under Install, and it does not update itself on macOS. Windows packaging is not wired.
+- Linux is the primary platform. Releases carry macOS dmgs for arm64 and x64, but the app is not notarized, so a browser-downloaded dmg needs the steps under Install. An ad hoc signed app is a new app to macOS after every update, so folder access it was granted is asked again. Windows packaging is not wired.
 - An HTTP channel's scope is declared and checked against the request. The database scope is checked against what the parsed statement touches, which is a stronger guarantee.
 - Codex tabs start with no bypass flag and run under Codex's own sandbox and approvals. A write by `lgrass` to its database, such as a thread post, asks for sandbox approval, so a Codex thinker cannot post unattended yet. Codex tabs also get no orientation in their system prompt, only the laws summary from the `SessionStart` hook, and Codex asks for review of the hook definitions through `/hooks`.
 - The guard does not see what a build tool fetches as a side effect (`go build`, `cargo build`, npm lifecycle scripts). Builds are left unlimited on purpose.
@@ -140,9 +140,11 @@ On macOS, run:
 curl -fsSL https://raw.githubusercontent.com/faizalv/lemongrass/main/scripts/install-mac.sh | bash
 ```
 
-It downloads the dmg for your Mac's chip from the newest release, checks it against the release's `SHA256SUMS`, quits a running Lemongrass, puts the app in `/Applications` and opens it. The app does not update itself on macOS, so run it again to update. `LEMONGRASS_VERSION=v0.4.0-rc.1` before `bash` installs a given tag.
+It downloads the dmg for your Mac's chip from the newest release, checks it against the release's `SHA256SUMS`, quits a running Lemongrass, puts the app in `/Applications` and opens it. `LEMONGRASS_VERSION=v0.4.0-rc.1` before `bash` installs a given tag. From 0.4.0 the app updates itself from Settings, Updates, the same as the rpm, as long as it runs from a folder such as `/Applications` and not from the dmg.
 
-The app is signed ad hoc, not with an Apple Developer ID, and is not notarized, so a dmg downloaded with a browser opens to "Apple could not verify Lemongrass is free of malware". The installer avoids that. With the dmg, click Done, then either open System Settings > Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Lemongrass.app`. The dmg carries a text file with the same steps. Either is needed once per version.
+The app is signed ad hoc, not with an Apple Developer ID, and is not notarized, so a dmg downloaded with a browser opens to "Apple could not verify Lemongrass is free of malware". The installer avoids that. With the dmg, click Done, then either open System Settings > Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Lemongrass.app`. The dmg carries a text file with the same steps. Either is needed once per version. An update the app installs itself does not need it.
+
+To be offered release candidates as well as stable releases, start the app with `LEMONGRASS_UPDATE_PRERELEASE=1` in its environment, on macOS with `LEMONGRASS_UPDATE_PRERELEASE=1 /Applications/Lemongrass.app/Contents/MacOS/Lemongrass`.
 
 ## Build
 

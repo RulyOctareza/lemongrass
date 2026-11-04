@@ -59,6 +59,29 @@ export function rpmAssetName(version: string): string {
   return `lemongrass-${version}.x86_64.rpm`
 }
 
+// Must match dmg.artifactName in electron-builder.yml. arch is process.arch, arm64 or x64.
+export function dmgAssetName(version: string, arch: string): string {
+  return `lemongrass-${version}-${arch}.dmg`
+}
+
+export interface ListedRelease {
+  tag_name?: string
+  draft?: boolean
+}
+
+// The prerelease channel reads the releases list, which GitHub orders by creation date, not version, so
+// the newest is picked by semver. A tag that is not semver is skipped.
+export function newestRelease<T extends ListedRelease>(releases: T[]): T | null {
+  let best: T | null = null
+  for (const rel of releases) {
+    if (rel.draft || !rel.tag_name) continue
+    const version = versionFromTag(rel.tag_name)
+    if (compareVersions(version, version) === null) continue
+    if (!best || isNewer(version, versionFromTag(best.tag_name ?? ''))) best = rel
+  }
+  return best
+}
+
 // Reads one file's hash from sha256sum output, where each line is the hex digest, two spaces (or a
 // space and * in binary mode) and the file name.
 export function sha256For(sums: string, file: string): string | null {

@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 The Lemongrass Authors
+
+// What differs between the rpm and the macOS update. The check, download and SHA256SUMS verification
+// are shared in updater.ts.
+export interface UpdatePlatform {
+  unsupportedReason(): Promise<string | null>
+  assetName(version: string): string
+  // Shown while install runs, null for the view's default.
+  installingMessage: string | null
+  // Installs the verified file and returns a message for the installed state, null for the default.
+  install(file: string, version: string): Promise<string | null>
+  // The rpm is installed once install returns, so its download folder goes. The macOS app is only
+  // staged there and is copied into place by restart.
+  keepAfterInstall: boolean
+  restart(): void
+}

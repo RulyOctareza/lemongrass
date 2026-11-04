@@ -5,7 +5,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   compareVersions,
+  dmgAssetName,
   isNewer,
+  newestRelease,
   rpmAssetName,
   sha256For,
   versionFromTag
@@ -36,6 +38,21 @@ test('a version that is not semver is never offered an update', () => {
 test('names the release assets', () => {
   assert.equal(versionFromTag('v0.2.0'), '0.2.0')
   assert.equal(rpmAssetName('0.2.0-rc.1'), 'lemongrass-0.2.0-rc.1.x86_64.rpm')
+  assert.equal(dmgAssetName('0.4.0-rc.2', 'arm64'), 'lemongrass-0.4.0-rc.2-arm64.dmg')
+  assert.equal(dmgAssetName('0.4.0', 'x64'), 'lemongrass-0.4.0-x64.dmg')
+})
+
+test('the prerelease channel picks the highest version, not the newest entry', () => {
+  const releases = [
+    { tag_name: 'v0.3.1', draft: false },
+    { tag_name: 'v0.4.0-rc.3', draft: false },
+    { tag_name: 'v0.4.0-rc.2', draft: false },
+    { tag_name: 'v0.5.0', draft: true },
+    { tag_name: 'nightly', draft: false }
+  ]
+  assert.equal(newestRelease(releases)?.tag_name, 'v0.4.0-rc.3')
+  assert.equal(newestRelease([...releases, { tag_name: 'v0.4.0' }])?.tag_name, 'v0.4.0')
+  assert.equal(newestRelease([]), null)
 })
 
 test('reads one file from SHA256SUMS', () => {

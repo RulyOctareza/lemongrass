@@ -54,6 +54,7 @@ mac:
       to: "bin/darwin-arm64/lgrassconf"
 dmg:
   # The release builds one dmg per arch into the same directory, so the arch keeps them from overwriting each other.
+  # The in-app updater looks the dmg up by this name (dmgAssetName in ui/src/main/updateVersion.ts).
   artifactName: ${name}-${version}-${arch}.${ext}
   # The app is not notarized, so Gatekeeper blocks its first launch from a downloaded dmg. The background prints the
   # steps to open it anyway, and the text file under them repeats the steps with the command to copy and points at

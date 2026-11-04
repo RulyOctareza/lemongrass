@@ -1,7 +1,7 @@
 # Builds the x86_64 rpm and the arm64 and x64 macOS dmgs for a pushed v<version> tag, versioned from the tag, and
 # publishes them with one SHA256SUMS as a GitHub Release. A manual run (Run workflow) builds and checks every package
 # from the chosen branch and attaches them to the run as an artifact, publishing nothing.
-# The in-app updater reads the latest release and verifies the rpm against SHA256SUMS, so both asset names are fixed.
+# The in-app updater reads the latest release and verifies the rpm or the dmg against SHA256SUMS, so their names are fixed.
 name: Release
 
 on:

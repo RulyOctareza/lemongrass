@@ -49,11 +49,15 @@ const status = computed((): { text: string; tone: '' | 'muted' | 'saved' | 'erro
       return { text: `Downloading ${s.latest}. ${Math.round((s.progress ?? 0) * 100)}%`, tone: '' }
     case 'verifying':
       return { text: 'Checking the download.', tone: '' }
+    // The platform's own message wins: on macOS installing only prepares the new app, and the
+    // password, when one is needed, is asked on restart.
     case 'installing':
-      return { text: 'Waiting for your password, then installing.', tone: '' }
+      return { text: s.message ?? 'Waiting for your password, then installing.', tone: '' }
     case 'installed':
       return {
-        text: `Version ${s.latest} is installed. Restart to use it. Restarting closes every open tab.`,
+        text:
+          s.message ??
+          `Version ${s.latest} is installed. Restart to use it. Restarting closes every open tab.`,
         tone: 'saved'
       }
     case 'failed':
@@ -70,7 +74,7 @@ const status = computed((): { text: string; tone: '' | 'muted' | 'saved' | 'erro
 <template>
   <div v-if="state" class="updates">
     <p class="settings-text">
-      Lemongrass looks for a new release every few hours. Installing one asks for your system
+      Lemongrass looks for a new release every few hours. Installing one can ask for your system
       password.
     </p>
 
