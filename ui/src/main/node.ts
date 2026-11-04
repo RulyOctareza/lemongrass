@@ -54,6 +54,7 @@ interface RegistryProject {
   id: string
   name: string
   path: string
+  deletedAt?: string
 }
 
 const STORE_DIR = join(homedir(), '.lemongrass')
@@ -104,9 +105,13 @@ function saveConfig(cfg: NodeConfig): void {
   renameSync(tmp, CONFIG_FILE)
 }
 
+// A deleted project is left out, as the daemon's library leaves it out, so it cannot be shared again.
 function loadRegistry(): RegistryProject[] {
   try {
-    return JSON.parse(readFileSync(join(STORE_DIR, 'projects.json'), 'utf-8'))
+    const projects = JSON.parse(
+      readFileSync(join(STORE_DIR, 'projects.json'), 'utf-8')
+    ) as RegistryProject[]
+    return projects.filter((p) => !p.deletedAt)
   } catch {
     return []
   }
@@ -303,6 +308,18 @@ function updateGrant(req: NodeUpdateRequest): void {
   grant.expiresAt = expiresAt.toISOString()
   grant.shares = shares
   saveConfig(cfg)
+}
+
+// Called by the purge of a deleted project: drops its alias and every grant's share of it, then hints the daemon.
+export async function dropNodeProject(projectId: string): Promise<void> {
+  if (!existsSync(CONFIG_FILE)) return
+  const cfg = loadConfig()
+  const aliases = new Set(cfg.projects.filter((p) => p.projectId === projectId).map((p) => p.alias))
+  if (aliases.size === 0) return
+  cfg.projects = cfg.projects.filter((p) => !aliases.has(p.alias))
+  for (const g of cfg.grants) g.shares = g.shares.filter((s) => !aliases.has(s.alias))
+  saveConfig(cfg)
+  await daemonStatus('reload')
 }
 
 export function registerNodeHandlers(): void {

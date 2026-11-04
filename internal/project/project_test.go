@@ -139,3 +139,86 @@ func TestRegisterViaSymlinkReturnsExistingEntry(t *testing.T) {
 		t.Fatalf("registry has %d entries after registering the real path then its symlink, want 1", len(projects))
 	}
 }
+
+func markDeleted(t *testing.T, id string) {
+	t.Helper()
+	projects, err := loadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range projects {
+		if projects[i].ID == id {
+			projects[i].DeletedAt = "2026-01-01T00:00:00.000Z"
+		}
+	}
+	if err := saveAll(projects); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeletedProjectIsHiddenUntilRegisteredAgain(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	other := t.TempDir()
+
+	p, err := Register(dir)
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if _, err := Register(other); err != nil {
+		t.Fatalf("Register (other): %v", err)
+	}
+	markDeleted(t, p.ID)
+
+	listed, err := List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range listed {
+		if q.ID == p.ID {
+			t.Error("List returned a deleted project")
+		}
+	}
+	all, err := ListAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Errorf("ListAll returned %d projects, want 2 with the deleted one", len(all))
+	}
+	if _, err := Resolve(dir); err == nil {
+		t.Error("Resolve matched a deleted project")
+	}
+
+	restored, err := Register(dir)
+	if err != nil {
+		t.Fatalf("Register (restore): %v", err)
+	}
+	if restored.ID != p.ID || restored.DeletedAt != "" {
+		t.Errorf("Register did not restore the deleted entry: %+v", restored)
+	}
+	if _, err := Resolve(dir); err != nil {
+		t.Errorf("Resolve after restore: %v", err)
+	}
+}
+
+func TestRegisterKeepsOtherProjectsDeletedMark(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	deleted, err := Register(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	markDeleted(t, deleted.ID)
+	if _, err := Register(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	all, err := ListAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range all {
+		if q.ID == deleted.ID && q.DeletedAt == "" {
+			t.Error("registering another project cleared the deleted mark")
+		}
+	}
+}

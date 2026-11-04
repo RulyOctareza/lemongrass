@@ -28,6 +28,7 @@ import type {
   PtyDataPayload,
   PtyExitPayload,
   Project,
+  ProjectDeleteResult,
   UiState,
   BiblioTree,
   BiblioFileResult,
@@ -181,7 +182,11 @@ const projects = {
   list: (): Promise<Project[]> => ipcRenderer.invoke('projects:list'),
   add: (): Promise<Project | null> => ipcRenderer.invoke('projects:add'),
   setTrust: (id: string, trusted: boolean): Promise<Project | null> =>
-    ipcRenderer.invoke('projects:setTrust', id, trusted)
+    ipcRenderer.invoke('projects:setTrust', id, trusted),
+  home: (): Promise<string> => ipcRenderer.invoke('projects:home'),
+  liveShells: (): Promise<Record<string, number>> => ipcRenderer.invoke('projects:liveShells'),
+  delete: (id: string): Promise<ProjectDeleteResult | null> =>
+    ipcRenderer.invoke('projects:delete', id)
 }
 
 const workspaceLayouts = {

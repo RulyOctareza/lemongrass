@@ -20,6 +20,9 @@ type Project struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Path string `json:"path"`
+	// DeletedAt marks a project the human deleted. It stays registered, with its data, until the
+	// app purges it 30 days later, so a CLI rewrite of the registry must carry it through.
+	DeletedAt string `json:"deletedAt,omitempty"`
 }
 
 func registryPath() string {
@@ -41,9 +44,28 @@ func loadAll() ([]Project, error) {
 	return projects, nil
 }
 
-// List returns every registered project, or none when the registry does not exist yet.
+// List returns every registered project not marked deleted, or none when the registry does not exist yet.
 func List() ([]Project, error) {
+	projects, err := loadAll()
+	if err != nil {
+		return nil, err
+	}
+	return active(projects), nil
+}
+
+// ListAll also returns deleted projects, for stores that must keep a deleted project's data until it is purged.
+func ListAll() ([]Project, error) {
 	return loadAll()
+}
+
+func active(projects []Project) []Project {
+	out := make([]Project, 0, len(projects))
+	for _, p := range projects {
+		if p.DeletedAt == "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func saveAll(projects []Project) error {
@@ -57,7 +79,8 @@ func saveAll(projects []Project) error {
 	return os.WriteFile(registryPath(), data, 0o644)
 }
 
-// Register adds dir to the project registry, deduped by symlink-resolved path, returning the existing entry unchanged if already registered.
+// Register adds dir to the project registry, deduped by symlink-resolved path, returning the existing entry if already
+// registered. A deleted entry is restored under its id, so its data comes back with it.
 func Register(dir string) (Project, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -69,10 +92,18 @@ func Register(dir string) (Project, error) {
 	if err != nil {
 		return Project{}, err
 	}
-	for _, p := range projects {
-		if resolvePath(p.Path) == abs {
+	for i, p := range projects {
+		if resolvePath(p.Path) != abs {
+			continue
+		}
+		if p.DeletedAt == "" {
 			return p, nil
 		}
+		projects[i].DeletedAt = ""
+		if err := saveAll(projects); err != nil {
+			return Project{}, err
+		}
+		return projects[i], nil
 	}
 
 	p := Project{ID: uuid.NewString(), Name: filepath.Base(abs), Path: abs}
@@ -93,7 +124,7 @@ func resolvePath(dir string) string {
 
 // Resolve matches a directory to a registered project, both symlink-resolved: exact path first, then the nearest registered ancestor.
 func Resolve(dir string) (Project, error) {
-	projects, err := loadAll()
+	projects, err := List()
 	if err != nil {
 		return Project{}, err
 	}

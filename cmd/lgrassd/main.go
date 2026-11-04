@@ -32,6 +32,8 @@ func main() {
 		cmdNode(os.Args[2:])
 	case "tabs":
 		cmdTabs(os.Args[2:])
+	case "project":
+		cmdProject(os.Args[2:])
 	case "accounts":
 		cmdAccounts(os.Args[2:])
 	case "trust":
@@ -76,6 +78,8 @@ COMMANDS
   tabs title <tab-id> <title>       Records the shell title a tab currently shows
   tabs clear                        Drops every registered tab of the project, keeping their saved sessions
   tabs forget <tab-id>              Drops a closed tab's records
+  project purge <project-id>        Deletes a deleted project's session store rows and biblio history;
+                                     refuses a project not marked deleted
   accounts list                     The Claude accounts beside the primary, as JSON
   accounts add <name>               Creates ~/.claude-<name>, links the shared folders and registers the hooks
   accounts remove <name>            Deletes ~/.claude-<name> and forgets the account

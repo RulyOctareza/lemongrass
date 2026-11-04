@@ -181,6 +181,11 @@ export function killAllShells(): void {
   shells.clear()
 }
 
+// Includes shells still stopping, since their agent may still be running.
+export function liveShellCwds(): string[] {
+  return [...shells.values()].map((shell) => shell.cwd)
+}
+
 export function hasCodexShells(): boolean {
   return [...shells.values()].some((shell) => shell.command === 'codex')
 }

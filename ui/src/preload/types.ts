@@ -35,6 +35,9 @@ export interface Project {
   trusted?: boolean
 }
 
+// A refused delete names how many shells still run for the project.
+export type ProjectDeleteResult = { ok: true } | { ok: false; liveShells: number }
+
 export interface UiState {
   lastProjectId?: string
   zoomFactor?: number

@@ -21,6 +21,7 @@ import { registerNotificationHandlers } from './notifications'
 import { registerDepsHandlers } from './deps'
 import { registerCreditsHandlers } from './credits'
 import { registerProjectHandlers } from './projects'
+import { startProjectPurge } from './projectPurge'
 import { setTrustBinary } from './projectTrust'
 import { registerWorkspaceLayoutHandlers } from './workspaceLayouts'
 import { registerUiStateHandlers } from './uiState'
@@ -139,6 +140,7 @@ app.whenReady().then(async () => {
   registerCreditsHandlers()
   setTrustBinary(lgrassdPath)
   registerProjectHandlers(() => mainWindow)
+  startProjectPurge(lgrassdPath)
   registerWorkspaceLayoutHandlers()
   registerUiStateHandlers(() => mainWindow)
   registerTabSessionHandlers(lgrassdPath)

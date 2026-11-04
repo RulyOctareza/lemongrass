@@ -55,9 +55,11 @@ func registeredProject(id string) error {
 	return fmt.Errorf("gatekeeper: project %q is not registered", id)
 }
 
-// pruneProjectPolicies drops the policies of projects that left the registry. A registry that cannot be read or lists no project prunes nothing, so a broken registry never wipes every project's policy.
+// pruneProjectPolicies drops the policies of projects that left the registry. A deleted project is still registered
+// until its purge, so it keeps its policy for a restore. A registry that cannot be read or lists no project prunes
+// nothing, so a broken registry never wipes every project's policy.
 func (b *Backend) pruneProjectPolicies() error {
-	projects, err := project.List()
+	projects, err := project.ListAll()
 	if err != nil || len(projects) == 0 {
 		return nil
 	}

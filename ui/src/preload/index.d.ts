@@ -27,6 +27,7 @@ import type {
   PtyDataPayload,
   PtyExitPayload,
   Project,
+  ProjectDeleteResult,
   UiState,
   BiblioTree,
   BiblioFileResult,
@@ -192,6 +193,9 @@ interface Api {
     list: () => Promise<Project[]>
     add: () => Promise<Project | null>
     setTrust: (id: string, trusted: boolean) => Promise<Project | null>
+    home: () => Promise<string>
+    liveShells: () => Promise<Record<string, number>>
+    delete: (id: string) => Promise<ProjectDeleteResult | null>
   }
   tabSessions: {
     list: (projectPath: string) => Promise<Record<string, string>>

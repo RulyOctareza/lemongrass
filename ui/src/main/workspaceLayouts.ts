@@ -93,6 +93,22 @@ function importLegacy(projectId: string): WorkspaceState | null {
   return null
 }
 
+// Called by the purge of a deleted project. The legacy files are only read for a layout's first import, but they hold
+// the project's id too.
+export function dropWorkspaceLayout(projectId: string): void {
+  const all = readJson(STORE_FILE)
+  if (projectId in all) {
+    delete all[projectId]
+    saveAll(all)
+  }
+  for (const file of [LEGACY_SHELL_FILE, LEGACY_DOC_FILE]) {
+    const legacy = readJson(file)
+    if (!(projectId in legacy)) continue
+    delete legacy[projectId]
+    writeFileSync(file, JSON.stringify(legacy, null, 2))
+  }
+}
+
 export function registerWorkspaceLayoutHandlers(): void {
   ipcMain.handle('workspaceLayouts:load', (_event, projectId: string) => {
     const saved = readJson(STORE_FILE)

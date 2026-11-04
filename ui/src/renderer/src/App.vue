@@ -121,6 +121,18 @@ async function answerTrust(trusted: boolean): Promise<void> {
   }
 }
 
+// Main refuses a delete while any shell runs for the project, so nothing of it is live here. Its in-memory workspace
+// stays, so adding the folder back in this session restores it as it was.
+function onProjectDeleted(id: string): void {
+  projects.value = projects.value.filter((p) => p.id !== id)
+  delete loadedProjects[id]
+  delete biblioByProject[id]
+  if (trustPrompt.value?.id === id) trustPrompt.value = null
+  if (activeProjectId.value !== id) return
+  if (shellPicker.open) cancelShellPicker()
+  activeProjectId.value = null
+}
+
 async function addProject(): Promise<void> {
   const project = await window.api.projects.add()
   if (!project) return
@@ -185,6 +197,7 @@ onBeforeUnmount(() => {
             :active-project-id="activeProjectId"
             @select="selectProject"
             @add="addProject"
+            @deleted="onProjectDeleted"
           />
         </span>
       </template>
