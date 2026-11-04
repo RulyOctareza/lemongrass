@@ -55,6 +55,24 @@ mac:
 dmg:
   # The release builds one dmg per arch into the same directory, so the arch keeps them from overwriting each other.
   artifactName: ${name}-${version}-${arch}.${ext}
+  # The app is not notarized, so Gatekeeper blocks its first launch from a downloaded dmg. The background prints the
+  # steps to open it anyway, and the text file under them repeats the steps with the command to copy and points at
+  # scripts/install-mac.sh. dmg-builder sizes the window from the background (540x500), so there is no window block.
+  # The positions match build/dmg/background.html, which renders both pngs. Setting contents replaces the default
+  # layout, so the app and the Applications link are listed here too.
+  background: build/dmg/background.png
+  contents:
+    - x: 130
+      y: 130
+      type: file
+    - x: 410
+      y: 130
+      type: link
+      path: /Applications
+    - x: 270
+      y: 425
+      type: file
+      path: "build/dmg/If Lemongrass won't open.txt"
 linux:
   target:
     - AppImage
