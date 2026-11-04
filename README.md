@@ -130,6 +130,20 @@ The procedures an agent follows live in `lgrass how`, embedded in the `lgrass` b
 
 Claude tabs learn these from their orientation, and no lemongrass skill is installed for Claude. `lgrassconf` still installs the older skills for Codex, which has no orientation yet. Bibliothek is not among them: Claude tabs get it in their system prompt, and a Codex tab or a Claude session outside Lemongrass uses it only if it is installed separately from its own repository.
 
+## Install
+
+On Fedora and other rpm distributions, install the rpm from the [latest release](https://github.com/faizalv/lemongrass/releases). The app updates itself from then on.
+
+On macOS, run:
+
+```
+curl -fsSL https://raw.githubusercontent.com/faizalv/lemongrass/main/scripts/install-mac.sh | bash
+```
+
+It downloads the dmg for your Mac's chip from the newest release, checks it against the release's `SHA256SUMS`, quits a running Lemongrass, puts the app in `/Applications` and opens it. Run it again to update. `LEMONGRASS_VERSION=v0.4.0-rc.1` before `bash` installs a given tag.
+
+The app is signed but not notarized by Apple yet, so a dmg downloaded with a browser opens to "Apple could not verify Lemongrass is free of malware". The installer avoids that. With the dmg, click Done, then either open System Settings > Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Lemongrass.app`. The dmg carries a text file with the same steps. Either is needed once per version.
+
 ## Build
 
 ```
