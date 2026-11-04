@@ -225,26 +225,42 @@ func TestExecWebOnAPIChannelNamesTheAPICommands(t *testing.T) {
 	}
 }
 
-func TestRefuseAPIOnWeb(t *testing.T) {
+func TestRouteOnChannelTypeRefusesAPIOnWeb(t *testing.T) {
 	client, short, _ := webStack(t, "web", map[string]any{"ok": true})
-	for _, args := range [][]string{{short, "get", "/orders"}, {short, "flush"}} {
-		if err := refuseAPIOnWeb(client, args); err == nil || !strings.Contains(err.Error(), "web channel, it takes open") {
-			t.Errorf("%v: err = %v, want the web commands named", args, err)
-		}
+	if _, err := routeOnChannelType(client, []string{short, "get", "/orders"}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "web channel, it takes open") {
+		t.Errorf("get: err = %v, want the web commands named", err)
 	}
 	for _, args := range [][]string{{short, "info"}, {short, "users"}} {
-		if err := refuseAPIOnWeb(client, args); err != nil {
-			t.Errorf("%v: err = %v, want info and users allowed on a web channel", args, err)
+		if handled, err := routeOnChannelType(client, args, &bytes.Buffer{}); err != nil || handled {
+			t.Errorf("%v: handled = %v, err = %v, want info and users left to the rester path", args, handled, err)
 		}
 	}
 
-	if err := refuseAPIOnWeb(client, []string{"nope0000", "get", "/orders"}); err == nil || !strings.Contains(err.Error(), "no such channel") {
+	if _, err := routeOnChannelType(client, []string{"nope0000", "get", "/orders"}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "no such channel") {
 		t.Errorf("unknown id: err = %v, want the info call's error returned so the request is not sent", err)
 	}
 
 	client, short, _ = webStack(t, "api", map[string]any{"ok": true})
-	if err := refuseAPIOnWeb(client, []string{short, "get", "/orders"}); err != nil {
-		t.Errorf("api channel: err = %v, want no refusal", err)
+	for _, args := range [][]string{{short, "get", "/orders"}, {short, "flush"}} {
+		if handled, err := routeOnChannelType(client, args, &bytes.Buffer{}); err != nil || handled {
+			t.Errorf("api channel %v: handled = %v, err = %v, want it left to the rester path", args, handled, err)
+		}
+	}
+}
+
+func TestRouteOnChannelTypeSendsWebFlushToTheEngine(t *testing.T) {
+	client, short, got := webStack(t, "web", map[string]any{"ok": true, "text": `{"flushed":1}`})
+	var out bytes.Buffer
+	handled, err := routeOnChannelType(client, []string{short, "flush", "--user", "alice"}, &out)
+	if err != nil || !handled {
+		t.Fatalf("handled = %v, err = %v, want the flush run on the engine", handled, err)
+	}
+	req := <-got
+	if req.Command != "flush" || req.Flags["user"] != "alice" {
+		t.Errorf("request = %+v, want command flush with user alice", req)
+	}
+	if strings.TrimSpace(out.String()) != `{"flushed":1}` {
+		t.Errorf("out = %q, want the engine's count", out.String())
 	}
 }
 

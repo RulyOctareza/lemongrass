@@ -141,12 +141,12 @@ func TestExecAppLogin(t *testing.T) {
 func TestRefuseAPIOnApp(t *testing.T) {
 	client, short := appStack(t, "app", restergate.AppLoginResult{})
 	for _, args := range [][]string{{short, "get", "/orders"}, {short, "flush"}} {
-		if err := refuseAPIOnWeb(client, args); err == nil || !strings.Contains(err.Error(), "app channel, it takes app-login") {
+		if _, err := routeOnChannelType(client, args, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "app channel, it takes app-login") {
 			t.Errorf("%v: err = %v, want app-login named", args, err)
 		}
 	}
 	for _, args := range [][]string{{short, "info"}, {short, "users"}} {
-		if err := refuseAPIOnWeb(client, args); err != nil {
+		if _, err := routeOnChannelType(client, args, &bytes.Buffer{}); err != nil {
 			t.Errorf("%v: err = %v, want info and users allowed on an app channel", args, err)
 		}
 	}

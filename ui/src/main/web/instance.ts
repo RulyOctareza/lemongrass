@@ -113,8 +113,16 @@ export class Instance {
     // Human input from the watch tab. before-input-event sees only real keyboard input, never keys sent over
     // CDP, while input-event sees every mouse press, the engine's own included, which capture subtracts.
     const wc = page.view.webContents
-    wc.on('before-input-event', (_event, input) => {
-      if (input.type === 'keyDown') page.capture.keyDown()
+    wc.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      page.capture.keyDown()
+      // The default menu's Reload and Force Reload act on the focused window's own contents, the app itself, and
+      // the main window's shortcut guard never sees keys sent to this view, so the view handles them first.
+      if (input.code === 'KeyR' && (input.control || input.meta) && !input.alt) {
+        event.preventDefault()
+        if (input.shift) wc.reloadIgnoringCache()
+        else wc.reload()
+      }
     })
     wc.on('input-event', (_event, input) => {
       if (input.type === 'mouseDown') page.capture.mouseDown()
@@ -160,13 +168,27 @@ export class Instance {
     page.view.setBounds({ x: 0, y: 0, width: 1280, height: 800 })
   }
 
-  destroy(): void {
-    for (const page of this.pages.values()) {
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) win.contentView.removeChildView(page.view)
-      }
-      page.destroy()
+  private unmount(page: Page): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.contentView.removeChildView(page.view)
     }
+    page.destroy()
+  }
+
+  // Ends one user's page with its in-memory session, cookies included, so the next switch to that user runs
+  // the login steps again. Flushing the active user leaves no user active, so nothing runs as anyone by accident.
+  drop(user: string): boolean {
+    const page = this.pages.get(user)
+    if (!page) return false
+    this.pages.delete(user)
+    if (this.active?.page === page) this.active = undefined
+    this.unmount(page)
+    this.emit()
+    return true
+  }
+
+  destroy(): void {
+    for (const page of this.pages.values()) this.unmount(page)
     this.pages.clear()
     this.active = undefined
     this.notify({ tabId: this.tabId, url: '', title: '', user: '', open: false })

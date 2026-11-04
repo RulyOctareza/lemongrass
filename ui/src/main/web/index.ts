@@ -99,10 +99,16 @@ function instanceFor(tabId: string, channelId: string): Instance {
   return created
 }
 
+interface Switched {
+  page: Page
+  // Set when the user's page had been logged out and the login steps ran again.
+  note: string
+}
+
 // The page for a user, logging in when that user has none yet. The vault reply is the only place the login
 // values exist, and only runLogin reads them.
-async function pageFor(inst: Instance, requested: string): Promise<Page> {
-  if (requested === '' && inst.active) return inst.active.page
+async function pageFor(inst: Instance, requested: string): Promise<Switched> {
+  if (requested === '' && inst.active) return { page: inst.active.page, note: '' }
   if (requested === '' && inst.failedUser) throw new WebError(noUserText(inst))
   try {
     return await switchTo(inst, requested)
@@ -117,7 +123,12 @@ function noUserText(inst: Instance): string {
   return `the last switch to ${inst.failedUser} failed, so no user is active: run user <name> or open <path> --user <name> first`
 }
 
-async function switchTo(inst: Instance, requested: string): Promise<Page> {
+// Asks the vault for a user's login material and keeps what redaction needs. requested may be empty for a
+// channel with a single web user; the reply names the user as the pages are keyed.
+async function loginFields(
+  inst: Instance,
+  requested: string
+): Promise<{ login: WebLoginFields; user: string }> {
   const login = await vaultCall<WebLoginFields>('web_login_fields', {
     channel_id: inst.channelId,
     user: requested
@@ -128,10 +139,25 @@ async function switchTo(inst: Instance, requested: string): Promise<Page> {
   inst.origin = login.origin
   for (const value of secretFieldValues(login.fields ?? {}, [user, requested]))
     inst.secrets.add(value)
+  return { login, user }
+}
+
+async function switchTo(inst: Instance, requested: string): Promise<Switched> {
+  const { login, user } = await loginFields(inst, requested)
   const existing = inst.pages.get(user)
+  let note = ''
   if (existing) {
-    inst.activate(user, existing)
-    return existing
+    // A page showing a password field was logged out, by the app, the model or the human, and reusing it would
+    // leave every open on the login form. Naming the user logs in again; open without --user never does, so
+    // the login page itself stays testable.
+    const loggedOut =
+      (login.login ?? []).length > 0 && (await existing.passwordFieldVisible().catch(() => false))
+    if (!loggedOut) {
+      inst.activate(user, existing)
+      return { page: existing, note }
+    }
+    inst.drop(user)
+    note = `${user}'s page showed a login form, so the session had ended: logged in again`
   }
   const page = inst.newPage()
   await page.open()
@@ -146,7 +172,38 @@ async function switchTo(inst: Instance, requested: string): Promise<Page> {
   // The login's own requests are dropped, so no credential sent or returned there can ever be listed.
   page.capture.clear()
   inst.activate(user, page)
-  return page
+  return { page, note }
+}
+
+// The web side of flush: ends the named user's page, or every page of the channel, so the next open or user
+// logs in from the start.
+async function flush(inst: Instance, requested: string): Promise<number> {
+  if (requested === '') {
+    const users = [...inst.pages.keys()]
+    for (const user of users) inst.drop(user)
+    inst.failedUser = ''
+    return users.length
+  }
+  const { user } = await loginFields(inst, requested)
+  const flushed = inst.drop(user)
+  if (inst.failedUser === user) inst.failedUser = ''
+  return flushed ? 1 : 0
+}
+
+// Said once each time the page comes to show a password field, so a model whose session ended learns how to
+// get back in without the hint repeating on every step of a login page test.
+const loginHinted = new WeakSet<Page>()
+
+async function loginHint(inst: Instance, page: Page): Promise<string> {
+  const showing = await page.passwordFieldVisible().catch(() => false)
+  if (!showing) {
+    loginHinted.delete(page)
+    return ''
+  }
+  if (loginHinted.has(page)) return ''
+  loginHinted.add(page)
+  const user = inst.active?.user ?? '<name>'
+  return `the page shows a password field: if ${user}'s session ended, open <path> --user ${user} logs in again, or flush --user ${user} ends the session`
 }
 
 function activePage(inst: Instance): Page {
@@ -166,16 +223,25 @@ function resolveUrl(inst: Instance, target: string): string {
 
 // What an action returns: what it did, how the page settled, counts of the requests and console errors it
 // caused, and what changed on the page. The requests themselves are listed only when the model asks with network.
-async function report(inst: Instance, page: Page, label: string, action: number): Promise<string> {
+async function report(
+  inst: Instance,
+  page: Page,
+  label: string,
+  action: number,
+  switchNote = ''
+): Promise<string> {
   const note = await settle(page)
   await page.capture.settled()
   const snapshot = await page.actionSnapshot()
+  const hint = await loginHint(inst, page)
   return [
     `as ${inst.active?.user ?? ''}`,
+    switchNote,
     `action ${action}: ${label}`,
     page.capture.takeHumanSummary(),
     page.capture.takeDownloadNotes(),
     note,
+    hint,
     page.capture.actionSummary(action),
     snapshot
   ]
@@ -216,19 +282,25 @@ async function run(
   const user = flags.user ?? ''
   if (command === 'open') {
     needArgs(command, args, 1, 'open <path-or-url> [--user <name>]')
-    const page = await pageFor(inst, user)
+    const { page, note } = await pageFor(inst, user)
     const action = page.capture.startAction()
     const url = resolveUrl(inst, args[0])
     await page.goto(url)
-    return { text: await report(inst, page, `opened ${page.url()}`, action) }
+    return { text: await report(inst, page, `opened ${page.url()}`, action, note) }
   }
   if (command === 'user') {
     needArgs(command, args, 1, 'user <name>')
-    const page = await pageFor(inst, args[0])
+    const { page, note } = await pageFor(inst, args[0])
     page.capture.startAction()
     return {
-      text: [`active user: ${inst.active?.user ?? args[0]}`, await page.snapshot()].join('\n')
+      text: [`active user: ${inst.active?.user ?? args[0]}`, note, await page.snapshot()]
+        .filter((part) => part !== '')
+        .join('\n')
     }
+  }
+  if (command === 'flush') {
+    const flushed = await flush(inst, user)
+    return { text: JSON.stringify({ flushed }) }
   }
   const page = activePage(inst)
   if (command === 'snapshot')

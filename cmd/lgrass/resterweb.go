@@ -36,14 +36,19 @@ const resterWebUsage = `web channels:
   lgrass rester <short-id> screenshot --out <file-or-directory> [--confirm]
 
 A web channel drives a browser inside the lemongrass app, so these commands only work in a
-lemongrass tab. info shows a channel's type: a web channel takes these commands and info and
-users, an api channel takes get, post, put, patch, delete, head, options and flush and refuses
-these. The human can watch the page in the app's web tab.
+lemongrass tab. info shows a channel's type: a web channel takes these commands, flush, info
+and users, an api channel takes get, post, put, patch, delete, head, options and flush and
+refuses these. The human can watch the page in the app's web tab.
 
 open navigates to <path-or-url>, relative to the channel's web origin, logging the user in
 first when that user has no session yet. --user names the user as users shows it and may be
 left out when the channel has a single web user. user switches the page to another user,
-logging in when needed. A snapshot and every action print "as <user>" first, so check who is
+logging in when needed. When open --user or user names a user whose page shows a password
+field, the session has ended, by a logout or by the app, and the user is logged in again; open
+without --user never logs in, so a login page can still be tested. flush [--user <name>] ends
+that user's browser session, or every user's without --user, and prints {"flushed": N}; the
+next open --user or user logs in from the start, and no user is active after the active one
+is flushed. A snapshot and every action print "as <user>" first, so check who is
 acting. When a switch or a login fails no user is active, and snapshot, the actions and open
 without --user are refused until user <name> or open <path> --user <name> succeeds, so nothing
 runs as the previous user. Passwords and tokens never appear in any output.
@@ -300,30 +305,38 @@ func routeResterWeb(args []string) bool {
 		}
 		return true
 	}
-	if err := refuseAPIOnWeb(client, args); err != nil {
+	handled, err := routeOnChannelType(client, args, os.Stdout)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
-	return false
+	return handled
 }
 
-// refuseAPIOnWeb reads the channel's type for a request or flush command and refuses it on a web or an app channel. A parse error is left to the ordinary rester path to report. A failed info call is returned, since sending the request anyway would count an unknown id twice in the agent's failure limiter.
-func refuseAPIOnWeb(client *agent.Client, args []string) error {
+// routeOnChannelType reads the channel's type for a request or flush command. flush on a web channel ends browser sessions and is run here, reported as handled; any other api command is refused on a web or an app channel. A parse error is left to the ordinary rester path to report. A failed info call is returned, since sending the request anyway would count an unknown id twice in the agent's failure limiter.
+func routeOnChannelType(client *agent.Client, args []string, stdout io.Writer) (bool, error) {
 	cmd, err := parseResterArgs(args)
 	if err != nil || cmd.info || cmd.users {
-		return nil
+		return false, nil
 	}
 	info, err := client.HTTPChannelInfo(cmd.shortID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if info.Type == "app" {
-		return fmt.Errorf("this is an app channel, it takes app-login, info and users, not %s. Run lgrass rester --help for the usage", strings.ToLower(args[1]))
+		return false, fmt.Errorf("this is an app channel, it takes app-login, info and users, not %s. Run lgrass rester --help for the usage", strings.ToLower(args[1]))
 	}
 	if info.Type != "web" {
-		return nil
+		return false, nil
 	}
-	return fmt.Errorf("this is a web channel, it takes open, user, snapshot, click, type, press, upload, download, wait, back, reload, network, console and screenshot, not %s. Run lgrass rester --help for their usage", strings.ToLower(args[1]))
+	if cmd.flush {
+		flags := map[string]string{}
+		if cmd.user != "" {
+			flags["user"] = cmd.user
+		}
+		return true, execWeb(client, webCommand{shortID: cmd.shortID, command: "flush", args: []string{}, flags: flags}, stdout)
+	}
+	return false, fmt.Errorf("this is a web channel, it takes open, user, snapshot, click, type, press, upload, download, wait, back, reload, network, console, screenshot and flush, not %s. Run lgrass rester --help for their usage", strings.ToLower(args[1]))
 }
 
 // execWeb sends cmd through the agent and prints what the model reads. A screenshot is written to --out instead of printed, after the target is checked so an existing file stops the command before the screenshot is taken.
