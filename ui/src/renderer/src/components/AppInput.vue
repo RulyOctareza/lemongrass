@@ -72,21 +72,7 @@ defineExpose({
     :class="[`app-input--${size}`, { mono, 'has-icon': icon, 'is-number': isNumber }, attrs.class]"
     :style="rootStyle"
   >
-    <svg
-      v-if="icon === 'search'"
-      class="app-input-icon"
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-      stroke-linecap="round"
-      aria-hidden="true"
-    >
-      <circle cx="7" cy="7" r="4.5" />
-      <path d="M10.5 10.5L14 14" />
-    </svg>
+    <AppIcon v-if="icon === 'search'" class="app-input-icon" name="search" :size="13" />
     <input ref="element" v-model="model" class="app-input-field" v-bind="inputAttrs" />
     <span v-if="isNumber" class="app-input-steps">
       <button

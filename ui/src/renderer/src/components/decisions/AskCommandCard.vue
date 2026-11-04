@@ -4,6 +4,7 @@
 <script setup lang="ts">
 // The card for a command ask. Execute runs the command in the vault daemon as the user, in the
 // ask's folder; the daemon refuses anything on its never-execute list whatever this card shows.
+import AppIcon from '../AppIcon.vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { Ask } from '../../../../preload/types'
 import { describeError, vaultSession } from '../../vaultSession'
@@ -209,19 +210,7 @@ async function decline(): Promise<void> {
         @mouseleave="hideRuleHint"
         @focus="showRuleHint"
         @blur="hideRuleHint"
-        ><svg
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.4"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <circle cx="8" cy="8" r="6.5" />
-          <path d="M8 7.2V11.2" />
-          <circle cx="8" cy="4.9" r="0.4" fill="currentColor" /></svg></span
+        ><AppIcon name="info" :size="14" /></span
       >.
       <AppInfoPopover id="ask-rule-help" :anchor="ruleHintAnchor"
         >You can change rule {{ ask.verdict.rule }} for this project in Settings,

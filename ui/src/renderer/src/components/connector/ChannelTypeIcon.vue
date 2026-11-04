@@ -2,24 +2,13 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import IconFrame from '../IconFrame.vue'
 // An HTTP channel's type as a glyph: braces for api, a globe for web, a phone for app.
-defineProps<{
-  type: 'api' | 'web' | 'app'
-}>()
+withDefaults(defineProps<{ type: 'api' | 'web' | 'app'; size?: number }>(), { size: 12 })
 </script>
 
 <template>
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
+  <IconFrame :size="size" :box="16" :stroke-width="1.4">
     <template v-if="type === 'web'">
       <circle cx="8" cy="8" r="6.5" />
       <ellipse cx="8" cy="8" rx="2.8" ry="6.5" />
@@ -37,5 +26,5 @@ defineProps<{
         d="M10.5 2C12 2 12.5 2.8 12.5 4V6.2C12.5 7.2 13.2 8 14 8C13.2 8 12.5 8.8 12.5 9.8V12C12.5 13.2 12 14 10.5 14"
       />
     </template>
-  </svg>
+  </IconFrame>
 </template>

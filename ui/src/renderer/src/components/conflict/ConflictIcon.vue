@@ -2,32 +2,14 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import IconFrame from '../IconFrame.vue'
 import { CONFLICT_ICONS, type ConflictIconName } from '../../conflictIcons'
 
-defineProps<{
-  name: ConflictIconName
-}>()
+withDefaults(defineProps<{ name: ConflictIconName; size?: number }>(), { size: 13 })
 </script>
 
 <template>
-  <svg
-    class="conflict-icon"
-    width="13"
-    height="13"
-    viewBox="0 0 14 14"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.3"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
+  <IconFrame class="conflict-icon" :size="size" :stroke-width="1.3">
     <path v-for="d in CONFLICT_ICONS[name]" :key="d" :d="d" />
-  </svg>
+  </IconFrame>
 </template>
-
-<style scoped>
-.conflict-icon {
-  flex-shrink: 0;
-}
-</style>

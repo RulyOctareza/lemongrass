@@ -4,6 +4,7 @@
 <script setup lang="ts">
 // The passphrase gate shown while the vault session is locked. Its styles come from vault.css, so it
 // must render inside a .vault-tab element.
+import AppIcon from './AppIcon.vue'
 import { computed, onMounted, ref } from 'vue'
 import '../vault.css'
 import { clearShortIds, describeError, unlockVaultSession } from '../vaultSession'
@@ -93,20 +94,7 @@ async function confirmReset(): Promise<void> {
             {{ unlockMode === 'set' ? 'Set your vault passphrase' : 'Enter your vault passphrase' }}
           </h4>
           <span class="info-trigger" tabindex="0" aria-label="About the vault">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              aria-hidden="true"
-            >
-              <circle cx="8" cy="8" r="6.5" />
-              <path d="M8 7.2V11.2" />
-              <circle cx="8" cy="4.9" r="0.4" fill="currentColor" />
-            </svg>
+            <AppIcon name="info" :size="14" />
           </span>
           <p class="info-popover" role="tooltip">
             <template v-if="unlockMode === 'set'">

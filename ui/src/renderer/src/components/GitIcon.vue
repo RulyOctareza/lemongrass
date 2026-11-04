@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import IconFrame from './IconFrame.vue'
 const SHAPES = {
   branch: [
     'M4 1.5a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3',
@@ -29,30 +30,11 @@ const SHAPES = {
 
 export type GitIconName = keyof typeof SHAPES
 
-defineProps<{
-  name: GitIconName
-}>()
+withDefaults(defineProps<{ name: GitIconName; size?: number }>(), { size: 13 })
 </script>
 
 <template>
-  <svg
-    class="git-icon"
-    width="13"
-    height="13"
-    viewBox="0 0 14 14"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
+  <IconFrame class="git-icon" :size="size">
     <path v-for="d in SHAPES[name]" :key="d" :d="d" />
-  </svg>
+  </IconFrame>
 </template>
-
-<style scoped>
-.git-icon {
-  flex-shrink: 0;
-}
-</style>

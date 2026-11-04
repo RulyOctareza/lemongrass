@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppConfirmButton from './AppConfirmButton.vue'
 import TabIcon from './TabIcon.vue'
@@ -414,17 +415,7 @@ onBeforeUnmount(() => {
 
       <div class="pane-actions">
         <button class="pane-action" title="New shell" @click="addShell(project, leaf.id)">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.2"
-            stroke-linecap="round"
-          >
-            <path d="M7 2.5v9M2.5 7h9" />
-          </svg>
+          <AppIcon name="plus" :size="14" />
         </button>
         <button
           class="pane-action"
@@ -489,35 +480,8 @@ onBeforeUnmount(() => {
             :title="copiedTabId === activeTab.id ? 'Copied' : 'Copy path'"
             @click="copyPath(activeTab.id)"
           >
-            <svg
-              v-if="copiedTabId === activeTab.id"
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M3 7.5l2.5 2.5L11 4.5" />
-            </svg>
-            <svg
-              v-else
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <rect x="4.5" y="4.5" width="7" height="8" rx="1.2" />
-              <path
-                d="M9.5 4.5V3.2A1.2 1.2 0 0 0 8.3 2H3.2A1.2 1.2 0 0 0 2 3.2v5.1a1.2 1.2 0 0 0 1.2 1.2h1.3"
-              />
-            </svg>
+            <AppIcon v-if="copiedTabId === activeTab.id" name="check" :size="14" />
+            <AppIcon v-else name="copy" :size="14" />
           </button>
         </template>
       </div>
@@ -656,42 +620,12 @@ onBeforeUnmount(() => {
           Read in a new shell
         </button>
         <button class="menu-item" @click="menuCopyPath">
-          <svg
-            class="menu-icon"
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="4.5" y="4.5" width="7" height="8" rx="1.2" />
-            <path
-              d="M9.5 4.5V3.2A1.2 1.2 0 0 0 8.3 2H3.2A1.2 1.2 0 0 0 2 3.2v5.1a1.2 1.2 0 0 0 1.2 1.2h1.3"
-            />
-          </svg>
+          <AppIcon class="menu-icon" name="copy" :size="14" />
           Copy path
         </button>
       </template>
       <button v-else-if="menuTab.kind === 'shell'" class="menu-item" @click="menuCopyTabId">
-        <svg
-          class="menu-icon"
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="4.5" y="4.5" width="7" height="8" rx="1.2" />
-          <path
-            d="M9.5 4.5V3.2A1.2 1.2 0 0 0 8.3 2H3.2A1.2 1.2 0 0 0 2 3.2v5.1a1.2 1.2 0 0 0 1.2 1.2h1.3"
-          />
-        </svg>
+        <AppIcon class="menu-icon" name="copy" :size="14" />
         Copy tab id
       </button>
       <button v-if="menuTab.kind === 'shell'" class="menu-item" @click="menuWatchBrowser">
@@ -753,19 +687,7 @@ onBeforeUnmount(() => {
       </AppConfirmButton>
       <div class="menu-divider" />
       <button class="menu-item" @click="menuClose">
-        <svg
-          class="menu-icon"
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" />
-        </svg>
+        <AppIcon class="menu-icon" name="close" :size="14" />
         Close tab
       </button>
     </div>

@@ -10,6 +10,7 @@ const openDrawers = reactive(new Set<string>())
 </script>
 
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import { computed, ref } from 'vue'
 import { finishOperation, gitStateOf } from '../git'
 import { openConflict, type ProjectRef } from '../workspace'
@@ -164,20 +165,12 @@ async function finish(action: 'continue' | 'abort'): Promise<void> {
     <AppEmptyState v-if="conflicted.length === 0" size="sm" title="All conflicts are resolved." />
     <section v-else>
       <button class="drawer-head" :aria-expanded="drawerOpen" @click="toggleDrawer">
-        <svg
+        <AppIcon
           class="drawer-chevron"
           :class="{ open: drawerOpen }"
-          width="9"
-          height="9"
-          viewBox="0 0 10 10"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M3 2l3 3-3 3" />
-        </svg>
+          name="chevronRight"
+          :size="9"
+        />
         <span>Conflicted files</span>
         <span class="drawer-count">{{ conflicted.length }}</span>
       </button>

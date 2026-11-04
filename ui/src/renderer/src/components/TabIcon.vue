@@ -2,31 +2,14 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import IconFrame from './IconFrame.vue'
 import type { IconShape } from '../tabKinds'
 
-defineProps<{
-  shapes: IconShape[]
-}>()
+withDefaults(defineProps<{ shapes: IconShape[]; size?: number }>(), { size: 13 })
 </script>
 
 <template>
-  <svg
-    class="tab-icon"
-    width="13"
-    height="13"
-    viewBox="0 0 14 14"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
+  <IconFrame class="tab-icon" :size="size">
     <component :is="shape.tag" v-for="(shape, index) in shapes" :key="index" v-bind="shape.attrs" />
-  </svg>
+  </IconFrame>
 </template>
-
-<style scoped>
-.tab-icon {
-  flex-shrink: 0;
-}
-</style>

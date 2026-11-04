@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import { computed, ref } from 'vue'
 import { gitStateOf, runStash } from '../git'
 import { formatAge } from '../gitTime'
@@ -53,20 +54,7 @@ async function save(): Promise<void> {
   <div class="stash-section">
     <div class="stash-head">
       <button class="stash-toggle" :aria-expanded="!folded" @click="folded = !folded">
-        <svg
-          class="stash-chevron"
-          :class="{ open: !folded }"
-          width="9"
-          height="9"
-          viewBox="0 0 10 10"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M3 2l3 3-3 3" />
-        </svg>
+        <AppIcon class="stash-chevron" :class="{ open: !folded }" name="chevronRight" :size="9" />
         <span class="git-heading">Stashes</span>
         <span v-if="stashes.length > 0" class="stash-count">{{ stashes.length }}</span>
       </button>

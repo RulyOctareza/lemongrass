@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import IconFrame from './IconFrame.vue'
 // The workgroup glyph matches the workgroup tab's icon in tabKinds.ts, so the two read as the same thing.
 const SHAPES = {
   account: [
@@ -20,31 +21,17 @@ const SHAPES = {
 
 export type StripIconName = keyof typeof SHAPES
 
-defineProps<{
-  name: StripIconName
-}>()
+withDefaults(defineProps<{ name: StripIconName; size?: number }>(), { size: 13 })
 </script>
 
 <template>
-  <svg
-    class="strip-icon"
-    width="13"
-    height="13"
-    viewBox="0 0 14 14"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
+  <IconFrame class="strip-icon" :size="size">
     <path v-for="d in SHAPES[name]" :key="d" :d="d" />
-  </svg>
+  </IconFrame>
 </template>
 
 <style scoped>
 .strip-icon {
-  flex-shrink: 0;
   color: var(--color-fg-muted);
 }
 </style>

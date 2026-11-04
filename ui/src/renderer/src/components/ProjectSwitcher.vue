@@ -7,9 +7,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppInput from './AppInput.vue'
 import AppConfirmButton from './AppConfirmButton.vue'
-import GitIcon from './GitIcon.vue'
+import AppIcon from './AppIcon.vue'
 import type { AppInputHandle } from './appInput'
 import { placeFloat, placementStyle } from '../floatPlace'
+import { useProjectDelete } from '../projectDelete'
 import type { Project } from '../../../preload/types'
 
 const props = defineProps<{
@@ -35,8 +36,8 @@ const query = ref('')
 const highlighted = ref(0)
 const dropdownStyle = ref<Record<string, string>>({})
 const placed = ref(false)
-// Shells running for each project, read on every opening; a project with any is not deleted.
-const liveShells = ref<Record<string, number>>({})
+// Live shells are reread on every opening.
+const { refreshLiveShells, refusal: deleteRefusal, remove: removeProject } = useProjectDelete()
 const home = ref('')
 let naturalHeight = 0
 
@@ -105,10 +106,6 @@ async function toggleOpen(): Promise<void> {
   scrollHighlightedIntoView()
 }
 
-async function refreshLiveShells(): Promise<void> {
-  liveShells.value = await window.api.projects.liveShells()
-}
-
 function pick(id: string): void {
   emit('select', id)
   open.value = false
@@ -135,20 +132,8 @@ function pickHighlighted(): void {
   if (project) pick(project.id)
 }
 
-function deleteRefusal(id: string): string | undefined {
-  const n = liveShells.value[id]
-  if (!n) return undefined
-  return n === 1 ? 'Close its open tab first' : `Close its ${n} open tabs first`
-}
-
 async function remove(id: string): Promise<void> {
-  const result = await window.api.projects.delete(id)
-  if (result?.ok) {
-    emit('deleted', id)
-    return
-  }
-  // A shell started since the dropdown opened; the row now shows why it was refused.
-  await refreshLiveShells()
+  if (await removeProject(id)) emit('deleted', id)
 }
 
 function onDocumentClickOutside(event: MouseEvent): void {
@@ -178,20 +163,7 @@ onBeforeUnmount(() => {
       @click="toggleOpen"
     >
       <span class="trigger-label">{{ activeLabel }}</span>
-      <svg
-        class="lg-trigger-caret"
-        width="9"
-        height="9"
-        viewBox="0 0 10 10"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.4"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M2 3.5L5 6.5L8 3.5" />
-      </svg>
+      <AppIcon class="lg-trigger-caret" name="chevronDown" :size="9" />
     </button>
 
     <Teleport to="body">
@@ -245,7 +217,7 @@ onBeforeUnmount(() => {
               :title="deleteRefusal(project.id)"
             >
               <button type="button" class="delete" disabled :aria-label="deleteRefusal(project.id)">
-                <GitIcon name="drop" />
+                <AppIcon name="trash" :size="16" />
               </button>
             </span>
             <AppConfirmButton
@@ -257,7 +229,7 @@ onBeforeUnmount(() => {
               confirm-label="Click again to delete. The folder is not touched, and lemongrass keeps its data for 30 days."
               @confirm="remove(project.id)"
             >
-              <GitIcon name="drop" />
+              <AppIcon name="trash" :size="16" />
             </AppConfirmButton>
           </div>
           <p v-if="projects.length === 0" class="lg-menu-empty">No projects yet.</p>
@@ -423,7 +395,7 @@ onBeforeUnmount(() => {
 .delete {
   flex-shrink: 0;
   display: inline-flex;
-  padding: 3px;
+  padding: 4px;
   background: none;
   border: none;
   border-radius: var(--radius-sm);

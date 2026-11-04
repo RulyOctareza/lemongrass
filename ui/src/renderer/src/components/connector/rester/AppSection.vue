@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from '../../AppIcon.vue'
 import { computed, ref } from 'vue'
 import type { VaultRester } from '../../../../../preload/types'
 import AppButton from '../../AppButton.vue'
@@ -167,14 +168,7 @@ async function turnOff(): Promise<void> {
             @dragstart="onHandleDragStart($event, index)"
             @dragend="endDrag"
           >
-            <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
-              <circle cx="3" cy="3" r="1.2" />
-              <circle cx="7" cy="3" r="1.2" />
-              <circle cx="3" cy="7" r="1.2" />
-              <circle cx="7" cy="7" r="1.2" />
-              <circle cx="3" cy="11" r="1.2" />
-              <circle cx="7" cy="11" r="1.2" />
-            </svg>
+            <AppIcon name="dragHandle" :size="14" />
           </span>
           <span class="step-number">{{ index + 1 }}</span>
           <AppSegmented

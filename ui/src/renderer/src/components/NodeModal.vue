@@ -8,6 +8,7 @@ import AppButton from './AppButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
 import AppConfirmButton from './AppConfirmButton.vue'
 import AppSegmented from './AppSegmented.vue'
+import AppIcon from './AppIcon.vue'
 import AppSwitcher from './AppSwitcher.vue'
 import type {
   NodeGrantView,
@@ -510,25 +511,7 @@ function copy(key: string, text: string): void {
                 :aria-label="copied === 'url' ? 'Copied' : 'Copy URL'"
                 @click="copy('url', nodeURL)"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path v-if="copied === 'url'" d="M3 7.5l2.5 2.5L11 4.5" />
-                  <template v-else>
-                    <rect x="4.5" y="4.5" width="7" height="8" rx="1.2" />
-                    <path
-                      d="M9.5 4.5V3.2A1.2 1.2 0 0 0 8.3 2H3.2A1.2 1.2 0 0 0 2 3.2v5.1a1.2 1.2 0 0 0 1.2 1.2h1.3"
-                    />
-                  </template>
-                </svg>
+                <AppIcon :name="copied === 'url' ? 'check' : 'copy'" :size="14" />
               </button>
               <AppConfirmButton
                 v-slot="{ armed }"

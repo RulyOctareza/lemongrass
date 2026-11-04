@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   commitChanges,
@@ -240,19 +241,7 @@ watch(() => props.project.id, refresh)
         :behind="status.behind"
       />
       <span v-if="files.length" class="git-count">{{ files.length }}</span>
-      <svg
-        class="git-chevron"
-        width="10"
-        height="10"
-        viewBox="0 0 10 10"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M3 2l3 3-3 3" />
-      </svg>
+      <AppIcon class="git-chevron" name="chevronRight" :size="10" />
     </button>
 
     <div v-if="!state.folded && conflictMode" class="git-body">
@@ -319,20 +308,12 @@ watch(() => props.project.id, refresh)
               :aria-expanded="!state.foldedGroups.includes(group.id)"
               @click="toggleGroupFold(project.id, group.id)"
             >
-              <svg
+              <AppIcon
                 class="group-chevron"
                 :class="{ open: !state.foldedGroups.includes(group.id) }"
-                width="9"
-                height="9"
-                viewBox="0 0 10 10"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 2l3 3-3 3" />
-              </svg>
+                name="chevronRight"
+                :size="9"
+              />
               <span>{{ group.label }}</span>
               <span class="group-count">{{ group.files.length }}</span>
             </button>

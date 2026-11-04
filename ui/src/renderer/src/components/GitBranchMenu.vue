@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { deleteBranch, gitStateOf, switchBranch, updateBranch } from '../git'
 import type { ProjectRef } from '../workspace'
@@ -316,20 +317,7 @@ onBeforeUnmount(removeListeners)
     @click="toggle"
   >
     <slot />
-    <svg
-      class="lg-trigger-caret"
-      width="9"
-      height="9"
-      viewBox="0 0 10 10"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.4"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 3.5L5 6.5L8 3.5" />
-    </svg>
+    <AppIcon class="lg-trigger-caret" name="chevronDown" :size="9" />
   </button>
 
   <Teleport to="body">

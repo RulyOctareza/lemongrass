@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from '../AppIcon.vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import AppConfirmButton from '../AppConfirmButton.vue'
 import RunHistory from './RunHistory.vue'
@@ -60,19 +61,7 @@ onBeforeUnmount(() => {
       @click="open = !open"
     >
       {{ formatAge(at, ageNow) }}
-      <svg
-        class="caret"
-        width="9"
-        height="9"
-        viewBox="0 0 10 10"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.4"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M2 3.5L5 6.5L8 3.5" />
-      </svg>
+      <AppIcon class="caret" name="chevronDown" :size="9" />
     </button>
     <div v-if="open" class="popover">
       <div class="popover-head">

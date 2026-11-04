@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from './AppIcon.vue'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { openApprovals, pendingFor, refreshWorkgroups, workgroupStateOf } from '../workgroups'
 import {
@@ -91,19 +92,7 @@ watch(() => liveShellCount(props.project.id), refresh)
       >
         !
       </span>
-      <svg
-        class="wg-chevron"
-        width="10"
-        height="10"
-        viewBox="0 0 10 10"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M3 2l3 3-3 3" />
-      </svg>
+      <AppIcon class="wg-chevron" name="chevronRight" :size="10" />
     </button>
 
     <div v-if="!state.folded" class="wg-body">

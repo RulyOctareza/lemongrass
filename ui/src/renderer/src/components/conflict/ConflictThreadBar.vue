@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import AppIcon from '../AppIcon.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppButton from '../AppButton.vue'
 import AppSwitcher from '../AppSwitcher.vue'
@@ -197,21 +198,7 @@ function onKeydown(event: KeyboardEvent): void {
   <div class="thread-bar">
     <div class="bar-head">
       <button class="fold" :aria-expanded="!folded" @click="folded = !folded">
-        <svg
-          class="fold-chevron"
-          :class="{ open: !folded }"
-          width="9"
-          height="9"
-          viewBox="0 0 10 10"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M3 2l3 3-3 3" />
-        </svg>
+        <AppIcon class="fold-chevron" :class="{ open: !folded }" name="chevronRight" :size="9" />
         Conflict thread
       </button>
       <span v-if="open" class="head-note">

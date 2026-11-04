@@ -217,7 +217,12 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else-if="!activeProject" class="main">
-        <ProjectSelector :projects="projects" @select="selectProject" @add="addProject" />
+        <ProjectSelector
+          :projects="projects"
+          @select="selectProject"
+          @add="addProject"
+          @deleted="onProjectDeleted"
+        />
       </div>
     </div>
 

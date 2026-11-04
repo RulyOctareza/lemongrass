@@ -2,6 +2,7 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
+import IconFrame from './IconFrame.vue'
 type Shape = { d: string; filled?: true }
 
 // The account glyph matches StripIcon's, so Accounts reads as the same thing as the strip's account switch.
@@ -46,58 +47,36 @@ const CLAUDE_ORANGE = 'hsl(14.8, 63.1%, 59.6%)'
 
 export type SettingsIconName = keyof typeof SHAPES | 'claude' | 'codex'
 
-defineProps<{
-  name: SettingsIconName
-}>()
+withDefaults(defineProps<{ name: SettingsIconName; size?: number }>(), { size: 13 })
 </script>
 
 <template>
-  <svg
+  <IconFrame
     v-if="name === 'claude'"
     class="settings-icon"
-    width="13"
-    height="13"
-    viewBox="0 0 100 100"
+    :size="size"
+    :box="100"
+    :stroke-width="null"
     :fill="CLAUDE_ORANGE"
-    aria-hidden="true"
   >
     <path :d="CLAUDE_MARK" />
-  </svg>
-  <svg
+  </IconFrame>
+  <IconFrame
     v-else-if="name === 'codex'"
     class="settings-icon"
-    width="13"
-    height="13"
-    viewBox="0 0 320 320"
+    :size="size"
+    :box="320"
+    :stroke-width="null"
     fill="currentColor"
-    aria-hidden="true"
   >
     <path :d="CODEX_MARK" />
-  </svg>
-  <svg
-    v-else
-    class="settings-icon"
-    width="13"
-    height="13"
-    viewBox="0 0 14 14"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
+  </IconFrame>
+  <IconFrame v-else class="settings-icon" :size="size">
     <path
       v-for="shape in SHAPES[name] as readonly Shape[]"
       :key="shape.d"
       :d="shape.d"
       :fill="shape.filled ? 'currentColor' : undefined"
     />
-  </svg>
+  </IconFrame>
 </template>
-
-<style scoped>
-.settings-icon {
-  flex-shrink: 0;
-}
-</style>
