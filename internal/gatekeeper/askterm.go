@@ -7,10 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"os"
 	"sync"
-
-	"github.com/creack/pty"
 )
 
 const (
@@ -36,10 +33,16 @@ const (
 	askViewDetached = "detached"
 )
 
+// askConsole is the terminal a command runs in: a pty on Unix, a ConPTY on Windows.
+type askConsole interface {
+	io.ReadWriter
+	Resize(rows, cols int) error
+}
+
 // askTerm is the pseudo-terminal of one running command: everything it prints goes to the tail for the model, to the replay and to the one attached viewer, and the viewer's keystrokes go back in.
 type askTerm struct {
 	mu     sync.Mutex
-	pty    *os.File
+	pty    askConsole
 	replay []byte
 	viewer *askViewer
 	ended  bool
@@ -51,8 +54,8 @@ type askViewer struct {
 	reason string
 }
 
-func newAskTerm(ptmx *os.File) *askTerm {
-	return &askTerm{pty: ptmx}
+func newAskTerm(console askConsole) *askTerm {
+	return &askTerm{pty: console}
 }
 
 // pump copies the terminal's output until it closes, which on Linux is an error once every holder of the terminal has exited.
@@ -145,7 +148,7 @@ func (t *askTerm) resize(v *askViewer, rows, cols int) error {
 	if !current {
 		return errors.New("gatekeeper: this view is no longer attached")
 	}
-	return pty.Setsize(t.pty, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
+	return t.pty.Resize(rows, cols)
 }
 
 // end cuts off the viewer for good; later output is still recorded but reaches no one.

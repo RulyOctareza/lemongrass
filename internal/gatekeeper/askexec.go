@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/creack/pty"
 	"github.com/faizalv/lemongrass/internal/guard"
 	"github.com/faizalv/lemongrass/internal/vault"
 )
@@ -95,12 +93,30 @@ func (b *Backend) ExecuteAsk(id string, timeout time.Duration, rows, cols int) (
 	return started, nil
 }
 
+type askSize struct {
+	rows, cols int
+}
+
 // askStartSize is the card terminal's size when the app sent one in range, else the default, so a command's first output already fits the card.
-func askStartSize(rows, cols int) *pty.Winsize {
+func askStartSize(rows, cols int) askSize {
 	if rows < 1 || cols < 1 || rows > askTermMax || cols > askTermMax {
-		return &pty.Winsize{Rows: askTermRows, Cols: askTermCols}
+		return askSize{rows: askTermRows, cols: askTermCols}
 	}
-	return &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)}
+	return askSize{rows: rows, cols: cols}
+}
+
+// askProcess is a started command and the terminal it runs in, behind one interface per OS (askexec_unix.go,
+// askexec_windows.go).
+type askProcess interface {
+	console() askConsole
+	wait() error
+	// signal asks the command's whole tree to stop, or kills it when kill is set.
+	signal(kill bool)
+	// exited runs once the command has exited, before its last output is drained: a ConPTY reaches EOF only once it
+	// is closed, a pty once every holder has exited.
+	exited()
+	close()
+	exitCode(waitErr error) int
 }
 
 // StopAsk ends a running command; its result is marked stopped.
@@ -119,26 +135,18 @@ func (b *Backend) StopAsk(id string) error {
 }
 
 // runAsk owns the command from start to finish. It holds its OS thread for the whole run because the parent-death signal is tied to the thread that started the child, and a thread Go retires early would kill the command with it.
-func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size *pty.Winsize, run *askRun, startErr chan<- error) {
+func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size askSize, run *askRun, startErr chan<- error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	shell, err := exec.LookPath("bash")
-	if err != nil {
-		shell = "/bin/sh"
-	}
 	tail := newTailWriter(askTailLines, askTailLineBytes)
-	cmd := exec.Command(shell, "-c", a.Command)
-	cmd.Dir = a.Cwd
-	cmd.Env = askEnv(os.Environ(), a.Path, a.AccountEnv)
-	setAskProcAttr(cmd)
-	// Every command gets a terminal, so one that asks for a password, a confirmation or a login can be answered from the card; the start also makes it a session leader with its own process group.
-	ptmx, err := pty.StartWithSize(cmd, size)
+	// Every command gets a terminal, so one that asks for a password, a confirmation or a login can be answered from the card.
+	proc, err := startAsk(a.Command, a.Cwd, askEnv(os.Environ(), a.Path, a.AccountEnv), size)
 	if err != nil {
 		startErr <- err
 		return
 	}
-	term := newAskTerm(ptmx)
+	term := newAskTerm(proc.console())
 	pumped := make(chan struct{})
 	go func() {
 		term.pump(tail)
@@ -150,7 +158,7 @@ func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size *pty.Winsize, 
 	startErr <- nil
 
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go func() { done <- proc.wait() }()
 
 	result := vault.AskResult{}
 	timer := time.NewTimer(timeout)
@@ -160,20 +168,21 @@ func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size *pty.Winsize, 
 	case waitErr = <-done:
 	case <-timer.C:
 		result.TimedOut = true
-		waitErr = endAskProcess(cmd, done)
+		waitErr = endAskProcess(proc, done)
 	case <-run.stop:
 		result.Stopped = true
-		waitErr = endAskProcess(cmd, done)
+		waitErr = endAskProcess(proc, done)
 	}
 
+	proc.exited()
 	select {
 	case <-pumped:
 	case <-time.After(askDrainGrace):
 	}
 	term.end()
-	_ = ptmx.Close()
+	proc.close()
 
-	result.ExitCode = exitCode(cmd, waitErr)
+	result.ExitCode = proc.exitCode(waitErr)
 	result.OutputTail = tail.String()
 	b.runs.mu.Lock()
 	delete(b.runs.runs, a.ID)
@@ -181,26 +190,16 @@ func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size *pty.Winsize, 
 	b.Asks.Finish(a.ID, result)
 }
 
-// endAskProcess asks the command's process group to stop, then kills it after a grace period.
-func endAskProcess(cmd *exec.Cmd, done <-chan error) error {
-	signalAskGroup(cmd, false)
+// endAskProcess asks the command's tree to stop, then kills it after a grace period.
+func endAskProcess(proc askProcess, done <-chan error) error {
+	proc.signal(false)
 	select {
 	case err := <-done:
 		return err
 	case <-time.After(askStopGrace):
 	}
-	signalAskGroup(cmd, true)
+	proc.signal(true)
 	return <-done
-}
-
-func exitCode(cmd *exec.Cmd, err error) int {
-	if cmd.ProcessState != nil {
-		return cmd.ProcessState.ExitCode()
-	}
-	if err != nil {
-		return -1
-	}
-	return 0
 }
 
 // askEnv is the daemon's environment with the caller's PATH and account variables, so the command finds the same tools and the same Claude or Codex account the tab would. The daemon's own account variables are dropped either way, since the tab's absence of one means the default account. The tab id is dropped, since the command does not run in the tab, and TERM names the terminal the card renders.
@@ -212,7 +211,7 @@ func askEnv(base []string, path string, account map[string]string) []string {
 	env := make([]string, 0, len(base)+2+len(account))
 	for _, kv := range base {
 		name, _, _ := strings.Cut(kv, "=")
-		if slices.Contains(drop, name) {
+		if slices.ContainsFunc(drop, func(d string) bool { return sameEnvName(d, name) }) {
 			continue
 		}
 		env = append(env, kv)

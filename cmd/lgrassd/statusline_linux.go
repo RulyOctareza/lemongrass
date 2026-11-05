@@ -5,9 +5,14 @@ package main
 
 import (
 	"os/exec"
+	"runtime"
 	"syscall"
 )
 
-func dieWithParent(cmd *exec.Cmd) {
+// The parent-death signal is tied to the thread that forks, hence the lock.
+func runTiedToParent(cmd *exec.Cmd) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	return cmd.Run()
 }

@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/agentconf"
@@ -68,16 +67,17 @@ func runHumanStatusLine(home, account string, payload []byte, stdout, stderr io.
 	if command == "" {
 		return 0
 	}
-	cmd := exec.Command("sh", "-c", command)
+	cmd, err := statusLineCommand(command)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
 	cmd.Stdin = bytes.NewReader(payload)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	// Claude Code cancels a run that is still going when a new trigger arrives, so the child must not outlive this
-	// process. The parent-death signal is tied to the thread that forks, hence the lock.
-	dieWithParent(cmd)
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	err = cmd.Run()
+	// process.
+	err = runTiedToParent(cmd)
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		return exit.ExitCode()

@@ -5,12 +5,10 @@ package gatekeeper
 
 import (
 	"bytes"
-	"os/exec"
+	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/creack/pty"
 )
 
 func TestTailWriterTerminalOutput(t *testing.T) {
@@ -42,12 +40,11 @@ func TestTailWriterTerminalOutput(t *testing.T) {
 
 func startTestTerm(t *testing.T, script string) (*askTerm, *tailWriter, chan struct{}) {
 	t.Helper()
-	cmd := exec.Command("bash", "-c", script)
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: askTermRows, Cols: askTermCols})
+	proc, err := startAsk(script, t.TempDir(), os.Environ(), askSize{rows: askTermRows, cols: askTermCols})
 	if err != nil {
 		t.Fatal(err)
 	}
-	term := newAskTerm(ptmx)
+	term := newAskTerm(proc.console())
 	tail := newTailWriter(askTailLines, askTailLineBytes)
 	pumped := make(chan struct{})
 	go func() {
@@ -55,10 +52,11 @@ func startTestTerm(t *testing.T, script string) (*askTerm, *tailWriter, chan str
 		close(pumped)
 	}()
 	t.Cleanup(func() {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+		proc.signal(true)
+		_ = proc.wait()
+		proc.exited()
 		term.end()
-		_ = ptmx.Close()
+		proc.close()
 	})
 	return term, tail, pumped
 }

@@ -96,11 +96,16 @@ func runReplay(rc hook.ReplayCall) int {
 		fmt.Printf("wrote %s\n", rc.FilePath)
 		return 0
 	}
-	cmd := exec.Command("bash", "-c", rc.Command)
+	shell, err := replayShell()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	cmd := exec.Command(shell, "-c", rc.Command)
 	cmd.Dir = rc.Cwd
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		return exit.ExitCode()
