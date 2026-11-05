@@ -78,25 +78,23 @@ func sshDialFunc(alias string) func(ctx context.Context, network, addr string) (
 	}
 }
 
-// dialSSH runs `ssh -W addr alias` with one end of a socketpair as its stdin and stdout and
-// returns the other end. A socket rather than pipes gives the driver read and write deadlines,
-// which pgx relies on to cancel a query.
+// dialSSH runs `ssh -W addr alias` with its stdin and stdout wired to a connection it returns
+// (wireSSH, per OS). The driver needs read and write deadlines on that connection, which pgx
+// relies on to cancel a query.
 func dialSSH(alias, network, addr string) (*sshConn, error) {
 	switch network {
 	case "tcp", "tcp4", "tcp6":
 	default:
 		return nil, fmt.Errorf("dbgate: ssh carries only tcp connections, not %s", network)
 	}
-	local, remote, err := socketPair()
+	stderr := &cappedBuffer{max: sshStderrCap}
+	cmd := exec.Command(sshBinary, "-o", "BatchMode=yes", "-W", addr, "--", alias)
+	local, release, err := wireSSH(cmd)
 	if err != nil {
 		return nil, err
 	}
-	defer remote.Close()
+	defer release()
 
-	stderr := &cappedBuffer{max: sshStderrCap}
-	cmd := exec.Command(sshBinary, "-o", "BatchMode=yes", "-W", addr, "--", alias)
-	cmd.Stdin = remote
-	cmd.Stdout = remote
 	cmd.Stderr = stderr
 	cmd.WaitDelay = sshWaitDelay
 	if err := cmd.Start(); err != nil {

@@ -9,8 +9,22 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"syscall"
 )
+
+// wireSSH gives ssh one end of a socketpair as its stdin and stdout and returns the other; a
+// socket rather than pipes gives the driver its deadlines. release closes this process's copy of
+// ssh's end once ssh has started.
+func wireSSH(cmd *exec.Cmd) (net.Conn, func(), error) {
+	local, remote, err := socketPair()
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd.Stdin = remote
+	cmd.Stdout = remote
+	return local, func() { remote.Close() }, nil
+}
 
 // socketPair returns a connected unix stream pair: a net.Conn for the driver and a file to hand
 // to ssh. Both ends are close-on-exec, set under ForkLock so a concurrent exec cannot inherit them.
