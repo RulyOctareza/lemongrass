@@ -36,9 +36,6 @@ const SHAPES = {
   ]
 } as const satisfies Record<string, readonly Shape[]>
 
-// Claude's mark keeps its own orange on every item state, since a recolored mark stops reading as Claude.
-const CLAUDE_ORANGE = 'hsl(14.8, 63.1%, 59.6%)'
-
 export type SettingsIconName = keyof typeof SHAPES | 'claude' | 'codex'
 
 withDefaults(defineProps<{ name: SettingsIconName; size?: number }>(), { size: 13 })
@@ -51,7 +48,7 @@ withDefaults(defineProps<{ name: SettingsIconName; size?: number }>(), { size: 1
     :size="size"
     :box="CLAUDE_MARK_BOX"
     :stroke-width="null"
-    :fill="CLAUDE_ORANGE"
+    fill="currentColor"
   >
     <path :d="CLAUDE_MARK" />
   </IconFrame>
