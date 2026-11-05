@@ -7,6 +7,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 const conflictScope = "conflict:merge:main:feature"
@@ -33,7 +35,7 @@ func ownedRows(t *testing.T, store *Store, tab string) Pending {
 
 // A store at version 3 keeps its threads, and a workgroup thread is marked as one.
 func TestMigrationV4KindsExistingThreads(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	saved := migrations
 	migrations = migrations[:3]
 	store, err := Open(DBPath(), testProjectID)

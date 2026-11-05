@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -124,13 +125,18 @@ func TestBuildResterBodyMultipartCarriesFileByteForByte(t *testing.T) {
 }
 
 func TestBuildResterBodyMultipartQuotesAwkwardFileNames(t *testing.T) {
-	path := writeTemp(t, `we"ird name.csv`, []byte("x"))
+	// Windows forbids a double quote in a file name, so there the field name carries the quote alone.
+	name := `we"ird name.csv`
+	if runtime.GOOS == "windows" {
+		name = `we'ird name;.csv`
+	}
+	path := writeTemp(t, name, []byte("x"))
 	body, contentType, err := buildResterBody(resterCommand{files: []filePart{{field: `up"load`, path: path}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	parts := readMultipart(t, body, contentType)
-	if len(parts) != 1 || parts[0].name != `up"load` || parts[0].filename != `we"ird name.csv` {
+	if len(parts) != 1 || parts[0].name != `up"load` || parts[0].filename != name {
 		t.Errorf("parts = %+v, want the quoted names to round trip", parts)
 	}
 }

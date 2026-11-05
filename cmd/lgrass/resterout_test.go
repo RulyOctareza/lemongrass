@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -100,7 +101,8 @@ func TestSaveDownloadWritesTheFile(t *testing.T) {
 	if got, _ := os.ReadFile(target); string(got) != "hello" {
 		t.Errorf("file = %q, want hello", got)
 	}
-	if info, _ := os.Stat(target); info.Mode().Perm() != 0o644 {
+	// Windows keeps only a read-only bit, so any writable file reports 0666 there.
+	if info, _ := os.Stat(target); runtime.GOOS != "windows" && info.Mode().Perm() != 0o644 {
 		t.Errorf("mode = %v, want 0644", info.Mode().Perm())
 	}
 	noTemps(t, dir)

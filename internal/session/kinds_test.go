@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 func TestGroupMessageKindsFollowMentions(t *testing.T) {
@@ -67,7 +69,7 @@ func TestMarkOtherSentSettlesOnlyOtherRows(t *testing.T) {
 }
 
 func TestOpenAddsKindToAnOlderNotificationsTable(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	if err := os.MkdirAll(filepath.Dir(DBPath()), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

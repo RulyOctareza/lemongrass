@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 func storeVersion(t *testing.T, s *Store) int {
@@ -37,7 +39,7 @@ func TestOpenBuildsAFreshStoreAtTheCurrentVersion(t *testing.T) {
 
 // A store from before versioning reads 0 and keeps its rows through version 1.
 func TestOpenMigratesAnUnversionedStoreKeepingItsData(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	if err := os.MkdirAll(filepath.Dir(DBPath()), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -76,7 +78,7 @@ func TestOpenMigratesAnUnversionedStoreKeepingItsData(t *testing.T) {
 // A store as version 1 left it, for tests that seed pre-versioning tables and reset user_version to 0.
 func openVersion1Store(t *testing.T) *Store {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	saved := migrations
 	migrations = migrations[:1]
 	store, err := Open(DBPath(), testProjectID)
@@ -116,7 +118,7 @@ func TestOpenOnACurrentStoreRunsNoStep(t *testing.T) {
 
 // The race that matters is the app's boot migrate against a hook from a tab left running, on a store that already exists in WAL mode.
 func TestConcurrentOpensApplyAStepOnce(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	if err := os.MkdirAll(filepath.Dir(DBPath()), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

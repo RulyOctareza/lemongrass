@@ -10,13 +10,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 const testProjectID = "testproj"
 
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	store, err := Open(DBPath(), testProjectID)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -567,7 +569,7 @@ func TestStartWorksOnOlderSessionsTables(t *testing.T) {
 		"with the socket columns":    ",\n\t\tmessaging_socket TEXT,\n\t\tmessaging_token TEXT",
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			testenv.Home(t)
 			if err := os.MkdirAll(filepath.Dir(DBPath()), 0o755); err != nil {
 				t.Fatalf("MkdirAll: %v", err)
 			}

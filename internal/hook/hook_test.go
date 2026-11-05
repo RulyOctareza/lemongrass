@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"github.com/faizalv/lemongrass/internal/session"
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 const hookTestProjectID = "hooktestproj"
 
 func openHookTestStore(t *testing.T) *session.Store {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	store, err := session.Open(session.DBPath(), hookTestProjectID)
 	if err != nil {
 		t.Fatalf("session.Open: %v", err)

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/session"
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 
 func openStore(t *testing.T) *session.Store {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	store, err := session.Open(session.DBPath(), "proj")
 	if err != nil {
 		t.Fatalf("Open: %v", err)

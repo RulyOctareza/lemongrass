@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 func TestRegisterCreatesEntryMatchingElectronUIShape(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	dir := t.TempDir()
 
 	p, err := Register(dir)
@@ -43,7 +45,7 @@ func TestRegisterCreatesEntryMatchingElectronUIShape(t *testing.T) {
 }
 
 func TestRegisterIsIdempotentByExactPath(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	dir := t.TempDir()
 
 	first, err := Register(dir)
@@ -72,7 +74,7 @@ func TestRegisterIsIdempotentByExactPath(t *testing.T) {
 }
 
 func TestResolveFollowsSymlinkToRegisteredPath(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	real := t.TempDir()
 	p, err := Register(real)
 	if err != nil {
@@ -107,7 +109,7 @@ func TestResolveFollowsSymlinkToRegisteredPath(t *testing.T) {
 }
 
 func TestRegisterViaSymlinkReturnsExistingEntry(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	real := t.TempDir()
 	first, err := Register(real)
 	if err != nil {
@@ -157,7 +159,7 @@ func markDeleted(t *testing.T, id string) {
 }
 
 func TestDeletedProjectIsHiddenUntilRegisteredAgain(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	dir := t.TempDir()
 	other := t.TempDir()
 
@@ -203,7 +205,7 @@ func TestDeletedProjectIsHiddenUntilRegisteredAgain(t *testing.T) {
 }
 
 func TestRegisterKeepsOtherProjectsDeletedMark(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	deleted, err := Register(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
