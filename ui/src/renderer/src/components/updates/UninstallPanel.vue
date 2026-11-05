@@ -7,6 +7,7 @@ import AppButton from '../AppButton.vue'
 import AppModal from '../AppModal.vue'
 import AppProgressLine from '../AppProgressLine.vue'
 import type { UninstallState } from '../../../../preload/types'
+import { isWindows } from '../../platform'
 
 const state = ref<UninstallState | null>(null)
 const confirming = ref(false)
@@ -35,7 +36,10 @@ const status = computed((): { text: string; tone: '' | 'error' } => {
     case 'authorizing':
       return { text: 'Waiting for your password.', tone: '' }
     case 'removing':
-      return { text: 'Removing the package. Lemongrass closes when it is done.', tone: '' }
+      // Windows hands the removal to the uninstaller, which runs silently once the app has closed.
+      return isWindows
+        ? { text: 'Lemongrass closes now. Its uninstaller finishes the removal.', tone: '' }
+        : { text: 'Removing the package. Lemongrass closes when it is done.', tone: '' }
     case 'failed':
       return { text: state.value.message ?? 'Uninstalling failed.', tone: 'error' }
     default:
@@ -70,7 +74,10 @@ const status = computed((): { text: string; tone: '' | 'error' } => {
         <li>The background keeper service.</li>
         <li>The Lemongrass hooks and status line in your Claude and Codex settings.</li>
         <li>The Lemongrass skills and the lgrass, lgrassconf and lgrassd commands.</li>
-        <li>The Lemongrass package. This asks for your system password.</li>
+        <li v-if="isWindows">
+          The Lemongrass app, removed by its uninstaller after Lemongrass closes.
+        </li>
+        <li v-else>The Lemongrass package. This asks for your system password.</li>
       </ul>
       <p class="settings-text">
         Your Lemongrass data, Claude account folders and trusted projects stay. Lemongrass closes
