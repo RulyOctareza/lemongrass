@@ -7,6 +7,9 @@ export interface ShellAgent {
   label: string
   hint: string
   warning?: string
+  // A hidden agent is left out of the New shell picker but still resolves by id, so its existing
+  // tabs and workgroup members keep running.
+  hidden?: boolean
 }
 
 export const SHELL_AGENTS: readonly ShellAgent[] = [
@@ -27,7 +30,8 @@ export const SHELL_AGENTS: readonly ShellAgent[] = [
     command: 'agent',
     label: 'Cursor Agent',
     hint: 'agent',
-    warning: 'Cursor support is still under development. Use Claude Code or Codex.'
+    warning: 'Cursor support is still under development. Use Claude Code or Codex.',
+    hidden: true
   },
   {
     id: 'shell',
@@ -36,6 +40,10 @@ export const SHELL_AGENTS: readonly ShellAgent[] = [
     hint: 'shell'
   }
 ]
+
+export const PICKABLE_SHELL_AGENTS: readonly ShellAgent[] = SHELL_AGENTS.filter(
+  (agent) => !agent.hidden
+)
 
 const RESUME_ARGV: Record<string, (sessionId: string) => string[]> = {
   claude: (sessionId) => ['--resume', sessionId],
@@ -69,7 +77,7 @@ const PREF_KEY = 'lemongrass.shellAgentId'
 export function preferredShellAgentId(): string {
   try {
     const saved = localStorage.getItem(PREF_KEY)
-    if (saved && SHELL_AGENTS.some((agent) => agent.id === saved)) return saved
+    if (saved && PICKABLE_SHELL_AGENTS.some((agent) => agent.id === saved)) return saved
   } catch {
     // ignore
   }
