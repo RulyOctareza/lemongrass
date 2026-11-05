@@ -9,7 +9,7 @@ import type { UpdatePlatform } from './updatePlatform'
 const RPM = '/usr/bin/rpm'
 
 // Updating replaces the rpm's files under /opt, so only a copy that rpm itself installed can do it.
-async function unsupportedReason(): Promise<string | null> {
+export async function unsupportedReason(): Promise<string | null> {
   if (process.arch !== 'x64') return 'Updates are published for Linux x86_64 only.'
   try {
     await run(RPM, ['-q', 'lemongrass'])

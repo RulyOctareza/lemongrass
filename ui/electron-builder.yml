@@ -110,8 +110,9 @@ deb:
   afterInstall: build/deb-after-install.sh
   afterRemove: build/deb-after-remove.sh
   fpm: ['--depends', 'git']
-# No custom scriptlets: setting afterInstall or afterRemove replaces electron-builder's defaults, which create
+# No afterInstall or afterRemove: setting either replaces electron-builder's defaults, which create
 # /usr/bin/lemongrass and set the chrome-sandbox mode. The keeper unit is per-user, written by `lgrassconf install`.
+# electron-builder sets no before-remove scriptlet, so ours goes in through fpm and the defaults stay.
 # The in-app updater finds the release asset by this fixed name.
 # The polkit action and rule go in as fpm src=dst inputs, the way electron-builder ships the icon and .desktop file,
 # so they need no scriptlet: polkitd picks them up by itself. Sources are relative to ui/, where fpm runs. polkit
@@ -123,6 +124,8 @@ rpm:
     - 'git'
     - '--depends'
     - 'polkit'
+    - '--before-remove'
+    - 'build/rpm-before-remove.sh'
     - 'build/polkit/com.lemongrass.app.lgrassroot.policy=/usr/share/polkit-1/actions/com.lemongrass.app.lgrassroot.policy'
     - 'build/polkit/com.lemongrass.app.lgrassroot.rules=/usr/share/polkit-1/rules.d/com.lemongrass.app.lgrassroot.rules'
 appImage:

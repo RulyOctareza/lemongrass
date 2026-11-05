@@ -85,3 +85,33 @@ func SyncFile(path string, want []byte) error {
 	}
 	return WriteAtomic(path, want, 0o644)
 }
+
+// RemoveHookConfig takes the Lemongrass hook groups out of one settings file and reports whether the file changed.
+// With deleteIfEmpty, a file left with nothing in it is deleted instead of written back as an empty object.
+func RemoveHookConfig(path string, events []string, deleteIfEmpty bool) (bool, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	out, changed, empty, err := RemoveHookGroups(data, events)
+	if err != nil {
+		return false, err
+	}
+	if deleteIfEmpty && empty {
+		if err := os.Remove(path); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	if !changed {
+		return false, nil
+	}
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	return true, WriteAtomic(path, out, mode)
+}

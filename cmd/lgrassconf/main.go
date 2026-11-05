@@ -17,7 +17,9 @@ func usage() {
   run      Watches the config and repairs drift until stopped
   check    Runs one repair pass and exits
   install  Installs the background keeper (systemd user unit on Linux, LaunchAgent on macOS)
-  uninstall  Stops and removes the background keeper installed by install
+  uninstall  Removes what Lemongrass put on this account: the keeper, its hooks and status line in the
+             Claude and Codex config, its skills, and the lgrass, lgrassconf and lgrassd binaries.
+             Lemongrass data, Claude account folders and project trust stay.
 `)
 	os.Exit(2)
 }
@@ -51,8 +53,8 @@ func main() {
 			os.Exit(1)
 		}
 	case "uninstall":
-		if err := uninstallUnit(home); err != nil {
-			fmt.Fprintf(os.Stderr, "lgrassconf: %v\n", err)
+		// Each failure is already printed by uninstall as it happens.
+		if err := newKeeper(home).uninstall(os.Stdout, uninstallUnit, binDirs(home)); err != nil {
 			os.Exit(1)
 		}
 	default:

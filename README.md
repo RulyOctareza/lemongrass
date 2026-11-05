@@ -146,6 +146,20 @@ The app is signed ad hoc, not with an Apple Developer ID, and is not notarized, 
 
 To be offered release candidates as well as stable releases, start the app with `LEMONGRASS_UPDATE_PRERELEASE=1` in its environment, on macOS with `LEMONGRASS_UPDATE_PRERELEASE=1 /Applications/Lemongrass.app/Contents/MacOS/Lemongrass`.
 
+## Uninstall
+
+With the rpm, open Settings, Updates and click Uninstall Lemongrass. It asks for your system password and closes the app when done.
+
+To do it by hand, or on macOS, first run as your own user:
+
+```
+lgrassconf uninstall
+```
+
+It stops the keeper service, takes the Lemongrass hooks and status line out of your Claude and Codex settings (putting back a status line you had before), and removes the Lemongrass skills and the `lgrass`, `lgrassconf` and `lgrassd` binaries. Then remove the package with `sudo dnf remove lemongrass`, or on macOS move Lemongrass from Applications to the Trash. Run `lgrassconf uninstall` first: removing the package does not reach the setup in your home folder, and the keeper keeps putting the hooks back while it runs. Launching Lemongrass again sets everything up again.
+
+`~/.lemongrass` stays, with your projects, vault, threads and history, and so do your Claude account folders (`~/.claude-<name>`) and the projects you trusted in Claude and Codex. Delete `~/.lemongrass` yourself to remove that data too.
+
 ## Build
 
 ```
@@ -158,7 +172,7 @@ Cross-compiles `lgrass`, `lgrassd` and `lgrassconf` for `linux/amd64` and `linux
 make build-rpm
 ```
 
-Same cross-compile, then builds only the rpm (needs `rpmbuild`), for Fedora and other rpm distributions. The package registers the `lgrassconf` keeper as a systemd user unit on install and removes it on uninstall, not on upgrade. The app also writes a per-user copy of `lgrass` and `lgrassconf` into `~/.local/bin` and its own user unit on launch. `lgrassconf uninstall` stops and removes that unit and leaves the binaries in place.
+Same cross-compile, then builds only the rpm (needs `rpmbuild`), for Fedora and other rpm distributions. The package installs the app under `/opt/Lemongrass` and registers no service. On each launch the app copies `lgrass` and `lgrassconf` into `~/.local/bin` and `lgrassd` into `~/.lemongrass/bin`, then runs `lgrassconf install`, which writes the keeper's systemd user unit. Removing the package prints a reminder to run `lgrassconf uninstall`, described under Uninstall.
 
 ```
 make build-mac

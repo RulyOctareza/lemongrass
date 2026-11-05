@@ -130,3 +130,60 @@ func ReconcileHookGroups(data []byte, registrations []HookRegistration) ([]byte,
 	}
 	return append(out, '\n'), true, nil
 }
+
+// RemoveHookGroups drops every Lemongrass hook group of the given events, found by the same rule reconcile uses to
+// claim them, then event lists left empty and a hooks object left empty. empty reports that nothing else is left in
+// the settings, so a file Lemongrass created can go.
+func RemoveHookGroups(data []byte, events []string) (out []byte, changed, empty bool, err error) {
+	top := map[string]json.RawMessage{}
+	if len(bytes.TrimSpace(data)) > 0 {
+		if err := json.Unmarshal(data, &top); err != nil {
+			return nil, false, false, fmt.Errorf("agentconf: parsing settings: %w", err)
+		}
+	}
+	raw, ok := top["hooks"]
+	if !ok {
+		return data, false, len(top) == 0, nil
+	}
+	hooks := map[string][]json.RawMessage{}
+	if err := json.Unmarshal(raw, &hooks); err != nil {
+		return nil, false, false, fmt.Errorf("agentconf: parsing hooks: %w", err)
+	}
+	for _, event := range events {
+		groups, ok := hooks[event]
+		if !ok {
+			continue
+		}
+		var kept []json.RawMessage
+		for _, g := range groups {
+			if ownedByEvent(g, event) {
+				changed = true
+				continue
+			}
+			kept = append(kept, g)
+		}
+		if len(kept) == 0 {
+			changed = true
+			delete(hooks, event)
+		} else {
+			hooks[event] = kept
+		}
+	}
+	if !changed {
+		return data, false, false, nil
+	}
+	if len(hooks) == 0 {
+		delete(top, "hooks")
+	} else {
+		hooksJSON, err := json.Marshal(hooks)
+		if err != nil {
+			return nil, false, false, err
+		}
+		top["hooks"] = hooksJSON
+	}
+	out, err = json.MarshalIndent(top, "", "  ")
+	if err != nil {
+		return nil, false, false, err
+	}
+	return append(out, '\n'), true, len(top) == 0, nil
+}

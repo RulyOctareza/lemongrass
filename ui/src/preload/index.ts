@@ -19,6 +19,7 @@ import type {
   UsageReport,
   StatusLineChainState,
   UpdateState,
+  UninstallState,
   DepsState,
   CreditsResult,
   DeviceEnd,
@@ -641,6 +642,14 @@ const update = {
       callback(state)
     ipcRenderer.on('update:state-changed', listener)
     return () => ipcRenderer.removeListener('update:state-changed', listener)
+  },
+  uninstallState: (): Promise<UninstallState> => ipcRenderer.invoke('uninstall:state'),
+  uninstall: (): Promise<void> => ipcRenderer.invoke('uninstall:run'),
+  onUninstallState: (callback: (state: UninstallState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: UninstallState): void =>
+      callback(state)
+    ipcRenderer.on('uninstall:state-changed', listener)
+    return () => ipcRenderer.removeListener('uninstall:state-changed', listener)
   }
 }
 

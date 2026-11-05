@@ -128,3 +128,59 @@ func TestReconcileRejectsInvalidJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveHookGroupsKeepsTheHumansHooks(t *testing.T) {
+	in := []byte(`{
+  "model": "opus",
+  "hooks": {
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "/x/lgrassd hook Stop"}]},
+      {"hooks": [{"type": "command", "command": "notify.sh"}]}
+    ],
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "/x/lgrassd hook PreToolUse"}]}],
+    "Custom": [{"hooks": [{"type": "command", "command": "/x/lgrassd hook Custom"}]}]
+  }
+}`)
+	out, changed, empty, err := RemoveHookGroups(in, []string{"Stop", "PreToolUse"})
+	if err != nil || !changed || empty {
+		t.Fatalf("changed=%v empty=%v err=%v", changed, empty, err)
+	}
+	var got struct {
+		Model string                       `json:"model"`
+		Hooks map[string][]json.RawMessage `json:"hooks"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Model != "opus" {
+		t.Error("other settings lost")
+	}
+	if _, ok := got.Hooks["PreToolUse"]; ok {
+		t.Error("event left with no groups kept")
+	}
+	if len(got.Hooks["Stop"]) != 1 || !strings.Contains(string(got.Hooks["Stop"][0]), "notify.sh") {
+		t.Errorf("Stop: %s", got.Hooks["Stop"])
+	}
+	if len(got.Hooks["Custom"]) != 1 {
+		t.Error("an event not asked for was touched")
+	}
+}
+
+func TestRemoveHookGroupsReportsAnEmptyFile(t *testing.T) {
+	in := []byte(`{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/x/lgrassd hook Stop"}]}]}}`)
+	out, changed, empty, err := RemoveHookGroups(in, []string{"Stop"})
+	if err != nil || !changed || !empty {
+		t.Fatalf("changed=%v empty=%v err=%v", changed, empty, err)
+	}
+	if strings.TrimSpace(string(out)) != "{}" {
+		t.Errorf("out: %s", out)
+	}
+}
+
+func TestRemoveHookGroupsLeavesSettingsWithoutHooksAlone(t *testing.T) {
+	in := []byte(`{"model": "opus"}`)
+	out, changed, empty, err := RemoveHookGroups(in, ClaudeHookEvents)
+	if err != nil || changed || empty || string(out) != string(in) {
+		t.Fatalf("changed=%v empty=%v err=%v out=%s", changed, empty, err, out)
+	}
+}

@@ -18,6 +18,7 @@ import type {
   UsageReport,
   StatusLineChainState,
   UpdateState,
+  UninstallState,
   DepsState,
   CreditsResult,
   DeviceEnd,
@@ -184,6 +185,9 @@ interface Api {
     install: () => Promise<void>
     restart: () => Promise<void>
     onState: (callback: (state: UpdateState) => void) => () => void
+    uninstallState: () => Promise<UninstallState>
+    uninstall: () => Promise<void>
+    onUninstallState: (callback: (state: UninstallState) => void) => () => void
   }
   deps: {
     state: () => Promise<DepsState>

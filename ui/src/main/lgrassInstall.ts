@@ -37,7 +37,7 @@ function resourceDir(): string | null {
 
 type BinName = 'lgrass' | 'lgrassd' | 'lgrassconf'
 
-function resolveBundledBin(name: BinName): string | null {
+export function resolveBundledBin(name: BinName): string | null {
   const dir = resourceDir()
   if (!dir) return null
   return join(process.resourcesPath, 'bin', dir, name)
@@ -93,11 +93,7 @@ export function installLgrass(): string | null {
   if (!app.isPackaged) {
     const dest = join(resolveInstallDir(), 'lgrass')
     if (!existsSync(dest)) {
-      console.error(
-        'lgrass: not found at',
-        dest,
-        '. Run `make install` from the repo root.'
-      )
+      console.error('lgrass: not found at', dest, '. Run `make install` from the repo root.')
       return null
     }
     return dest
@@ -111,11 +107,7 @@ export function installLgrassd(): string | null {
   if (!app.isPackaged) {
     const dest = join(lgrassdInstallDir(), 'lgrassd')
     if (!existsSync(dest)) {
-      console.error(
-        'lgrassd: not found at',
-        dest,
-        '. Run `make install` from the repo root.'
-      )
+      console.error('lgrassd: not found at', dest, '. Run `make install` from the repo root.')
       return null
     }
     return dest

@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppButton from '../AppButton.vue'
 import AppConfirmButton from '../AppConfirmButton.vue'
 import AppProgressLine from '../AppProgressLine.vue'
+import UninstallPanel from './UninstallPanel.vue'
 import type { UpdateState } from '../../../../preload/types'
 
 const state = ref<UpdateState | null>(null)
@@ -124,6 +125,8 @@ const status = computed((): { text: string; tone: '' | 'muted' | 'saved' | 'erro
         {{ armed ? 'Click again' : 'Restart now' }}
       </AppConfirmButton>
     </div>
+
+    <UninstallPanel />
   </div>
 </template>
 
