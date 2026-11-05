@@ -64,6 +64,11 @@ export function dmgAssetName(version: string, arch: string): string {
   return `lemongrass-${version}-${arch}.dmg`
 }
 
+// Must match nsis.artifactName in electron-builder.yml.
+export function winAssetName(version: string): string {
+  return `lemongrass-${version}-setup.exe`
+}
+
 export interface ListedRelease {
   tag_name?: string
   draft?: boolean

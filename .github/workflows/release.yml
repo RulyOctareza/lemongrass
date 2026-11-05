@@ -1,7 +1,8 @@
-# Builds the x86_64 rpm and the arm64 and x64 macOS dmgs for a pushed v<version> tag, versioned from the tag, and
-# publishes them with one SHA256SUMS as a GitHub Release. A manual run (Run workflow) builds and checks every package
-# from the chosen branch and attaches them to the run as an artifact, publishing nothing.
-# The in-app updater reads the latest release and verifies the rpm or the dmg against SHA256SUMS, so their names are fixed.
+# Builds the x86_64 rpm, the arm64 and x64 macOS dmgs and the Windows x64 setup.exe for a pushed v<version> tag,
+# versioned from the tag, and publishes them with one SHA256SUMS as a GitHub Release. A manual run (Run workflow)
+# builds and checks every package from the chosen branch and attaches them to the run as an artifact, publishing
+# nothing. The in-app updater reads the latest release and verifies the rpm, the dmg or the setup.exe against
+# SHA256SUMS, so their names are fixed.
 name: Release
 
 on:
@@ -121,10 +122,69 @@ jobs:
           path: ui/dist/lemongrass-*.dmg
           if-no-files-found: error
 
+  windows:
+    name: windows
+    # The setup.exe is built on Linux like the rpm. Nothing native is compiled: node-pty ships win32-x64 prebuilds and
+    # the Go binaries cross-compile.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # The same Node as build/rpm/Containerfile, so every package is built by one toolchain.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.22.2
+
+      # electron-builder runs the 32-bit NSIS installer once under wine to extract its uninstaller, which needs the
+      # i386 wine. The exe's icon and version are written without wine.
+      - name: Install wine
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wine64 wine32:i386
+
+      # The version comes from the tag exactly as in the rpm job.
+      - name: Build setup.exe
+        env:
+          STAMP: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          set -eu
+          if [ -n "$STAMP" ]; then
+            npm --prefix ui version "${STAMP#v}" --no-git-tag-version --allow-same-version
+          fi
+          npm --prefix ui ci
+          make dist-windows
+          npm --prefix ui run build:win -- --x64 --publish never
+
+      # Fails the job when the package lacks a Go binary or node-pty's Windows module, which would only surface as a
+      # broken install on the user's machine.
+      - name: Check the package
+        working-directory: ui/dist/win-unpacked/resources
+        run: |
+          set -eu
+          for f in bin/windows-amd64/lgrass.exe bin/windows-amd64/lgrassd.exe bin/windows-amd64/lgrassconf.exe \
+                   app.asar.unpacked/node_modules/node-pty/prebuilds/win32-x64/conpty.node \
+                   app.asar.unpacked/node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe; do
+            [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
+            echo "ok $f"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: ui/dist/lemongrass-*-setup.exe
+          if-no-files-found: error
+
   # One job writes SHA256SUMS over every package, so the rpm and mac jobs never race to upload the same asset.
   release:
     name: release
-    needs: [rpm, mac]
+    needs: [rpm, mac, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

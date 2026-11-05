@@ -22,6 +22,7 @@ import { isNewer, newestRelease, sha256For, versionFromTag } from './updateVersi
 import type { UpdatePlatform } from './updatePlatform'
 import { rpmPlatform } from './updaterRpm'
 import { macPlatform } from './updaterMac'
+import { winPlatform } from './updaterWin'
 
 // Releases are built by .github/workflows/release.yml. The repo is public, so the check needs no token,
 // and the unauthenticated limit of 60 requests an hour is far above one check every few hours.
@@ -55,8 +56,12 @@ interface ReleaseBody {
   assets?: ReleaseAsset[]
 }
 
-const platform: UpdatePlatform | null =
-  process.platform === 'linux' ? rpmPlatform : process.platform === 'darwin' ? macPlatform : null
+const platforms: Partial<Record<NodeJS.Platform, UpdatePlatform>> = {
+  linux: rpmPlatform,
+  darwin: macPlatform,
+  win32: winPlatform
+}
+const platform: UpdatePlatform | null = platforms[process.platform] ?? null
 
 let state: UpdateState = {
   phase: 'idle',
@@ -94,7 +99,7 @@ function messageOf(err: unknown): string {
 
 async function unsupportedReason(): Promise<string | null> {
   if (!app.isPackaged) return 'This is a source build. Updates run only in the installed app.'
-  if (!platform) return 'Updates are published for Linux and macOS only.'
+  if (!platform) return 'Updates are published for Linux, macOS and Windows only.'
   return platform.unsupportedReason()
 }
 
@@ -249,8 +254,8 @@ export function registerUpdateHandlers(getWindow: () => BrowserWindow | undefine
     platform.restart()
   })
 
-  // A macOS update stays staged in its version's folder until the swap after quit, so the folder named
-  // for the version now running holds the update that was just applied.
+  // A macOS or Windows update stays staged in its version's folder until it is applied after quit, so
+  // the folder named for the version now running holds the update that was just applied.
   rmSync(join(UPDATES_DIR, state.current), { recursive: true, force: true })
 
   void unsupportedReason().then((reason) => {

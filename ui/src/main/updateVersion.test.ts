@@ -10,7 +10,8 @@ import {
   newestRelease,
   rpmAssetName,
   sha256For,
-  versionFromTag
+  versionFromTag,
+  winAssetName
 } from './updateVersion.ts'
 
 test('compares the numeric parts', () => {
@@ -40,6 +41,7 @@ test('names the release assets', () => {
   assert.equal(rpmAssetName('0.2.0-rc.1'), 'lemongrass-0.2.0-rc.1.x86_64.rpm')
   assert.equal(dmgAssetName('0.4.0-rc.2', 'arm64'), 'lemongrass-0.4.0-rc.2-arm64.dmg')
   assert.equal(dmgAssetName('0.4.0', 'x64'), 'lemongrass-0.4.0-x64.dmg')
+  assert.equal(winAssetName('0.4.0'), 'lemongrass-0.4.0-setup.exe')
 })
 
 test('the prerelease channel picks the highest version, not the newest entry', () => {
