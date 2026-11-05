@@ -30,10 +30,8 @@ type Verdict struct {
 	Detail string
 }
 
-const (
-	bangPrefixLine = " If the user really wants it, ask them to run it themselves with the ! prefix in the prompt."
-	commandAskLine = " The model may file a command ask instead: run lgrass how ask request."
-)
+// A guarded command reaches the human as a command ask, which runs it in a terminal on the decision card, so a refusal points there and never at typing the command into the prompt.
+const commandAskLine = " If it is truly needed, file a command ask so the user can run it: run lgrass how ask request."
 
 func (v Verdict) Message() string {
 	detail := ""
@@ -45,16 +43,12 @@ func (v Verdict) Message() string {
 		if v.RuleID == "find-delete" {
 			subject = "find -delete"
 		}
-		message := "lgrass: " + subject + " blocked (rule " + v.RuleID + ")." + detail + bangPrefixLine
-		if v.Mode == ModeDeny {
-			message += commandAskLine
-		}
-		return message
+		return "lgrass: " + subject + " blocked (rule " + v.RuleID + ")." + detail + commandAskLine
 	}
 	if v.Mode == ModeAsk {
-		return "lgrass: rule " + v.RuleID + " (" + v.Description + ") needs the user's approval, and approval is not available yet." + detail + " Ask the user to run it themselves with the ! prefix in the prompt."
+		return "lgrass: rule " + v.RuleID + " (" + v.Description + ") needs the user's decision." + detail + " A shell command goes to the user as a command ask: run lgrass how ask request. For anything else, tell the user what you need and why."
 	}
-	return "lgrass: this call is blocked by rule " + v.RuleID + " (" + v.Description + ")." + detail + " It is not allowed in a lemongrass session, whatever the permission mode." + bangPrefixLine + commandAskLine
+	return "lgrass: this call is blocked by rule " + v.RuleID + " (" + v.Description + ")." + detail + " It is not allowed in a lemongrass session, whatever the permission mode." + commandAskLine
 }
 
 var secretComponents = map[string]bool{".ssh": true, ".aws": true, ".gnupg": true, ".kube": true, ".lemongrass": true, ".netrc": true}

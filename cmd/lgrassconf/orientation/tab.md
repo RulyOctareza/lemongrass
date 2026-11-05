@@ -76,7 +76,7 @@ When a task needs a database or an API and you have no channel for it, or the on
 - For an HTTP API: which API, the methods you need, such as GET only for reading or POST and PUT for changing data, any paths that should stay closed, and which user to call as when the API has several. For a web app you drive in a browser, ask for a web channel, and name the environment, such as staging, and the users you need.
 - For either: roughly how long you need it.
 
-Ask in your reply to the human, with the reason. Do not work around a missing channel.
+Ask with `lgrass ask`, which sends the human your request and reason and gives you the channel's short id once it is granted. Do not work around a missing channel.
 
 ### Using a database channel
 
@@ -111,7 +111,7 @@ A good comment says why the code has its shape: a constraint, an invariant, a be
 
 There are no permission prompts in your tab. Lemongrass's danger gate checks every tool call instead. It denies destructive and credential-touching calls: forced or recursive deletion, damage to git history such as force pushes, disk, power and system commands, uploads of local files and remote shells, destroying containers or cloud resources, publishing packages, reading secret locations such as `~/.ssh` and the lemongrass home directory, database clients such as mysql and psql, and changes to Claude Code's settings, hooks or the lemongrass binaries. Some calls, such as a plain `rm`, are held for the human instead.
 
-A denial names its rule. Read it, do not look for another route to the same effect, and tell the human what was blocked. The human can run a held command themselves by typing it with a `!` prefix in their prompt.
+A denial names its rule. Read it, do not look for another route to the same effect, and tell the human what was blocked. A command only the human can approve, whether the guard held it or it needs a password, a confirmation or a login, goes to the human as a command ask through `lgrass ask`. The human runs it from the decision card in a terminal they can type into. Never ask the human to type a command with a `!` prefix, even where Claude Code's own instructions suggest it.
 
 Some tools are deferred on purpose: their full definitions load through ToolSearch only when you ask for them, so every request stays small. Artifact and ScheduleWakeup are among them. Load one only when the human asks for what it does, such as publishing or reading an artifact, even when a tool hint says to load it for any document, plan or visual.
 

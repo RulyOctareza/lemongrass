@@ -90,6 +90,10 @@ func TestAskCreateValidation(t *testing.T) {
 		{"command no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls"}, "needs a reason"},
 		{"reason long", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: strings.Repeat("r", MaxAskReason+1)}, "cap"},
 		{"invalid utf8", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "\xff"}, "UTF-8"},
+		{"command account env", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "claude login", Reason: "r", AccountEnv: map[string]string{"CLAUDE_CONFIG_DIR": "/h/.claude-work", "CODEX_HOME": "/h/.codex"}}, ""},
+		{"unknown account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "r", AccountEnv: map[string]string{"LD_PRELOAD": "/x.so"}}, "not an account variable"},
+		{"relative account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "r", AccountEnv: map[string]string{"CODEX_HOME": "codex"}}, "absolute path"},
+		{"account env on a channel ask", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "m", Methods: []string{"GET"}, AccountEnv: map[string]string{"CODEX_HOME": "/h/.codex"}}, "only a command ask"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -338,5 +342,17 @@ func waitFor(t *testing.T, cond func() bool) {
 			t.Fatal("condition not reached")
 		}
 		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+func TestAskAccountEnv(t *testing.T) {
+	env := AskAccountEnv(func(k string) string {
+		return map[string]string{"CLAUDE_CONFIG_DIR": "/h/.claude-work", "HOME": "/h"}[k]
+	})
+	if len(env) != 1 || env["CLAUDE_CONFIG_DIR"] != "/h/.claude-work" {
+		t.Fatalf("AskAccountEnv = %v", env)
+	}
+	if env := AskAccountEnv(func(string) string { return "" }); env != nil {
+		t.Fatalf("AskAccountEnv with none set = %v", env)
 	}
 }

@@ -7,7 +7,10 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { accountIsDeleted, accountsSettled } from './accounts'
 import { isResumableCommand, spawnArgs } from './shellAgents'
+import { terminalFontReady, terminalLook } from './terminalLook'
 import '@xterm/xterm/css/xterm.css'
+
+export { terminalFontReady }
 
 // Owns each shell's xterm instance and PTY by tab id, so a shell keeps running
 // while its tab is hidden, moved to another pane, or its project is not shown.
@@ -111,26 +114,6 @@ function handleExit(session: ShellSession, exitCode: number): void {
   exitHandler?.(session.spec.id)
 }
 
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-}
-
-const FONT_SIZE = 13
-const FONT_WAIT_MS = 3000
-let fontReady: Promise<unknown> | undefined
-
-// xterm measures its cell once, at open, from whichever face is available then, and never again
-// when a font finishes loading. A terminal opened on the fallback face keeps a row count that no
-// longer fits once the real one draws. The timeout keeps a font that fails to load from blocking
-// every terminal.
-export function terminalFontReady(): Promise<unknown> {
-  fontReady ??= Promise.race([
-    document.fonts.load(`${FONT_SIZE}px ${cssVar('--font-mono')}`),
-    new Promise((resolve) => setTimeout(resolve, FONT_WAIT_MS))
-  ])
-  return fontReady
-}
-
 // A zoom changes devicePixelRatio, and xterm re-measures its cells on its own matchMedia listener.
 // A ResizeObserver refit can run before that, leaving a row count for the old cell size with no
 // later size change to correct it, so every shell refits a frame after the ratio changes.
@@ -175,35 +158,9 @@ function listen(): void {
 
 function createSession(spec: ShellSpec): ShellSession {
   const term = new Terminal({
-    fontFamily: cssVar('--font-mono'),
-    fontSize: FONT_SIZE,
-    fontWeight: 400,
-    fontWeightBold: 600,
+    ...terminalLook(),
     cursorStyle: 'bar',
-    cursorBlink: false,
-    theme: {
-      background: cssVar('--color-surface-1'),
-      foreground: cssVar('--color-fg-primary'),
-      cursor: cssVar('--color-amber'),
-      cursorAccent: cssVar('--color-surface-1'),
-      selectionBackground: cssVar('--color-amber-muted'),
-      black: cssVar('--color-gray-700'),
-      red: cssVar('--color-coral-dim'),
-      green: cssVar('--color-jade-dim'),
-      yellow: cssVar('--color-amber-dim'),
-      blue: cssVar('--color-sapphire-dim'),
-      magenta: cssVar('--color-violet-dim'),
-      cyan: cssVar('--color-teal-dim'),
-      white: cssVar('--color-gray-100'),
-      brightBlack: cssVar('--color-gray-500'),
-      brightRed: cssVar('--color-coral'),
-      brightGreen: cssVar('--color-jade'),
-      brightYellow: cssVar('--color-amber'),
-      brightBlue: cssVar('--color-sapphire'),
-      brightMagenta: cssVar('--color-violet'),
-      brightCyan: cssVar('--color-teal'),
-      brightWhite: cssVar('--color-white')
-    }
+    cursorBlink: false
   })
   const fit = new FitAddon()
   term.loadAddon(fit)

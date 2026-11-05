@@ -7,6 +7,9 @@ import type {
   Ask,
   AskCount,
   AskDeclineExtra,
+  AskTermAttach,
+  AskTermData,
+  AskTermEnd,
   Notice,
   NoticeInput,
   AccountInfo,
@@ -109,7 +112,14 @@ interface Api {
     count: () => Promise<AskCount>
     list: (passphrase: string) => Promise<Ask[]>
     get: (passphrase: string, id: string) => Promise<Ask>
-    execute: (passphrase: string, id: string, timeoutSeconds: number) => Promise<Ask>
+    // rows and cols are the card terminal's size, so the command starts at it.
+    execute: (
+      passphrase: string,
+      id: string,
+      timeoutSeconds: number,
+      rows?: number,
+      cols?: number
+    ) => Promise<Ask>
     stop: (passphrase: string, id: string) => Promise<void>
     decline: (
       passphrase: string,
@@ -117,6 +127,12 @@ interface Api {
       note: string,
       extra?: AskDeclineExtra
     ) => Promise<void>
+    termAttach: (passphrase: string, id: string) => Promise<AskTermAttach>
+    termInput: (attachId: number, data: string) => void
+    termResize: (attachId: number, rows: number, cols: number) => void
+    termDetach: (attachId: number) => void
+    onTermData: (callback: (payload: AskTermData) => void) => () => void
+    onTermEnd: (callback: (payload: AskTermEnd) => void) => () => void
     onCount: (callback: (count: AskCount) => void) => () => void
     onChanged: (callback: () => void) => () => void
     onOpen: (callback: (id: string) => void) => () => void

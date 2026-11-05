@@ -4,6 +4,7 @@
 <script setup lang="ts">
 // The card for a command ask. Execute runs the command in the vault daemon as the user, in the
 // ask's folder; the daemon refuses anything on its never-execute list whatever this card shows.
+// While it runs, the card shows the command's terminal and the human can type into it.
 import AppIcon from '../AppIcon.vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { Ask } from '../../../../preload/types'
@@ -13,6 +14,7 @@ import AppConfirmButton from '../AppConfirmButton.vue'
 import AppInfoPopover from '../AppInfoPopover.vue'
 import AppProgressLine from '../AppProgressLine.vue'
 import AppSegmented from '../AppSegmented.vue'
+import AppTerminal from '../AppTerminal.vue'
 import AppTextarea from '../AppTextarea.vue'
 import { noteAskAnswered } from '../../notifications'
 import { formatElapsed } from '../../elapsed'
@@ -95,6 +97,114 @@ const elapsed = computed(() =>
   startedMs.value === null ? null : formatElapsed(now.value - startedMs.value)
 )
 
+// The daemon holds one view of a running command's terminal at a time. This card attaches while
+// the command runs, and the output so far is replayed into the terminal on every attach.
+const terminal = ref<InstanceType<typeof AppTerminal> | null>(null)
+const live = computed(() => props.ask.state === 'running')
+let attachId: number | null = null
+let attaching = false
+let termSize: { rows: number; cols: number } | null = null
+// Set when the terminal is not showing here: another view took it over, or the connection closed.
+const viewNote = ref('')
+
+async function attachTerminal(): Promise<void> {
+  if (attachId !== null || attaching || !live.value) return
+  attaching = true
+  viewNote.value = ''
+  try {
+    const view = await window.api.ask.termAttach(vaultSession.passphrase, props.ask.id)
+    if (!live.value) {
+      window.api.ask.termDetach(view.attachId)
+      return
+    }
+    attachId = view.attachId
+    terminal.value?.reset()
+    terminal.value?.write(view.replay)
+    if (termSize) window.api.ask.termResize(attachId, termSize.rows, termSize.cols)
+    terminal.value?.focus()
+  } catch (err) {
+    // A command that has just ended refuses the attach; the refetch then shows its result.
+    if (live.value) viewNote.value = describeError(err)
+  } finally {
+    attaching = false
+  }
+}
+
+function detachTerminal(): void {
+  if (attachId !== null) window.api.ask.termDetach(attachId)
+  attachId = null
+}
+
+function sendInput(data: string): void {
+  if (attachId !== null) window.api.ask.termInput(attachId, data)
+}
+
+// The terminal reports its size once its font is ready; past the font wait the daemon's default size
+// is used, and the terminal sends its own on attach.
+const SIZE_WAIT_MS = 4000
+let sizeWaiter: ((size: { rows: number; cols: number }) => void) | null = null
+
+function sendResize(size: { rows: number; cols: number }): void {
+  termSize = size
+  sizeWaiter?.(size)
+  sizeWaiter = null
+  if (attachId !== null) window.api.ask.termResize(attachId, size.rows, size.cols)
+}
+
+function terminalSize(): Promise<{ rows: number; cols: number } | null> {
+  if (termSize) return Promise.resolve(termSize)
+  return new Promise((resolve) => {
+    sizeWaiter = resolve
+    setTimeout(() => {
+      if (sizeWaiter === resolve) sizeWaiter = null
+      resolve(null)
+    }, SIZE_WAIT_MS)
+  })
+}
+
+const stopTermData = window.api.ask.onTermData(({ attachId: id, data }) => {
+  if (id === attachId) terminal.value?.write(data)
+})
+
+const stopTermEnd = window.api.ask.onTermEnd(({ attachId: id, reason }) => {
+  if (id !== attachId) return
+  attachId = null
+  if (!live.value || reason === 'ended') return
+  // A view that fell behind attaches again and redraws from the replay.
+  if (reason === 'behind') {
+    void attachTerminal()
+    return
+  }
+  viewNote.value =
+    reason === 'replaced'
+      ? 'The terminal is showing in another view.'
+      : 'The terminal connection closed.'
+})
+
+watch(
+  live,
+  (on) => {
+    if (on) void nextTick(attachTerminal)
+    else detachTerminal()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  detachTerminal()
+  stopTermData()
+  stopTermEnd()
+})
+
+// Which Claude or Codex account a login in the command would reach, named by its folder.
+const accountLines = computed(() => {
+  const env = props.ask.account_env ?? {}
+  const lines: { label: string; dir: string }[] = []
+  if (env.CLAUDE_CONFIG_DIR) lines.push({ label: 'Claude account', dir: env.CLAUDE_CONFIG_DIR })
+  if (env.CODEX_HOME) lines.push({ label: 'Codex account', dir: env.CODEX_HOME })
+  return lines
+})
+
 // The rule hint's card shows while its info icon is hovered or focused.
 const ruleHintAnchor = ref<HTMLElement | null>(null)
 
@@ -151,7 +261,15 @@ function execute(): void {
   starting.value = true
   void run(async () => {
     try {
-      await window.api.ask.execute(vaultSession.passphrase, props.ask.id, timeoutSeconds.value)
+      // The terminal mounts as soon as the card starts, so the command can begin at its size.
+      const size = await terminalSize()
+      await window.api.ask.execute(
+        vaultSession.passphrase,
+        props.ask.id,
+        timeoutSeconds.value,
+        size?.rows,
+        size?.cols
+      )
     } catch (err) {
       starting.value = false
       throw err
@@ -184,12 +302,31 @@ async function decline(): Promise<void> {
           class="run-clock"
           :title="result?.started_at ? `Started at ${clock(result.started_at)}` : undefined"
         >
-          {{ elapsed === null ? 'Starting...' : `Running ${elapsed}` }}
+          <template v-if="elapsed === null">Starting...</template>
+          <template v-else
+            >Running <span class="run-time">{{ elapsed }}</span></template
+          >
         </span>
       </div>
       <span v-if="running && elapsed !== null" class="run-since">
         Since {{ clock(result?.started_at) }}
       </span>
+      <p v-for="line in accountLines" :key="line.label" class="hint account-line">
+        {{ line.label }}: <span class="account-dir">{{ line.dir }}</span>
+      </p>
+    </div>
+    <div v-if="running" class="field-block">
+      <span class="field-label">Terminal</span>
+      <AppTerminal
+        ref="terminal"
+        label="The command's terminal"
+        @data="sendInput"
+        @resize="sendResize"
+      />
+      <p v-if="viewNote" class="hint view-note">
+        {{ viewNote }}
+        <AppButton :disabled="busy" @click="attachTerminal">Show here</AppButton>
+      </p>
     </div>
     <div v-if="ask.reason" class="field-block">
       <span class="field-label">Reason</span>
@@ -346,6 +483,30 @@ async function decline(): Promise<void> {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
+}
+
+.view-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.account-line {
+  margin: 0;
+}
+
+.account-dir {
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* The body font has no tabular digits, so the time is set in mono, where every digit is one width
+   and the line beside it keeps still while the counter ticks. */
+.run-time {
+  font-family: var(--font-mono);
 }
 
 .run-since {

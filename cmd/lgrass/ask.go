@@ -80,6 +80,9 @@ func fileAndWait(path string, out io.Writer) int {
 	req.TabID = tabID
 	req.Cwd = cwd
 	req.Path = os.Getenv("PATH")
+	if req.Type == vault.AskCommand {
+		req.AccountEnv = vault.AskAccountEnv(os.Getenv)
+	}
 
 	client := &agent.Client{SocketPath: agent.SocketPath()}
 	a, err := client.CreateAsk(req)

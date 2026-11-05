@@ -340,7 +340,8 @@ func handleConn(svc *Backend, adminLimiter *vault.FailureLimiter, conn net.Conn)
 	}
 
 	var req request
-	if err := json.NewDecoder(conn).Decode(&req); err != nil {
+	dec := json.NewDecoder(conn)
+	if err := dec.Decode(&req); err != nil {
 		json.NewEncoder(conn).Encode(errResponse(err))
 		return
 	}
@@ -366,6 +367,10 @@ func handleConn(svc *Backend, adminLimiter *vault.FailureLimiter, conn net.Conn)
 	}
 	if req.Op == opWaitAsk {
 		serveWaitAsk(svc, conn, req)
+		return
+	}
+	if req.Op == opAttachAsk {
+		serveAttachAsk(svc, adminLimiter, conn, dec, req)
 		return
 	}
 	json.NewEncoder(conn).Encode(dispatch(svc, adminLimiter, req))

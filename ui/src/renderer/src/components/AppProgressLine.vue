@@ -3,8 +3,9 @@
 
 <script setup lang="ts">
 // An indeterminate progress line for work whose length is unknown, such as a running command. A
-// bright segment with a soft glow slides along a muted track and pulses in brightness, so the
-// state reads as alive at a glance. Pure CSS: nothing runs in script while it shows.
+// bright line with a soft glow grows from the left edge until it fills the muted track, then
+// shrinks toward the right edge, pulsing in brightness, so the state reads as alive at a glance.
+// Pure CSS: nothing runs in script while it shows.
 withDefaults(
   defineProps<{
     label: string
@@ -42,30 +43,34 @@ withDefaults(
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -40%;
-  width: 40%;
+  left: 0;
+  right: 100%;
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--line-color) 30%,
-    var(--line-color) 70%,
-    transparent
-  );
+  background: var(--line-color);
   box-shadow:
     0 0 6px var(--line-color),
     0 0 14px var(--line-muted);
   animation:
-    progress-slide 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite,
+    progress-sweep 2s infinite,
     progress-pulse 1.2s ease-in-out infinite alternate;
 }
 
-@keyframes progress-slide {
-  from {
-    left: -40%;
+/* Grow from the left edge, then let go of it toward the right; each half eases on its own, so the
+   line slows into the full track and out of it instead of turning sharply. */
+@keyframes progress-sweep {
+  0% {
+    left: 0;
+    right: 100%;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
   }
-  to {
+  50% {
+    left: 0;
+    right: 0;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  }
+  100% {
     left: 100%;
+    right: 0;
   }
 }
 
@@ -81,9 +86,7 @@ withDefaults(
 /* Still, but plainly on: the whole line in the tone color with its glow. */
 @media (prefers-reduced-motion: reduce) {
   .segment {
-    left: 0;
-    width: 100%;
-    background: var(--line-color);
+    right: 0;
     animation: none;
   }
 }

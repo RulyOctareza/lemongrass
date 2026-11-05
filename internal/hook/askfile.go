@@ -32,7 +32,7 @@ func dangerMessageWith(socketPath string, payload hookEvent, verdict guard.Verdi
 	}
 	client := &gatekeeper.Client{SocketPath: socketPath, Timeout: askFileTimeout}
 	ask, err := client.CreateAsk(gatekeeper.AskRequest{
-		Type: vault.AskCommand, TabID: payload.TabID, Cwd: payload.Cwd, Path: os.Getenv("PATH"),
+		Type: vault.AskCommand, TabID: payload.TabID, Cwd: payload.Cwd, Path: os.Getenv("PATH"), AccountEnv: vault.AskAccountEnv(os.Getenv),
 		Command: command, Rule: verdict.RuleID,
 	})
 	if err != nil {

@@ -124,6 +124,26 @@ func TestIPCAskExecute(t *testing.T) {
 	}
 }
 
+func TestIPCAskExecuteWithAccountEnv(t *testing.T) {
+	client := startAskServer(t)
+	dir := t.TempDir()
+	a, err := client.CreateAsk(AskRequest{Type: vault.AskCommand, TabID: "tab-1", Cwd: dir, Command: `echo "$CLAUDE_CONFIG_DIR"`, Reason: "login", AccountEnv: map[string]string{"CLAUDE_CONFIG_DIR": dir}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := client.GetAsk(testRootSecret, a.ID)
+	if err != nil || view.AccountEnv["CLAUDE_CONFIG_DIR"] != dir {
+		t.Fatalf("GetAsk = %+v, %v", view, err)
+	}
+	if _, err := client.ExecuteAsk(testRootSecret, a.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	done := waitAskState(t, client, a.ID, vault.AskAnswered)
+	if done.Result.OutputTail != dir {
+		t.Fatalf("tail = %q, want %q", done.Result.OutputTail, dir)
+	}
+}
+
 func TestIPCAskExecuteTimeoutAndStop(t *testing.T) {
 	client := startAskServer(t)
 	slow := fileCommand(t, client, "tab-1", "sleep 30")
@@ -339,11 +359,11 @@ func TestTailWriter(t *testing.T) {
 }
 
 func TestAskEnv(t *testing.T) {
-	env := askEnv([]string{"PATH=/daemon", "HOME=/h", "LGRASS_TAB_ID=x"}, "/tab/bin")
-	if strings.Join(env, " ") != "HOME=/h PATH=/tab/bin" {
+	env := askEnv([]string{"PATH=/daemon", "HOME=/h", "LGRASS_TAB_ID=x", "TERM=dumb", "CLAUDE_CONFIG_DIR=/daemon/claude"}, "/tab/bin", map[string]string{"CLAUDE_CONFIG_DIR": "/h/.claude-work"})
+	if strings.Join(env, " ") != "HOME=/h PATH=/tab/bin CLAUDE_CONFIG_DIR=/h/.claude-work TERM=xterm-256color" {
 		t.Fatalf("askEnv = %v", env)
 	}
-	if env := askEnv([]string{"PATH=/daemon"}, ""); env[0] != "PATH=/daemon" {
+	if env := askEnv([]string{"PATH=/daemon", "CODEX_HOME=/daemon/codex"}, "", nil); strings.Join(env, " ") != "PATH=/daemon TERM=xterm-256color" {
 		t.Fatalf("askEnv with no caller PATH = %v", env)
 	}
 }

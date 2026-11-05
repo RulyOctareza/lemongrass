@@ -100,11 +100,19 @@ export function startAsks(getWindow: () => BrowserWindow | undefined): void {
   })
   ipcMain.handle(
     'ask:execute',
-    async (_event, passphrase: string, id: string, timeoutSeconds: number) => {
+    async (
+      _event,
+      passphrase: string,
+      id: string,
+      timeoutSeconds: number,
+      rows?: number,
+      cols?: number
+    ) => {
       const { ask } = await vaultCall<{ ask: Ask }>('execute_ask', {
         root_secret: passphrase,
         id,
-        timeout_seconds: timeoutSeconds
+        timeout_seconds: timeoutSeconds,
+        ...(rows && cols ? { rows, cols } : {})
       })
       return ask
     }

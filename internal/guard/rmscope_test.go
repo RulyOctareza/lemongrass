@@ -341,7 +341,7 @@ func TestDeletionDenialDetail(t *testing.T) {
 				t.Fatal("not denied")
 			}
 			message := verdict.Message()
-			if !strings.Contains(message, tc.want) || !strings.Contains(message, "! prefix") {
+			if !strings.Contains(message, tc.want) || !strings.Contains(message, "command ask") || strings.Contains(message, "! prefix") {
 				t.Errorf("message = %q, want it to contain %q", message, tc.want)
 			}
 		})

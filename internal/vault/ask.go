@@ -7,7 +7,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -63,12 +65,30 @@ var (
 	ErrAskNotWaiting = errors.New("vault: the ask is no longer waiting for a decision")
 )
 
-// AskInput is what a caller files. TabID, Cwd and Path come from the caller's environment, not from text the model typed.
+// AskAccountEnvKeys name the variables that pick a Claude or Codex account. A command ask carries the caller's values, so a login run from a tab reaches that tab's account.
+var AskAccountEnvKeys = []string{"CLAUDE_CONFIG_DIR", "CODEX_HOME"}
+
+// AskAccountEnv reads the caller's account variables, leaving out the unset ones; nil when none is set.
+func AskAccountEnv(getenv func(string) string) map[string]string {
+	var env map[string]string
+	for _, k := range AskAccountEnvKeys {
+		if v := getenv(k); v != "" {
+			if env == nil {
+				env = map[string]string{}
+			}
+			env[k] = v
+		}
+	}
+	return env
+}
+
+// AskInput is what a caller files. TabID, Cwd, Path and AccountEnv come from the caller's environment, not from text the model typed.
 type AskInput struct {
 	Type       string
 	TabID      string
 	Cwd        string
 	Path       string
+	AccountEnv map[string]string
 	Reason     string
 	Tables     []string
 	Operations []string
@@ -127,6 +147,8 @@ type Ask struct {
 	RemovedTables []RemovedTable `json:"removed_tables,omitempty"`
 	// Path is the caller's PATH, which an executed command runs with.
 	Path string `json:"-"`
+	// AccountEnv is the caller's account variables, which an executed command runs with; the card shows them.
+	AccountEnv map[string]string `json:"account_env,omitempty"`
 }
 
 // Final reports whether the ask has its outcome, so a waiter stops waiting.
@@ -190,6 +212,9 @@ func validateAsk(in AskInput) error {
 		}
 		return nil
 	}
+	if in.Type != AskCommand && len(in.AccountEnv) > 0 {
+		return errors.New("vault: only a command ask carries account variables")
+	}
 	switch in.Type {
 	case AskDB:
 		if err := needsReason(); err != nil {
@@ -238,6 +263,9 @@ func validateAsk(in AskInput) error {
 		if len(in.Tables) > 0 || len(in.Operations) > 0 || in.Message != "" || len(in.Methods) > 0 {
 			return errors.New("vault: a command ask takes a command and a reason only")
 		}
+		if err := checkAccountEnv(in.AccountEnv); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("vault: unknown ask type %q, want db, rester or command", in.Type)
 	}
@@ -271,6 +299,22 @@ func checkDeclared(kind string, got, known []string) error {
 			return fmt.Errorf("vault: %s %q is listed twice", kind, v)
 		}
 		seen[v] = true
+	}
+	return nil
+}
+
+// checkAccountEnv accepts only the known account variables, each an absolute path.
+func checkAccountEnv(env map[string]string) error {
+	for k, v := range env {
+		if !slices.Contains(AskAccountEnvKeys, k) {
+			return fmt.Errorf("vault: %q is not an account variable, want one of %s", k, strings.Join(AskAccountEnvKeys, ", "))
+		}
+		if err := capText(k, v, 4096); err != nil {
+			return err
+		}
+		if !filepath.IsAbs(v) {
+			return fmt.Errorf("vault: %s must be an absolute path", k)
+		}
 	}
 	return nil
 }
@@ -356,7 +400,7 @@ func (s *AskStore) createLocked(in AskInput) (Ask, error) {
 			ID: id, Type: in.Type, TabID: in.TabID, Cwd: filepath.Clean(in.Cwd), CreatedAt: now, State: AskWaiting,
 			Reason: in.Reason, Tables: append([]string(nil), in.Tables...), Operations: append([]string(nil), in.Operations...),
 			Message: in.Message, Methods: append([]string(nil), in.Methods...), Command: in.Command,
-			Rule: in.Rule, Path: in.Path,
+			Rule: in.Rule, Path: in.Path, AccountEnv: maps.Clone(in.AccountEnv),
 		},
 		done: make(chan struct{}),
 	}
@@ -371,6 +415,7 @@ func (r *askRecord) snapshot() Ask {
 	a.Operations = append([]string(nil), r.Operations...)
 	a.Methods = append([]string(nil), r.Methods...)
 	a.RemovedTables = append([]RemovedTable(nil), r.RemovedTables...)
+	a.AccountEnv = maps.Clone(r.AccountEnv)
 	if r.Granted != nil {
 		g := AskGrant{
 			Tables:     append([]string(nil), r.Granted.Tables...),

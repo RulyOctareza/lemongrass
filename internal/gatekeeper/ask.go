@@ -47,6 +47,8 @@ type createAskPayload struct {
 	Methods    []string `json:"methods,omitempty"`
 	Command    string   `json:"command,omitempty"`
 	Rule       string   `json:"rule,omitempty"`
+	// AccountEnv is the caller's account variables (vault.AskAccountEnvKeys).
+	AccountEnv map[string]string `json:"account_env,omitempty"`
 }
 
 type waitAskPayload struct {
@@ -76,6 +78,9 @@ type executeAskPayload struct {
 	RootSecret     string `json:"root_secret"`
 	ID             string `json:"id"`
 	TimeoutSeconds int    `json:"timeout_seconds"`
+	// Rows and Cols are the card terminal's size, so the command starts at it.
+	Rows int `json:"rows,omitempty"`
+	Cols int `json:"cols,omitempty"`
 }
 
 type declineAskPayload struct {
@@ -294,7 +299,7 @@ func dispatchAsk(svc *Backend, adminLimiter *vault.FailureLimiter, req request) 
 			return errResponse(err), true
 		}
 		ask, err := svc.Asks.Create(vault.AskInput{
-			Type: p.Type, TabID: p.TabID, Cwd: p.Cwd, Path: p.Path, Reason: p.Reason,
+			Type: p.Type, TabID: p.TabID, Cwd: p.Cwd, Path: p.Path, AccountEnv: p.AccountEnv, Reason: p.Reason,
 			Tables: p.Tables, Operations: p.Operations, Message: p.Message, Methods: p.Methods, Command: p.Command, Rule: p.Rule,
 		})
 		if err != nil {
@@ -383,7 +388,7 @@ func dispatchAsk(svc *Backend, adminLimiter *vault.FailureLimiter, req request) 
 			if err := svc.verifyRoot(p.RootSecret); err != nil {
 				return response{}, err
 			}
-			a, err := svc.ExecuteAsk(p.ID, time.Duration(p.TimeoutSeconds)*time.Second)
+			a, err := svc.ExecuteAsk(p.ID, time.Duration(p.TimeoutSeconds)*time.Second, p.Rows, p.Cols)
 			if err != nil {
 				return response{}, err
 			}
@@ -471,8 +476,13 @@ func (c *Client) AnswerAsk(rootSecret, id, shortID string) error {
 }
 
 func (c *Client) ExecuteAsk(rootSecret, id string, timeout time.Duration) (AskView, error) {
+	return c.ExecuteAskSized(rootSecret, id, timeout, 0, 0)
+}
+
+// ExecuteAskSized starts the command on a terminal of rows by cols; a size out of range starts it at the default.
+func (c *Client) ExecuteAskSized(rootSecret, id string, timeout time.Duration, rows, cols int) (AskView, error) {
 	var out askPayload
-	err := c.call(opExecuteAsk, executeAskPayload{RootSecret: rootSecret, ID: id, TimeoutSeconds: int(timeout / time.Second)}, &out)
+	err := c.call(opExecuteAsk, executeAskPayload{RootSecret: rootSecret, ID: id, TimeoutSeconds: int(timeout / time.Second), Rows: rows, Cols: cols}, &out)
 	return out.Ask, err
 }
 

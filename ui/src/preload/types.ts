@@ -1187,6 +1187,8 @@ export interface Ask {
   methods?: string[]
   message?: string
   command?: string
+  // The requesting tab's CLAUDE_CONFIG_DIR and CODEX_HOME, which an executed command runs with.
+  account_env?: Record<string, string>
   rule?: string
   verdict?: AskVerdict | null
   never_execute?: boolean
@@ -1196,6 +1198,24 @@ export interface Ask {
   result?: AskResult | null
   granted?: AskGrant | null
   removed_tables?: AskRemovedTable[]
+}
+
+// An open view of a running command ask's terminal: the output so far, then data events until an end.
+export interface AskTermAttach {
+  attachId: number
+  replay: Uint8Array
+}
+
+export interface AskTermData {
+  attachId: number
+  data: Uint8Array
+}
+
+// Why the view ended: ended (the command ended), replaced (another view took over), behind (it fell
+// too far behind the output) or detached (the connection closed).
+export interface AskTermEnd {
+  attachId: number
+  reason: string
 }
 
 // What a channel ask was answered with; a subset of what it declared.

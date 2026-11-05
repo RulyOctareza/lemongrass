@@ -8,6 +8,9 @@ import type {
   Ask,
   AskCount,
   AskDeclineExtra,
+  AskTermAttach,
+  AskTermData,
+  AskTermEnd,
   Notice,
   NoticeInput,
   AccountInfo,
@@ -663,12 +666,36 @@ const ask = {
   list: (passphrase: string): Promise<Ask[]> => ipcRenderer.invoke('ask:list', passphrase),
   get: (passphrase: string, id: string): Promise<Ask> =>
     ipcRenderer.invoke('ask:get', passphrase, id),
-  execute: (passphrase: string, id: string, timeoutSeconds: number): Promise<Ask> =>
-    ipcRenderer.invoke('ask:execute', passphrase, id, timeoutSeconds),
+  execute: (
+    passphrase: string,
+    id: string,
+    timeoutSeconds: number,
+    rows?: number,
+    cols?: number
+  ): Promise<Ask> => ipcRenderer.invoke('ask:execute', passphrase, id, timeoutSeconds, rows, cols),
   stop: (passphrase: string, id: string): Promise<void> =>
     ipcRenderer.invoke('ask:stop', passphrase, id),
   decline: (passphrase: string, id: string, note: string, extra?: AskDeclineExtra): Promise<void> =>
     ipcRenderer.invoke('ask:decline', passphrase, id, note, extra),
+  termAttach: (passphrase: string, id: string): Promise<AskTermAttach> =>
+    ipcRenderer.invoke('ask:term-attach', passphrase, id),
+  termInput: (attachId: number, data: string): void =>
+    ipcRenderer.send('ask:term-input', { attachId, data }),
+  termResize: (attachId: number, rows: number, cols: number): void =>
+    ipcRenderer.send('ask:term-resize', { attachId, rows, cols }),
+  termDetach: (attachId: number): void => ipcRenderer.send('ask:term-detach', { attachId }),
+  onTermData: (callback: (payload: AskTermData) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: AskTermData): void =>
+      callback(payload)
+    ipcRenderer.on('ask:term-data', listener)
+    return () => ipcRenderer.removeListener('ask:term-data', listener)
+  },
+  onTermEnd: (callback: (payload: AskTermEnd) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: AskTermEnd): void =>
+      callback(payload)
+    ipcRenderer.on('ask:term-end', listener)
+    return () => ipcRenderer.removeListener('ask:term-end', listener)
+  },
   onCount: (callback: (count: AskCount) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, count: AskCount): void => callback(count)
     ipcRenderer.on('ask:count', listener)

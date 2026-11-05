@@ -3,6 +3,7 @@ module github.com/faizalv/lemongrass
 go 1.26.8
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/go-mysql-org/go-mysql v1.16.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/google/uuid v1.6.0

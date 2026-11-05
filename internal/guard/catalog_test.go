@@ -187,11 +187,11 @@ func TestDecisionsTiers(t *testing.T) {
 
 func TestVerdictMessages(t *testing.T) {
 	deny := Decide(bashInput(t, "git push --force"), Policy{})
-	if msg := deny.Message(); !strings.Contains(msg, "git-push-force") || !strings.Contains(msg, "Matched: git push with") || !strings.Contains(msg, "command ask") || !strings.Contains(msg, "! prefix") {
+	if msg := deny.Message(); !strings.Contains(msg, "git-push-force") || !strings.Contains(msg, "Matched: git push with") || !strings.Contains(msg, "command ask") || strings.Contains(msg, "! prefix") {
 		t.Errorf("deny message = %q", msg)
 	}
 	ask := Decide(bashInput(t, "git push"), Policy{})
-	if msg := ask.Message(); !strings.Contains(msg, "needs the user's approval") || strings.Contains(msg, "command ask") {
+	if msg := ask.Message(); !strings.Contains(msg, "needs the user's decision") || !strings.Contains(msg, "command ask") || strings.Contains(msg, "! prefix") {
 		t.Errorf("ask message = %q", msg)
 	}
 	if ask.Category != catGit {

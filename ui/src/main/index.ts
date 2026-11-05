@@ -39,6 +39,7 @@ import { registerConflictAgentHandlers } from './conflictAgent'
 import { flushBranchNotices } from './gitBranch'
 import { registerDeviceHandlers, stopAllDevices } from './device'
 import { registerVaultHandlers } from './vault'
+import { registerAskTerminal } from './askTerminal'
 import { registerResterClientHandlers } from './resterClient'
 import { registerNodeHandlers } from './node'
 import {
@@ -133,6 +134,7 @@ app.whenReady().then(async () => {
 
   registerNotificationHandlers(() => mainWindow)
   registerPtyHandlers(() => mainWindow?.webContents)
+  registerAskTerminal()
   registerAccountHandlers(lgrassdPath)
   registerUsageHandlers(lgrassdPath, () => mainWindow?.webContents)
   registerUpdateHandlers(() => mainWindow)

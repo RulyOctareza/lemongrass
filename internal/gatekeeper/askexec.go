@@ -9,10 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	"github.com/creack/pty"
 	"github.com/faizalv/lemongrass/internal/guard"
 	"github.com/faizalv/lemongrass/internal/vault"
 )
@@ -25,11 +28,15 @@ const (
 	askTailLineBytes  = 4000
 	// askStopGrace is how long a stopped or timed-out command gets after SIGTERM before its process group is killed.
 	askStopGrace = 5 * time.Second
+	// askDrainGrace is how long the terminal's last output is waited for after the command exits; a child that keeps the terminal open is not waited for.
+	askDrainGrace = 2 * time.Second
 )
 
 type askRun struct {
 	stop    chan struct{}
 	stopped bool
+	// term is set once the command has started; the human's view attaches to it.
+	term *askTerm
 }
 
 type askRuns struct {
@@ -52,7 +59,7 @@ func normalizeAskTimeout(timeout time.Duration) time.Duration {
 }
 
 // ExecuteAsk starts a waiting command ask's command in the ask's working directory, as the user, with the caller's PATH. The guard's deny and ask rules do not apply to a command the human executes; the never-execute list does.
-func (b *Backend) ExecuteAsk(id string, timeout time.Duration) (vault.Ask, error) {
+func (b *Backend) ExecuteAsk(id string, timeout time.Duration, rows, cols int) (vault.Ask, error) {
 	a, err := b.Asks.Get(id)
 	if err != nil {
 		return vault.Ask{}, err
@@ -77,7 +84,7 @@ func (b *Backend) ExecuteAsk(id string, timeout time.Duration) (vault.Ask, error
 	b.runs.mu.Unlock()
 
 	startErr := make(chan error, 1)
-	go b.runAsk(started, normalizeAskTimeout(timeout), run, startErr)
+	go b.runAsk(started, normalizeAskTimeout(timeout), askStartSize(rows, cols), run, startErr)
 	if err := <-startErr; err != nil {
 		b.runs.mu.Lock()
 		delete(b.runs.runs, id)
@@ -86,6 +93,14 @@ func (b *Backend) ExecuteAsk(id string, timeout time.Duration) (vault.Ask, error
 		return vault.Ask{}, fmt.Errorf("gatekeeper: starting the command: %w", err)
 	}
 	return started, nil
+}
+
+// askStartSize is the card terminal's size when the app sent one in range, else the default, so a command's first output already fits the card.
+func askStartSize(rows, cols int) *pty.Winsize {
+	if rows < 1 || cols < 1 || rows > askTermMax || cols > askTermMax {
+		return &pty.Winsize{Rows: askTermRows, Cols: askTermCols}
+	}
+	return &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)}
 }
 
 // StopAsk ends a running command; its result is marked stopped.
@@ -104,7 +119,7 @@ func (b *Backend) StopAsk(id string) error {
 }
 
 // runAsk owns the command from start to finish. It holds its OS thread for the whole run because the parent-death signal is tied to the thread that started the child, and a thread Go retires early would kill the command with it.
-func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, run *askRun, startErr chan<- error) {
+func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size *pty.Winsize, run *askRun, startErr chan<- error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -115,14 +130,23 @@ func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, run *askRun, startE
 	tail := newTailWriter(askTailLines, askTailLineBytes)
 	cmd := exec.Command(shell, "-c", a.Command)
 	cmd.Dir = a.Cwd
-	cmd.Env = askEnv(os.Environ(), a.Path)
-	cmd.Stdout = tail
-	cmd.Stderr = tail
+	cmd.Env = askEnv(os.Environ(), a.Path, a.AccountEnv)
 	setAskProcAttr(cmd)
-	if err := cmd.Start(); err != nil {
+	// Every command gets a terminal, so one that asks for a password, a confirmation or a login can be answered from the card; the start also makes it a session leader with its own process group.
+	ptmx, err := pty.StartWithSize(cmd, size)
+	if err != nil {
 		startErr <- err
 		return
 	}
+	term := newAskTerm(ptmx)
+	pumped := make(chan struct{})
+	go func() {
+		term.pump(tail)
+		close(pumped)
+	}()
+	b.runs.mu.Lock()
+	run.term = term
+	b.runs.mu.Unlock()
 	startErr <- nil
 
 	done := make(chan error, 1)
@@ -141,6 +165,13 @@ func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, run *askRun, startE
 		result.Stopped = true
 		waitErr = endAskProcess(cmd, done)
 	}
+
+	select {
+	case <-pumped:
+	case <-time.After(askDrainGrace):
+	}
+	term.end()
+	_ = ptmx.Close()
 
 	result.ExitCode = exitCode(cmd, waitErr)
 	result.OutputTail = tail.String()
@@ -172,14 +203,16 @@ func exitCode(cmd *exec.Cmd, err error) int {
 	return 0
 }
 
-// askEnv is the daemon's environment with the caller's PATH, so the command finds the same tools the tab would. The tab id is dropped, since the command does not run in the tab.
-func askEnv(base []string, path string) []string {
-	env := make([]string, 0, len(base)+1)
+// askEnv is the daemon's environment with the caller's PATH and account variables, so the command finds the same tools and the same Claude or Codex account the tab would. The daemon's own account variables are dropped either way, since the tab's absence of one means the default account. The tab id is dropped, since the command does not run in the tab, and TERM names the terminal the card renders.
+func askEnv(base []string, path string, account map[string]string) []string {
+	drop := append([]string{"LGRASS_TAB_ID", "TERM"}, vault.AskAccountEnvKeys...)
+	if path != "" {
+		drop = append(drop, "PATH")
+	}
+	env := make([]string, 0, len(base)+2+len(account))
 	for _, kv := range base {
-		if path != "" && strings.HasPrefix(kv, "PATH=") {
-			continue
-		}
-		if strings.HasPrefix(kv, "LGRASS_TAB_ID=") {
+		name, _, _ := strings.Cut(kv, "=")
+		if slices.Contains(drop, name) {
 			continue
 		}
 		env = append(env, kv)
@@ -187,10 +220,15 @@ func askEnv(base []string, path string) []string {
 	if path != "" {
 		env = append(env, "PATH="+path)
 	}
-	return env
+	for _, k := range vault.AskAccountEnvKeys {
+		if v := account[k]; v != "" {
+			env = append(env, k+"="+v)
+		}
+	}
+	return append(env, "TERM=xterm-256color")
 }
 
-// tailWriter keeps the last lines of a command's output, each cut to a byte cap, so a chatty command cannot grow the daemon's memory.
+// tailWriter keeps the last lines of a command's terminal output as plain text, each cut to a byte cap, so a chatty command cannot grow the daemon's memory. Escape sequences and control bytes are dropped, and a carriage return not followed by a newline restarts the line, so a progress bar leaves only its last state.
 type tailWriter struct {
 	mu       sync.Mutex
 	max      int
@@ -198,7 +236,25 @@ type tailWriter struct {
 	lines    []string
 	partial  []byte
 	overflow bool
+	esc      escState
+	cr       bool
 }
+
+type escState int
+
+const (
+	escNone escState = iota
+	// escStart follows ESC.
+	escStart
+	// escIntermediate follows ESC and an intermediate byte, such as a charset pick, up to its final byte.
+	escIntermediate
+	// escCSI runs from ESC [ to a final byte.
+	escCSI
+	// escString runs from ESC ], P, X, ^ or _ to BEL or ESC \.
+	escString
+	// escStringEsc follows an ESC inside a string, which ends it when a backslash comes next.
+	escStringEsc
+)
 
 func newTailWriter(maxLines, lineCap int) *tailWriter {
 	return &tailWriter{max: maxLines, lineCap: lineCap}
@@ -208,21 +264,81 @@ func (w *tailWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, c := range p {
-		if c == '\n' {
-			w.push()
-			continue
-		}
-		if len(w.partial) < w.lineCap {
-			w.partial = append(w.partial, c)
-		} else {
-			w.overflow = true
-		}
+		w.feed(c)
 	}
 	return len(p), nil
 }
 
+func (w *tailWriter) feed(c byte) {
+	switch w.esc {
+	case escStart:
+		switch {
+		case c == '[':
+			w.esc = escCSI
+		case c == ']' || c == 'P' || c == 'X' || c == '^' || c == '_':
+			w.esc = escString
+		case c >= 0x20 && c <= 0x2f:
+			w.esc = escIntermediate
+		default:
+			w.esc = escNone
+		}
+		return
+	case escIntermediate:
+		if c >= 0x30 && c <= 0x7e {
+			w.esc = escNone
+		}
+		return
+	case escCSI:
+		if c >= 0x40 && c <= 0x7e {
+			w.esc = escNone
+		}
+		return
+	case escString:
+		if c == 0x07 {
+			w.esc = escNone
+		} else if c == 0x1b {
+			w.esc = escStringEsc
+		}
+		return
+	case escStringEsc:
+		if c == '\\' {
+			w.esc = escNone
+		} else if c != 0x1b {
+			w.esc = escString
+		}
+		return
+	}
+	if w.cr {
+		w.cr = false
+		if c == '\n' {
+			w.push()
+			return
+		}
+		w.partial = w.partial[:0]
+		w.overflow = false
+	}
+	switch {
+	case c == '\n':
+		w.push()
+	case c == '\r':
+		w.cr = true
+	case c == 0x1b:
+		w.esc = escStart
+	case c == 0x08:
+		if len(w.partial) > 0 {
+			_, size := utf8.DecodeLastRune(w.partial)
+			w.partial = w.partial[:len(w.partial)-size]
+		}
+	case (c < 0x20 && c != '\t') || c == 0x7f:
+	case len(w.partial) < w.lineCap:
+		w.partial = append(w.partial, c)
+	default:
+		w.overflow = true
+	}
+}
+
 func (w *tailWriter) push() {
-	line := strings.TrimSuffix(string(w.partial), "\r")
+	line := string(w.partial)
 	if w.overflow {
 		line += " [line cut]"
 	}

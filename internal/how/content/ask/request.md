@@ -25,7 +25,7 @@ message: |
 reason: Optional, why you need it now.
 ```
 
-A command. Give the exact command, as you would run it.
+A command. Give the exact command, as you would run it. It runs in a terminal on the human's decision card, with your tab's PATH and Claude or Codex account, and the human can type into it. So a command that asks for a password, a confirmation or a login, such as `gcloud auth login`, is asked for the same way as any other.
 
 ```yaml
 type: command
