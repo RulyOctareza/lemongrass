@@ -13,16 +13,11 @@ import (
 	"path/filepath"
 
 	"github.com/faizalv/lemongrass/internal/agentconf"
+	"github.com/faizalv/lemongrass/internal/config"
 )
 
 // installedBinaries are the names the app copies into a bin folder on PATH; lgrassd lives in the keeper's candidates.
-var installedBinaries = []string{"lgrass", "lgrassconf"}
-
-// binDirs are where the app may have copied lgrass and lgrassconf: ~/.local/bin, or /usr/local/bin when that folder
-// was missing (resolveInstallDir in ui/src/main/lgrassInstall.ts).
-func binDirs(home string) []string {
-	return []string{filepath.Join(home, ".local", "bin"), "/usr/local/bin"}
-}
+var installedBinaries = []string{config.Exe("lgrass"), config.Exe("lgrassconf")}
 
 // uninstall reverses what install, the keeper and the app put outside the lemongrass home. The service goes first,
 // because a running keeper puts the config back within moments of any change. Every step reports what it removed,

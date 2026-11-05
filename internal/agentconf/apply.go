@@ -7,36 +7,13 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"path/filepath"
 	"time"
+
+	"github.com/faizalv/lemongrass/internal/atomicfile"
 )
 
 func WriteAtomic(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".lgrassconf-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return atomicfile.Write(path, data, mode)
 }
 
 func statKey(path string) (time.Time, int64) {

@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/faizalv/lemongrass/internal/claudeaccount"
+	"github.com/faizalv/lemongrass/internal/config"
 )
 
 var errAccountsUsage = errors.New("usage: lgrassd accounts <list|add|remove> ...")
@@ -32,7 +32,7 @@ func cmdAccounts(args []string) {
 
 // hookBinary is the installed path the keeper also registers, so the two never rewrite each other's hook command, and falls back to the running binary when nothing is installed.
 func hookBinary(home string) string {
-	installed := filepath.Join(home, ".lemongrass", "bin", "lgrassd")
+	installed := config.LgrassdPath(home)
 	if info, err := os.Stat(installed); err == nil && !info.IsDir() {
 		return installed
 	}

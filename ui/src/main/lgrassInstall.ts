@@ -2,7 +2,15 @@
 // Copyright (C) 2026 The Lemongrass Authors
 
 import { app } from 'electron'
-import { existsSync, copyFileSync, chmodSync, mkdirSync, renameSync, unlinkSync } from 'fs'
+import {
+  existsSync,
+  copyFileSync,
+  chmodSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  unlinkSync
+} from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { spawn } from 'child_process'
@@ -18,6 +26,9 @@ function resourceDir(): string | null {
     case 'darwin':
       osName = 'darwin'
       break
+    case 'win32':
+      osName = 'windows'
+      break
     default:
       return null
   }
@@ -32,27 +43,81 @@ function resourceDir(): string | null {
     default:
       return null
   }
-  // Linux packages carry only the x64 binaries; macOS carries both arches.
-  if (osName === 'linux' && arch !== 'amd64') return null
+  // Linux and Windows packages carry only the x64 binaries; macOS carries both arches. Windows on arm64 runs the
+  // x64 app under emulation, which reports x64 here.
+  if (osName !== 'darwin' && arch !== 'amd64') return null
   return `${osName}-${arch}`
 }
 
 type BinName = 'lgrass' | 'lgrassd' | 'lgrassconf'
 
+// The file name of a lemongrass binary on this OS, matching config.Exe in Go.
+function exe(name: BinName): string {
+  return process.platform === 'win32' ? `${name}.exe` : name
+}
+
 export function resolveBundledBin(name: BinName): string | null {
   const dir = resourceDir()
   if (!dir) return null
-  return join(process.resourcesPath, 'bin', dir, name)
+  return join(process.resourcesPath, 'bin', dir, exe(name))
 }
 
+// Must match config.BinDirs in Go, which `lgrassconf uninstall` cleans. On Windows the folder is always
+// ~/.local/bin, which `lgrassconf install` puts on the user's PATH.
 function resolveInstallDir(): string {
   const localBin = join(homedir(), '.local', 'bin')
+  if (process.platform === 'win32') return localBin
   return existsSync(localBin) ? localBin : '/usr/local/bin'
 }
 
 // lgrassd lives under ~/.lemongrass/bin, off PATH, so a model cannot call it by name.
 function lgrassdInstallDir(): string {
   return join(homedir(), '.lemongrass', 'bin')
+}
+
+function tryUnlink(path: string): void {
+  try {
+    unlinkSync(path)
+  } catch {
+    // ignore
+  }
+}
+
+// Windows cannot overwrite a running exe but can rename it, so a copy in use is moved aside to <file>.old-* and the
+// new one renamed into its place. The process running the old file keeps it open, so it is deleted on a later
+// launch, once nothing runs it.
+function removeSetAside(installDir: string, file: string): void {
+  let entries: string[]
+  try {
+    entries = readdirSync(installDir)
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    if (entry.startsWith(`${file}.old-`)) tryUnlink(join(installDir, entry))
+  }
+}
+
+function replaceFile(tmp: string, dest: string): void {
+  if (process.platform !== 'win32' || !existsSync(dest)) {
+    renameSync(tmp, dest)
+    return
+  }
+  try {
+    renameSync(tmp, dest)
+    return
+  } catch {
+    // dest is running; it is set aside below.
+  }
+  const aside = `${dest}.old-${process.pid}-${Date.now()}`
+  renameSync(dest, aside)
+  try {
+    renameSync(tmp, dest)
+  } catch (err) {
+    renameSync(aside, dest)
+    throw err
+  }
+  tryUnlink(aside)
 }
 
 function copyBundled(name: BinName, installDir: string = resolveInstallDir()): string | null {
@@ -63,19 +128,16 @@ function copyBundled(name: BinName, installDir: string = resolveInstallDir()): s
       return null
     }
     mkdirSync(installDir, { recursive: true })
-    const dest = join(installDir, name)
+    removeSetAside(installDir, exe(name))
+    const dest = join(installDir, exe(name))
     // dest may be the running lgrassconf service binary, which cannot be overwritten in place while open.
     const tmp = `${dest}.tmp-${process.pid}`
     copyFileSync(bundled, tmp)
     chmodSync(tmp, 0o755)
     try {
-      renameSync(tmp, dest)
+      replaceFile(tmp, dest)
     } catch (err) {
-      try {
-        unlinkSync(tmp)
-      } catch {
-        // ignore
-      }
+      tryUnlink(tmp)
       throw err
     }
     return dest
@@ -93,7 +155,7 @@ function copyBundled(name: BinName, installDir: string = resolveInstallDir()): s
 // from. `make install` builds lgrass straight to the install dir instead.
 export function installLgrass(): string | null {
   if (!app.isPackaged) {
-    const dest = join(resolveInstallDir(), 'lgrass')
+    const dest = join(resolveInstallDir(), exe('lgrass'))
     if (!existsSync(dest)) {
       console.error('lgrass: not found at', dest, '. Run `make install` from the repo root.')
       return null
@@ -107,7 +169,7 @@ export function installLgrass(): string | null {
 // `make install` builds it there instead.
 export function installLgrassd(): string | null {
   if (!app.isPackaged) {
-    const dest = join(lgrassdInstallDir(), 'lgrassd')
+    const dest = join(lgrassdInstallDir(), exe('lgrassd'))
     if (!existsSync(dest)) {
       console.error('lgrassd: not found at', dest, '. Run `make install` from the repo root.')
       return null
@@ -119,11 +181,11 @@ export function installLgrassd(): string | null {
 
 // Same pattern for lgrassconf. On packaged launches, also runs
 // `lgrassconf install` so the agent config keeper is registered
-// (LaunchAgent on macOS, systemd user unit on Linux). Failures are
-// logged, never fatal.
+// (LaunchAgent on macOS, systemd user unit on Linux, a logon task on
+// Windows). Failures are logged, never fatal.
 export function installLgrassconf(): string | null {
   if (!app.isPackaged) {
-    const dest = join(resolveInstallDir(), 'lgrassconf')
+    const dest = join(resolveInstallDir(), exe('lgrassconf'))
     return existsSync(dest) ? dest : null
   }
   const dest = copyBundled('lgrassconf')
@@ -131,7 +193,8 @@ export function installLgrassconf(): string | null {
   try {
     const child = spawn(dest, ['install'], {
       detached: true,
-      stdio: 'ignore'
+      stdio: 'ignore',
+      windowsHide: true
     })
     child.on('error', (err) => {
       console.error('lgrassconf: install spawn failed:', err)

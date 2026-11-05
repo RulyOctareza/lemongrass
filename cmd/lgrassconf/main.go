@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/faizalv/lemongrass/internal/config"
 )
 
 func usage() {
@@ -54,7 +56,7 @@ func main() {
 		}
 	case "uninstall":
 		// Each failure is already printed by uninstall as it happens.
-		if err := newKeeper(home).uninstall(os.Stdout, uninstallUnit, binDirs(home)); err != nil {
+		if err := newKeeper(home).uninstall(os.Stdout, uninstallUnit, config.BinDirs(home)); err != nil {
 			os.Exit(1)
 		}
 	default:

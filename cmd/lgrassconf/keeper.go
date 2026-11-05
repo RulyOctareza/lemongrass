@@ -14,6 +14,7 @@ import (
 
 	"github.com/faizalv/lemongrass/internal/agentconf"
 	"github.com/faizalv/lemongrass/internal/claudeaccount"
+	"github.com/faizalv/lemongrass/internal/config"
 	"github.com/faizalv/lemongrass/internal/session"
 )
 
@@ -67,10 +68,8 @@ type keeper struct {
 
 func newKeeper(home string) *keeper {
 	k := &keeper{
-		home: home,
-		candidates: []string{
-			filepath.Join(home, ".lemongrass", "bin", "lgrassd"),
-		},
+		home:       home,
+		candidates: []string{config.LgrassdPath(home)},
 	}
 	k.skills = k.loadSkills()
 	k.orientation = k.loadOrientation()
