@@ -19,6 +19,8 @@ const (
 	ActionUpgrade = "upgrade"
 	// lgrassroot run through pkexec, on the Linux families.
 	RouteHelper = "helper"
+	// winget run by the app as the user; an installer that needs admin raises its own UAC prompt.
+	RouteWinget = "winget"
 )
 
 // Offer is the one-click install or upgrade the app shows for a dependency.
@@ -42,6 +44,23 @@ type DepStatus struct {
 	Message  string   `json:"message"`
 }
 
+func newStatus(dep Dep, path, version string, origin Origin) DepStatus {
+	return DepStatus{
+		Name:     dep.Name,
+		Required: dep.Required,
+		Features: dep.Features,
+		Floor:    dep.Floor,
+		Path:     path,
+		Version:  version,
+		Origin:   origin,
+		Status:   status(dep, path, version),
+	}
+}
+
+func needsText(dep Dep) string {
+	return fmt.Sprintf("Lemongrass needs %s %s or newer.", dep.Name, dep.Floor)
+}
+
 func status(dep Dep, path, version string) string {
 	switch {
 	case path == "":
@@ -59,17 +78,11 @@ func status(dep Dep, path, version string) string {
 // evaluate decides a dependency's status, offer and message from what the check found. A binary installed by hand is
 // never updated, since lemongrass updates the user's own installation only through the OS's package manager.
 func evaluate(dep Dep, info OSInfo, path, version string, origin Origin) DepStatus {
-	s := DepStatus{
-		Name:     dep.Name,
-		Required: dep.Required,
-		Features: dep.Features,
-		Floor:    dep.Floor,
-		Path:     path,
-		Version:  version,
-		Origin:   origin,
-		Status:   status(dep, path, version),
+	if info.Family == FamilyWindows {
+		return evaluateWindows(dep, info, path, version, origin)
 	}
-	needs := fmt.Sprintf("Lemongrass needs %s %s or newer.", dep.Name, dep.Floor)
+	s := newStatus(dep, path, version, origin)
+	needs := needsText(dep)
 	switch s.Status {
 	case StatusMissing:
 		pkg := dep.Packages[info.Family]
@@ -97,4 +110,50 @@ func evaluate(dep Dep, info OSInfo, path, version string, origin Origin) DepStat
 		s.Message = fmt.Sprintf("Lemongrass could not read the version of the %s at %s. %s", dep.Name, path, needs)
 	}
 	return s
+}
+
+// evaluateWindows offers winget for a missing tool and for one winget can upgrade: a package it unpacked, or Git for
+// Windows, which winget upgrades whoever installed it. Scoop's copies are left to Scoop.
+func evaluateWindows(dep Dep, info OSInfo, path, version string, origin Origin) DepStatus {
+	s := newStatus(dep, path, version, origin)
+	needs := needsText(dep)
+	noWinget := fmt.Sprintf("winget is not available, so lemongrass cannot install %s. winget comes with App Installer from the Microsoft Store.", dep.Name)
+	switch s.Status {
+	case StatusMissing:
+		pkg := dep.Packages[FamilyWindows]
+		switch {
+		case dep.CheckOnly || pkg == "":
+			s.Message = dep.NoRoute[FamilyWindows]
+		case !info.Winget:
+			s.Message = noWinget
+		default:
+			s.Offer = &Offer{Action: ActionInstall, Package: pkg, Route: RouteWinget}
+		}
+	case StatusBelowFloor:
+		switch {
+		case dep.CheckOnly:
+			s.Message = needs
+		case origin.Manager == ManagerScoop:
+			s.Message = fmt.Sprintf("The %s at %s comes from Scoop, so lemongrass does not update it. Run scoop update %s. %s", dep.Name, path, origin.Package, needs)
+		case origin.Manager == ManagerWinget || origin.Manager == ManagerInstaller:
+			if info.Winget {
+				s.Offer = &Offer{Action: ActionUpgrade, Package: origin.Package, Route: RouteWinget}
+			} else {
+				s.Message = noWinget + " " + needs
+			}
+		case origin.Kind == OriginManual:
+			s.Message = fmt.Sprintf("The %s at %s was installed by hand, so lemongrass does not update it. %s", dep.Name, path, needs)
+		default:
+			s.Message = needs
+		}
+	case StatusUnknownVersion:
+		s.Message = fmt.Sprintf("Lemongrass could not read the version of the %s at %s. %s", dep.Name, path, needs)
+	}
+	return s
+}
+
+// blockedText explains a Windows tool that would not start, which on a machine with Smart App Control is what an
+// unsigned program looks like.
+func blockedText(dep Dep) string {
+	return fmt.Sprintf("Windows did not let %s run. Smart App Control blocks programs that are not signed, and %s is not.", dep.Name, dep.Name)
 }

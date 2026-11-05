@@ -42,7 +42,7 @@ func Real() System {
 		GOOS:         runtime.GOOS,
 		Home:         home,
 		Run:          runCommand,
-		LookPath:     exec.LookPath,
+		LookPath:     lookPath,
 		Stat:         statFile,
 		EvalSymlinks: filepath.EvalSymlinks,
 		ReadFile:     os.ReadFile,

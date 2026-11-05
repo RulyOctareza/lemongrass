@@ -232,3 +232,19 @@ func TestSDKPrefersTheFVMPin(t *testing.T) {
 		t.Fatalf("SDK = %s %v", got, err)
 	}
 }
+
+func TestCheckArgsRefusesBatchMetacharacters(t *testing.T) {
+	safe := []string{"run", "--machine", "-d", "emulator-5554", "--dart-define=API=https://example.test/v1?a=1", "--name", "logs in"}
+	if err := CheckArgs(`C:\sdk\bin\flutter.bat`, safe); err != nil {
+		t.Errorf("safe args refused: %v", err)
+	}
+	for _, bad := range []string{"--dart-define=A=1&calc", "a|b", "x>y", "^", "%PATH%", "!x!", `say "hi"`, "a\nb"} {
+		err := CheckArgs(`C:\sdk\bin\FLUTTER.BAT`, []string{"test", bad})
+		if err == nil || !strings.HasPrefix(err.Error(), "flutter: ") {
+			t.Errorf("%q: err = %v", bad, err)
+		}
+	}
+	if err := CheckArgs("/opt/flutter/bin/flutter", []string{"--dart-define=A=1&b"}); err != nil {
+		t.Errorf("a non-batch SDK refused an argument: %v", err)
+	}
+}

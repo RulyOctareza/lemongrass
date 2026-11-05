@@ -37,8 +37,10 @@ func Check(ctx context.Context, sys System, cachePath string, fresh bool) (Repor
 			}
 			st, _ := sys.Stat(path)
 			entry, ok := cached[dep.Name]
+			blocked := false
 			if !ok || entry.Path != path || entry.Size != st.Size || entry.ModTime != st.ModTime {
-				out, _ := sys.Run(ctx, path, dep.VersionArgs...)
+				out, err := sys.Run(ctx, path, dep.VersionArgs...)
+				blocked = err != nil && len(out) == 0 && info.Family == FamilyWindows && dep.UnsignedOnWindows
 				entry = cacheEntry{
 					Path:    path,
 					Size:    st.Size,
@@ -48,15 +50,19 @@ func Check(ctx context.Context, sys System, cachePath string, fresh bool) (Repor
 				}
 			}
 			// A timeout or a held rpm lock must not stick until the binary changes, so an unread origin on a
-			// family that has one, or an unread version that a floor depends on, is not cached.
+			// family that has one, an unread version that a floor depends on, or a tool Windows refused to run is
+			// not cached.
 			unsettled := (entry.Origin.Kind == OriginUnknown && info.Family == FamilyFedora) ||
-				(entry.Version == "" && dep.Floor != "")
+				(entry.Version == "" && dep.Floor != "") || blocked
 			if !unsettled {
 				mu.Lock()
 				entries[dep.Name] = entry
 				mu.Unlock()
 			}
 			report.Deps[i] = evaluate(dep, info, path, entry.Version, entry.Origin)
+			if blocked && report.Deps[i].Message == "" {
+				report.Deps[i].Message = blockedText(dep)
+			}
 		})
 	}
 	wg.Wait()

@@ -21,6 +21,8 @@ type Dep struct {
 	Packages map[string]string
 	// Said when the tool is missing and its family has no package.
 	NoRoute map[string]string
+	// Its Windows builds are not signed, so Smart App Control can refuse to run them.
+	UnsignedOnWindows bool
 }
 
 // Fixed so the cache can tell when the list itself changed.
@@ -32,18 +34,20 @@ var Deps = []Dep{
 		// merge-tree --merge-base takes a tree only from 2.45.0, which the rebase forecast and workspaces need.
 		Floor:       "2.45.0",
 		VersionArgs: []string{"--version"},
-		Packages:    map[string]string{FamilyFedora: "git"},
+		Packages:    map[string]string{FamilyFedora: "git", FamilyWindows: "Git.Git"},
 	},
 	{
 		Name:        "adb",
 		Features:    []string{"device", "flutterRecording"},
 		VersionArgs: []string{"version"},
-		Packages:    map[string]string{FamilyFedora: "android-tools"},
+		Packages:    map[string]string{FamilyFedora: "android-tools", FamilyWindows: "Google.PlatformTools"},
 	},
 	{
-		Name:        "scrcpy",
-		Features:    []string{"device", "flutterRecording"},
-		VersionArgs: []string{"--version"},
+		Name:              "scrcpy",
+		Features:          []string{"device", "flutterRecording"},
+		VersionArgs:       []string{"--version"},
+		Packages:          map[string]string{FamilyWindows: "Genymobile.scrcpy"},
+		UnsignedOnWindows: true,
 		NoRoute: map[string]string{
 			FamilyFedora: "scrcpy has no package in the repositories this system has enabled. Its developers publish it for Fedora through the COPR repository zeno/scrcpy.",
 		},
@@ -54,7 +58,9 @@ var Deps = []Dep{
 		VersionArgs: []string{"-version"},
 		// RPM Fusion's full ffmpeg conflicts with ffmpeg-free, so a fresh install takes ffmpeg-free and an upgrade
 		// names whichever package owns the binary.
-		Packages: map[string]string{FamilyFedora: "ffmpeg-free"},
+		// Gyan's release build has a version number; BtbN's builds are nightlies that report none.
+		Packages:          map[string]string{FamilyFedora: "ffmpeg-free", FamilyWindows: "Gyan.FFmpeg"},
+		UnsignedOnWindows: true,
 	},
 	{
 		Name:        "ssh",
@@ -62,7 +68,8 @@ var Deps = []Dep{
 		VersionArgs: []string{"-V"},
 		CheckOnly:   true,
 		NoRoute: map[string]string{
-			FamilyFedora: "ssh is not installed. Database channels over SSH need it, from the openssh-clients package.",
+			FamilyFedora:  "ssh is not installed. Database channels over SSH need it, from the openssh-clients package.",
+			FamilyWindows: "ssh is not installed. Database channels over SSH need the OpenSSH Client, which Windows adds in Settings under System, Optional features.",
 		},
 	},
 }

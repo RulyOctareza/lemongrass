@@ -5,6 +5,8 @@ package osdeps
 
 import (
 	"context"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -25,6 +27,9 @@ type OSInfo struct {
 	// An image-based Fedora such as Silverblue, where dnf cannot install and tools come with the image or by
 	// rpm-ostree layering.
 	Atomic bool `json:"-"`
+	// Windows only: the build number, and whether winget is there to install with.
+	Build  int  `json:"-"`
+	Winget bool `json:"-"`
 }
 
 // DetectOS reads the OS and its release.
@@ -34,7 +39,10 @@ func DetectOS(ctx context.Context, sys System) OSInfo {
 		out, _ := sys.Run(ctx, "sw_vers", "-productVersion")
 		return OSInfo{Family: FamilyMacOS, ID: "macos", Version: strings.TrimSpace(string(out))}
 	case "windows":
-		return OSInfo{Family: FamilyWindows, ID: "windows"}
+		out, _ := sys.Run(ctx, "cmd", "/c", "ver")
+		info := ParseWindowsVer(string(out))
+		info.Winget = Resolve(ctx, sys, "winget") != ""
+		return info
 	case "linux":
 		data, err := sys.ReadFile("/etc/os-release")
 		if err != nil {
@@ -73,5 +81,28 @@ func ParseOSRelease(data string) OSInfo {
 			return info
 		}
 	}
+	return info
+}
+
+// The bracketed version is the one part of cmd's ver line that is not translated.
+var windowsVer = regexp.MustCompile(`\[[^\]]*?(\d+)\.(\d+)\.(\d+)`)
+
+// windowsBuild11 is the first build of Windows 11, which still reports itself as version 10.0.
+const windowsBuild11 = 22000
+
+// ParseWindowsVer reads the release and build from the output of cmd /c ver, such as
+// "Microsoft Windows [Version 10.0.22631.4460]".
+func ParseWindowsVer(out string) OSInfo {
+	info := OSInfo{Family: FamilyWindows, ID: "windows"}
+	m := windowsVer.FindStringSubmatch(out)
+	if m == nil {
+		return info
+	}
+	info.Build, _ = strconv.Atoi(m[3])
+	release := m[1]
+	if release == "10" && info.Build >= windowsBuild11 {
+		release = "11"
+	}
+	info.Version = release + " (build " + m[3] + ")"
 	return info
 }

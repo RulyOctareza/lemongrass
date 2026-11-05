@@ -24,6 +24,7 @@ var errExit = errors.New("exit status 1")
 // fakeMachine stands in for a whole machine: files with their stats, what PATH finds, and each command's output.
 type fakeMachine struct {
 	goos      string
+	home      string
 	osRelease string
 	files     map[string]FileStat
 	onPath    map[string]string
@@ -38,6 +39,7 @@ type fakeMachine struct {
 func newFedora() *fakeMachine {
 	return &fakeMachine{
 		goos:      "linux",
+		home:      "/home/u",
 		osRelease: fedoraRelease,
 		files:     map[string]FileStat{},
 		onPath:    map[string]string{},
@@ -62,7 +64,7 @@ func (m *fakeMachine) install(name, path, versionOut, owner string) {
 func (m *fakeMachine) system() System {
 	return System{
 		GOOS: m.goos,
-		Home: "/home/u",
+		Home: m.home,
 		Run: func(_ context.Context, name string, args ...string) ([]byte, error) {
 			key := strings.Join(append([]string{name}, args...), " ")
 			m.mu.Lock()
@@ -190,7 +192,7 @@ func TestCheckFedora(t *testing.T) {
 	got := check(t, m)
 
 	git := got["git"]
-	if git.Status != StatusOK || git.Version != "2.56.0" || git.Origin != (Origin{OriginPackage, "git-core"}) || git.Offer != nil {
+	if git.Status != StatusOK || git.Version != "2.56.0" || git.Origin != (Origin{Kind: OriginPackage, Package: "git-core"}) || git.Offer != nil {
 		t.Errorf("git = %+v", git)
 	}
 	adb := got["adb"]
@@ -253,7 +255,7 @@ func TestCheckOriginThroughSymlink(t *testing.T) {
 	m.links["/usr/bin/ffmpeg"] = "/usr/lib/ffmpeg/ffmpeg"
 	m.files["/usr/lib/ffmpeg/ffmpeg"] = FileStat{Size: 1, Exec: true}
 	m.commands["rpm -qf --qf %{NAME}\n /usr/lib/ffmpeg/ffmpeg"] = fakeOut{out: "ffmpeg-free\nffmpeg-free\n"}
-	if ffmpeg := check(t, m)["ffmpeg"]; ffmpeg.Origin != (Origin{OriginPackage, "ffmpeg-free"}) {
+	if ffmpeg := check(t, m)["ffmpeg"]; ffmpeg.Origin != (Origin{Kind: OriginPackage, Package: "ffmpeg-free"}) {
 		t.Errorf("ffmpeg = %+v", ffmpeg)
 	}
 }
@@ -419,8 +421,8 @@ func TestUpgradeOfAnOwnerOutsideTheAllowlistIsNotOffered(t *testing.T) {
 }
 
 func TestResolveGit(t *testing.T) {
-	winGit := filepath.Join(`C:\Program Files`, "Git", "cmd", "git.exe")
-	userGit := filepath.Join(`C:\Users\a\AppData\Local`, "Programs", "Git", "cmd", "git.exe")
+	winGit := `C:\Program Files\Git\cmd\git.exe`
+	userGit := `C:\Users\a\AppData\Local\Programs\Git\cmd\git.exe`
 	exe := FileStat{Exec: true}
 	cases := []struct {
 		name   string

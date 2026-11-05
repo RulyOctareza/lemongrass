@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -60,6 +59,9 @@ func flutterTest(ctx context.Context, project string, f cliFlags, passthrough []
 	}
 	args = append(args, passthrough...)
 	args = append(args, paths...)
+	if err := flutter.CheckArgs(sdk, args); err != nil {
+		return err
+	}
 
 	started := time.Now()
 	id, dir, err := flutter.NewRunDir(project, started)
@@ -160,12 +162,15 @@ func startTestRecording(ctx context.Context, serial, path string) (*flutter.Reco
 // runMachine runs flutter with stdout and stderr merged into the collector, and prints a line
 // per finished test to stderr so a long run shows progress.
 func runMachine(sdk, project string, args []string, collector *flutter.Collector) error {
-	cmd := exec.Command(sdk, args...)
+	cmd, err := flutter.Command(sdk, args...)
+	if err != nil {
+		return err
+	}
 	cmd.Dir = project
 	reader, writer := io.Pipe()
 	cmd.Stdout = writer
 	cmd.Stderr = writer
-	if err := cmd.Start(); err != nil {
+	if err = cmd.Start(); err != nil {
 		return fmt.Errorf("flutter: %w", err)
 	}
 	done := make(chan struct{})
@@ -179,7 +184,7 @@ func runMachine(sdk, project string, args []string, collector *flutter.Collector
 			reportProgress(line)
 		}
 	}()
-	err := cmd.Wait()
+	err = cmd.Wait()
 	writer.Close()
 	<-done
 	return err

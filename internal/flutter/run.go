@@ -96,18 +96,27 @@ func Spawn(self, project, serial string, args []string) error {
 	if s, err := ReadState(dir); err == nil && Alive(s) {
 		return fmt.Errorf("flutter: an app is already running on %s from this project (status %s). Use lgrass flutter reload, restart or stop", s.Serial, s.Status)
 	}
+	// Checked here as well as in the supervisor, so a refused argument is reported to the caller, not to run.log. A
+	// missing SDK is left to the supervisor, which records it in run.json.
+	if sdk, err := SDK(project); err == nil {
+		if err := CheckArgs(sdk, append([]string{serial}, args...)); err != nil {
+			return err
+		}
+	}
 	log, err := os.Create(LogPath(dir))
 	if err != nil {
 		return fmt.Errorf("flutter: %w", err)
 	}
 	defer log.Close()
 	writeState(dir, RunState{Serial: serial, Project: project, Args: args, Status: StatusBuilding, StartedAt: time.Now()})
-	cmd := exec.Command(self, append([]string{"flutter", "_serve", project, serial, "--"}, args...)...)
-	cmd.Dir = project
-	cmd.Stdout = log
-	cmd.Stderr = log
-	cmd.SysProcAttr = detachedProcAttr()
-	if err := cmd.Start(); err != nil {
+	cmd, err := startDetached(func() *exec.Cmd {
+		cmd := exec.Command(self, append([]string{"flutter", "_serve", project, serial, "--"}, args...)...)
+		cmd.Dir = project
+		cmd.Stdout = log
+		cmd.Stderr = log
+		return cmd
+	})
+	if err != nil {
 		return fmt.Errorf("flutter: starting the run supervisor: %w", err)
 	}
 	return cmd.Process.Release()
@@ -203,7 +212,15 @@ func Serve(project, serial string, args []string, onStarted func(vmService strin
 	}
 	writeState(dir, sv.state)
 
-	cmd := exec.Command(sdk, append([]string{"run", "--machine", "-d", serial}, args...)...)
+	cmd, err := Command(sdk, append([]string{"run", "--machine", "-d", serial}, args...)...)
+	if err != nil {
+		sv.fail(err.Error())
+		return err
+	}
+	if err := killChildrenOnExit(); err != nil {
+		sv.fail(err.Error())
+		return err
+	}
 	cmd.Dir = project
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()

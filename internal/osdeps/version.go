@@ -21,7 +21,8 @@ var versionPatterns = map[string][]*regexp.Regexp{
 	"scrcpy": {regexp.MustCompile(`(?m)^scrcpy v?(\d+\.\d+(?:\.\d+)?)`)},
 	// Release builds print "7.1.5" or "n7.1"; a nightly prints "N-12345-g<hash>" and has no version.
 	"ffmpeg": {regexp.MustCompile(`ffmpeg version n?(\d+\.\d+(?:\.\d+)?)`)},
-	"ssh":    {regexp.MustCompile(`OpenSSH_(\d+\.\d+(?:p\d+)?)`)},
+	// Windows' own client prints "OpenSSH_for_Windows_9.5p1".
+	"ssh": {regexp.MustCompile(`OpenSSH_(?:for_Windows_)?(\d+\.\d+(?:p\d+)?)`)},
 }
 
 // ParseVersion reads a tool's version from its output, or returns "" when it cannot.

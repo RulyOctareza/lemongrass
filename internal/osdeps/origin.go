@@ -17,10 +17,21 @@ const (
 	OriginUnknown = "unknown"
 )
 
-// Origin is who installed a dependency. Package is set only for OriginPackage.
+// Managers that own a package on Windows, which has no single package database.
+const (
+	ManagerWinget = "winget"
+	ManagerScoop  = "scoop"
+	// The Git for Windows installer, run by hand or by winget, which winget can upgrade either way.
+	ManagerInstaller = "installer"
+	// Part of Windows itself, updated only by Windows Update.
+	ManagerWindows = "windows"
+)
+
+// Origin is who installed a dependency. Package is set only for OriginPackage, Manager only on Windows.
 type Origin struct {
 	Kind    string `json:"kind"`
 	Package string `json:"package,omitempty"`
+	Manager string `json:"manager,omitempty"`
 }
 
 // readOrigin asks the package database who owns the binary. It reads the real path, because /usr/bin entries can be
@@ -28,6 +39,9 @@ type Origin struct {
 func readOrigin(ctx context.Context, sys System, info OSInfo, path string) Origin {
 	if path == "" {
 		return Origin{Kind: OriginNone}
+	}
+	if info.Family == FamilyWindows {
+		return windowsOrigin(sys, path)
 	}
 	if info.Family != FamilyFedora {
 		return Origin{Kind: OriginUnknown}

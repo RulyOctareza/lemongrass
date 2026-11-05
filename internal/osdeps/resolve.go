@@ -13,6 +13,9 @@ const macGitStub = "/usr/bin/git"
 // candidates lists where a tool is installed besides PATH. An app started from a desktop launcher, macOS Finder above
 // all, gets a minimal PATH, and an agent's shell may not have Android platform-tools on its PATH.
 func candidates(sys System, name string) []string {
+	if sys.GOOS == "windows" {
+		return windowsCandidates(sys, name)
+	}
 	var dirs []string
 	if name == "adb" {
 		for _, env := range []string{"ANDROID_HOME", "ANDROID_SDK_ROOT"} {
@@ -25,26 +28,9 @@ func candidates(sys System, name string) []string {
 			filepath.Join(sys.Home, "Android", "Sdk", "platform-tools"),
 		)
 	}
-	switch sys.GOOS {
-	case "windows":
-		if name == "git" {
-			for _, env := range []string{"ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"} {
-				if dir := sys.Getenv(env); dir != "" {
-					dirs = append(dirs, filepath.Join(dir, "Git", "cmd"))
-				}
-			}
-			if dir := sys.Getenv("LOCALAPPDATA"); dir != "" {
-				dirs = append(dirs, filepath.Join(dir, "Programs", "Git", "cmd"))
-			}
-		}
-		paths := make([]string, len(dirs))
-		for i, dir := range dirs {
-			paths[i] = filepath.Join(dir, name+".exe")
-		}
-		return paths
-	case "darwin":
+	if sys.GOOS == "darwin" {
 		dirs = append(dirs, "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin", "/usr/bin")
-	default:
+	} else {
 		dirs = append(dirs, "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin")
 	}
 	paths := make([]string, len(dirs))
@@ -65,13 +51,18 @@ func Resolve(ctx context.Context, sys System, name string) string {
 		}
 		return true
 	}
-	if p, err := sys.LookPath(name); err == nil && usable(p) {
-		return p
+	onPath, err := sys.LookPath(name)
+	if err == nil && usable(onPath) && !bundledAdb(sys, name, onPath) {
+		return onPath
 	}
 	for _, c := range candidates(sys, name) {
-		if st, ok := sys.Stat(c); ok && !st.Dir && st.Exec && usable(c) {
+		if st, ok := sys.Stat(c); ok && !st.Dir && st.Exec && usable(c) && !bundledAdb(sys, name, c) {
 			return c
 		}
+	}
+	// scrcpy's own adb is still better than none.
+	if err == nil && usable(onPath) {
+		return onPath
 	}
 	return ""
 }

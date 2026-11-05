@@ -254,9 +254,10 @@ func lineInFile(file, stack string, output []string) int {
 	return line
 }
 
+// Suite paths are written with forward slashes on every OS, the form Dart's own stack frames use.
 func (c *Collector) relative(path string) string {
 	if rel, err := filepath.Rel(c.project, path); err == nil && !strings.HasPrefix(rel, "..") {
-		return rel
+		return filepath.ToSlash(rel)
 	}
 	return path
 }

@@ -28,6 +28,7 @@ type cacheFile struct {
 	Schema  int                   `json:"schema"`
 	OS      OSInfo                `json:"os"`
 	Atomic  bool                  `json:"atomic"`
+	Winget  bool                  `json:"winget"`
 	List    string                `json:"list"`
 	Entries map[string]cacheEntry `json:"entries"`
 }
@@ -56,7 +57,10 @@ func loadCache(path string, info OSInfo) map[string]cacheEntry {
 	if json.Unmarshal(data, &c) != nil {
 		return nil
 	}
-	if c.Schema != cacheSchema || c.OS != info || c.Atomic != info.Atomic || c.List != listKey() {
+	// The OS block is compared field by field, since the fields kept out of JSON never survive the file.
+	same := c.OS.Family == info.Family && c.OS.ID == info.ID && c.OS.Version == info.Version &&
+		c.Atomic == info.Atomic && c.Winget == info.Winget
+	if c.Schema != cacheSchema || !same || c.List != listKey() {
 		return nil
 	}
 	return c.Entries
@@ -64,7 +68,7 @@ func loadCache(path string, info OSInfo) map[string]cacheEntry {
 
 // saveCache writes through a temp file and a rename, so a check killed midway never leaves half a file.
 func saveCache(path string, info OSInfo, entries map[string]cacheEntry) error {
-	c := cacheFile{Schema: cacheSchema, OS: info, Atomic: info.Atomic, List: listKey(), Entries: entries}
+	c := cacheFile{Schema: cacheSchema, OS: info, Atomic: info.Atomic, Winget: info.Winget, List: listKey(), Entries: entries}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return fmt.Errorf("osdeps: encode cache: %w", err)
