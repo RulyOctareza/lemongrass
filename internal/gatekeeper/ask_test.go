@@ -6,6 +6,7 @@ package gatekeeper
 import (
 	"errors"
 	"github.com/faizalv/lemongrass/internal/ipc"
+	"github.com/faizalv/lemongrass/internal/testenv"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ import (
 
 func startAskServer(t *testing.T) *Client {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	client := startTestServer(t)
 	if err := client.SetPassphrase(testRootSecret); err != nil {
 		t.Fatal(err)
@@ -188,11 +189,12 @@ func TestIPCAskNeverExecute(t *testing.T) {
 
 func startAskServerWithTables(t *testing.T, tables map[string][]string) *Client {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	svc, err := NewBackend(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { svc.Close() })
 	svc.listTables = func(_, dbName string) ([]string, error) {
 		have, ok := tables[dbName]
 		if !ok {

@@ -67,6 +67,11 @@ func TokenPath(addr string) string {
 	return addr + ".ipckey"
 }
 
+// pipeBufferSize is what libuv gives Node's pipes. With go-winio's default of zero a write completes only once the
+// other side reads it, so the greeting and the client's first request, both written before either side reads, would
+// block each other.
+const pipeBufferSize = 64 << 10
+
 // The DACL lets only the current user open the pipe. go-winio creates the first instance with FILE_CREATE, so a name
 // already taken, by a running daemon or by a squatter, fails here instead of sharing the name, and it rejects remote
 // clients.
@@ -76,7 +81,11 @@ func listen(addr string) (net.Listener, error) {
 		return nil, err
 	}
 	name := pipeName(addr)
-	l, err := winio.ListenPipe(name, &winio.PipeConfig{SecurityDescriptor: "D:P(A;;GA;;;" + sid + ")"})
+	l, err := winio.ListenPipe(name, &winio.PipeConfig{
+		SecurityDescriptor: "D:P(A;;GA;;;" + sid + ")",
+		InputBufferSize:    pipeBufferSize,
+		OutputBufferSize:   pipeBufferSize,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("ipc: listening on %s: %w", name, err)
 	}

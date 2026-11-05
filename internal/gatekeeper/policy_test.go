@@ -5,6 +5,7 @@ package gatekeeper
 
 import (
 	"encoding/json"
+	"github.com/faizalv/lemongrass/internal/testenv"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 func registerTestProject(t *testing.T) string {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	p, err := project.Register(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +145,7 @@ func TestProjectPoliciesFollowTheRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { b.Close() })
 	if err := b.SetPassphrase(testRootSecret); err != nil {
 		t.Fatal(err)
 	}
@@ -174,6 +176,7 @@ func TestProjectPoliciesFollowTheRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { reopened.Close() })
 	if _, projects := reopened.Policies(); len(projects) != 1 || projects[kept] == nil {
 		t.Errorf("projects after a restart = %q, want only %s", projects, kept)
 	}

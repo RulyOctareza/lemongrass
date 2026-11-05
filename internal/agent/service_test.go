@@ -33,6 +33,7 @@ func startTestVault(t *testing.T) *gatekeeper.Client {
 	if err != nil {
 		t.Fatalf("vault.NewService: %v", err)
 	}
+	t.Cleanup(func() { svc.Close() })
 	sockPath := filepath.Join(t.TempDir(), "vault.sock")
 	l, err := ipc.Listen(sockPath)
 	if err != nil {

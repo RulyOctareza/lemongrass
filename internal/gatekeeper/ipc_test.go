@@ -31,6 +31,7 @@ func startTestServer(t *testing.T) *Client {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
+	t.Cleanup(func() { svc.Close() })
 	sockPath := filepath.Join(t.TempDir(), "vault.sock")
 	l, err := ipc.Listen(sockPath)
 	if err != nil {
@@ -108,6 +109,7 @@ func TestIPCAdminOpsLockOutAfterRepeatedWrongSecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
+	t.Cleanup(func() { svc.Close() })
 	if err := svc.PutCredential(testRootSecret, "app-backend", []byte("creds")); err != nil {
 		t.Fatalf("PutCredential: %v", err)
 	}

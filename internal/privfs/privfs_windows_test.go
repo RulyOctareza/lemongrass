@@ -28,14 +28,21 @@ func TestRestrictedDirectoryPassesItsDACLOn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// SDDL prints a well-known account by its alias, such as LA for the built-in Administrator a CI runner uses, so
+	// the user's form is taken from the same printer.
+	owner, err := windows.SecurityDescriptorFromString("O:" + sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := strings.TrimPrefix(owner.String(), "O:")
 	for _, p := range []string{dir, file} {
 		sd, err := windows.GetNamedSecurityInfo(p, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 		if err != nil {
 			t.Fatal(err)
 		}
 		sddl := sd.String()
-		if strings.Count(sddl, "(") != 1 || !strings.Contains(sddl, sid) {
-			t.Fatalf("%s: DACL %s, want one entry for %s", p, sddl, sid)
+		if strings.Count(sddl, "(") != 1 || !strings.HasSuffix(sddl, ";"+user+")") {
+			t.Fatalf("%s: DACL %s, want one entry for %s", p, sddl, user)
 		}
 	}
 }

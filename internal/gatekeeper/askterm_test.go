@@ -51,10 +51,16 @@ func startTestTerm(t *testing.T, script string) (*askTerm, *tailWriter, chan str
 		term.pump(tail)
 		close(pumped)
 	}()
-	t.Cleanup(func() {
-		proc.signal(true)
+	// As runAsk does: once the command exits its console is told, since a ConPTY's output ends only when closed.
+	exited := make(chan struct{})
+	go func() {
 		_ = proc.wait()
 		proc.exited()
+		close(exited)
+	}()
+	t.Cleanup(func() {
+		proc.signal(true)
+		<-exited
 		term.end()
 		proc.close()
 	})

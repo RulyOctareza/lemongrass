@@ -38,6 +38,7 @@ func TestIPCRequestHTTPOutlivesConnDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBackend: %v", err)
 	}
+	t.Cleanup(func() { backend.Close() })
 	const rootSecret = "root-secret"
 	if err := backend.SetPassphrase(rootSecret); err != nil {
 		t.Fatalf("SetPassphrase: %v", err)

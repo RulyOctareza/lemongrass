@@ -94,6 +94,7 @@ func webStack(t *testing.T, channelType string, appReply map[string]any) (*agent
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 
 	vaultSock := filepath.Join(dir, "vault.sock")
 	vl, err := ipc.Listen(vaultSock)

@@ -49,6 +49,15 @@ func NewBackend(dir string) (*Backend, error) {
 	return b, nil
 }
 
+// Close releases the audit log. The daemon never calls it, since the backend lives as long as the process; tests do,
+// because Windows cannot remove a test's temp dir while the database file is open.
+func (b *Backend) Close() error {
+	if b.DB.Audit == nil {
+		return nil
+	}
+	return b.DB.Audit.Close()
+}
+
 // NewBackendFor attaches both gates to an already-open vault.
 func NewBackendFor(svc *vault.Service) *Backend {
 	return &Backend{Service: svc, DB: dbgate.New(svc), HTTP: restergate.New(svc), Asks: vault.NewAskStore(), runs: newAskRuns()}

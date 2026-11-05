@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/faizalv/lemongrass/internal/testenv"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,7 +30,7 @@ func writeRegistry(t *testing.T, projects []project.Project) {
 }
 
 func TestPurgeProjectRefusesALiveProject(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	writeRegistry(t, []project.Project{{ID: "live", Name: "live", Path: t.TempDir()}})
 	history := bibliohistory.GitDir("live")
 	if err := os.MkdirAll(history, 0o755); err != nil {
@@ -47,7 +48,7 @@ func TestPurgeProjectRefusesALiveProject(t *testing.T) {
 }
 
 func TestPurgeProjectRemovesHistoryOfADeletedProject(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	dir := t.TempDir()
 	writeRegistry(t, []project.Project{{ID: "gone", Name: "gone", Path: dir, DeletedAt: "2026-01-01T00:00:00.000Z"}})
 	history := bibliohistory.GitDir("gone")

@@ -4,6 +4,8 @@
 package vault
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -55,7 +57,7 @@ func (r *askRecorder) undeliveredIDs() []string {
 }
 
 func commandAsk(tab, command string) AskInput {
-	return AskInput{Type: AskCommand, TabID: tab, Cwd: "/work/app", Command: command, Reason: "needed now"}
+	return AskInput{Type: AskCommand, TabID: tab, Cwd: askCwd, Command: command, Reason: "needed now"}
 }
 
 func TestAskCreateValidation(t *testing.T) {
@@ -64,36 +66,36 @@ func TestAskCreateValidation(t *testing.T) {
 		in   AskInput
 		err  string
 	}{
-		{"db ok", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"orders"}, Operations: []string{"select"}, Reason: "r"}, ""},
-		{"rester ok", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "I need GET on /x", Methods: []string{"GET"}}, ""},
+		{"db ok", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"orders"}, Operations: []string{"select"}, Reason: "r"}, ""},
+		{"rester ok", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Message: "I need GET on /x", Methods: []string{"GET"}}, ""},
 		{"command ok", commandAsk("t", "git push"), ""},
-		{"hook command needs no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "git push", Rule: "git-push"}, ""},
-		{"unknown type", AskInput{Type: "x", TabID: "t", Cwd: "/w"}, "unknown ask type"},
-		{"db no operations", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Reason: "r"}, "at least one operation"},
-		{"db unknown operation", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"drop"}, Reason: "r"}, "is not a known operation"},
-		{"db repeated operation", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select", "select"}, Reason: "r"}, "twice"},
-		{"db with methods", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select"}, Methods: []string{"GET"}, Reason: "r"}, "tables, operations and a reason only"},
-		{"rester no methods", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "m"}, "at least one method"},
-		{"rester lower method", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "m", Methods: []string{"get"}}, "is not a known method"},
-		{"command with operations", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "r", Operations: []string{"select"}}, "command and a reason only"},
-		{"no tab", AskInput{Type: AskRester, Cwd: "/w", Message: "m", Methods: []string{"GET"}}, "tab id"},
+		{"hook command needs no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "git push", Rule: "git-push"}, ""},
+		{"unknown type", AskInput{Type: "x", TabID: "t", Cwd: askCwd}, "unknown ask type"},
+		{"db no operations", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a"}, Reason: "r"}, "at least one operation"},
+		{"db unknown operation", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a"}, Operations: []string{"drop"}, Reason: "r"}, "is not a known operation"},
+		{"db repeated operation", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a"}, Operations: []string{"select", "select"}, Reason: "r"}, "twice"},
+		{"db with methods", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a"}, Operations: []string{"select"}, Methods: []string{"GET"}, Reason: "r"}, "tables, operations and a reason only"},
+		{"rester no methods", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Message: "m"}, "at least one method"},
+		{"rester lower method", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Message: "m", Methods: []string{"get"}}, "is not a known method"},
+		{"command with operations", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: "r", Operations: []string{"select"}}, "command and a reason only"},
+		{"no tab", AskInput{Type: AskRester, Cwd: askCwd, Message: "m", Methods: []string{"GET"}}, "tab id"},
 		{"relative cwd", AskInput{Type: AskRester, TabID: "t", Cwd: "w", Message: "m", Methods: []string{"GET"}}, "absolute"},
-		{"db no tables", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Operations: []string{"select"}, Reason: "r"}, "at least one table"},
-		{"db no reason", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}}, "needs a reason"},
-		{"db bad table", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a b"}, Operations: []string{"select"}, Reason: "r"}, "not a table name"},
-		{"db too many tables", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: make([]string, MaxAskTables+1), Operations: []string{"select"}, Reason: "r"}, "at most"},
-		{"db with command", AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select"}, Reason: "r", Command: "x"}, "tables, operations and a reason only"},
-		{"rester empty", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Methods: []string{"GET"}}, "needs a message"},
-		{"rester long", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: strings.Repeat("m", MaxAskMessage+1), Methods: []string{"GET"}}, "cap"},
-		{"command empty", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Reason: "r"}, "needs a command"},
-		{"command long", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Reason: "r", Command: strings.Repeat("c", MaxAskCommand+1)}, "cap"},
-		{"command no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls"}, "needs a reason"},
-		{"reason long", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: strings.Repeat("r", MaxAskReason+1)}, "cap"},
-		{"invalid utf8", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "\xff"}, "UTF-8"},
-		{"command account env", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "claude login", Reason: "r", AccountEnv: map[string]string{"CLAUDE_CONFIG_DIR": "/h/.claude-work", "CODEX_HOME": "/h/.codex"}}, ""},
-		{"unknown account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "r", AccountEnv: map[string]string{"LD_PRELOAD": "/x.so"}}, "not an account variable"},
-		{"relative account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: "/w", Command: "ls", Reason: "r", AccountEnv: map[string]string{"CODEX_HOME": "codex"}}, "absolute path"},
-		{"account env on a channel ask", AskInput{Type: AskRester, TabID: "t", Cwd: "/w", Message: "m", Methods: []string{"GET"}, AccountEnv: map[string]string{"CODEX_HOME": "/h/.codex"}}, "only a command ask"},
+		{"db no tables", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Operations: []string{"select"}, Reason: "r"}, "at least one table"},
+		{"db no reason", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a"}}, "needs a reason"},
+		{"db bad table", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a b"}, Operations: []string{"select"}, Reason: "r"}, "not a table name"},
+		{"db too many tables", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: make([]string, MaxAskTables+1), Operations: []string{"select"}, Reason: "r"}, "at most"},
+		{"db with command", AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a"}, Operations: []string{"select"}, Reason: "r", Command: "x"}, "tables, operations and a reason only"},
+		{"rester empty", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Methods: []string{"GET"}}, "needs a message"},
+		{"rester long", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Message: strings.Repeat("m", MaxAskMessage+1), Methods: []string{"GET"}}, "cap"},
+		{"command empty", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Reason: "r"}, "needs a command"},
+		{"command long", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Reason: "r", Command: strings.Repeat("c", MaxAskCommand+1)}, "cap"},
+		{"command no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls"}, "needs a reason"},
+		{"reason long", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: strings.Repeat("r", MaxAskReason+1)}, "cap"},
+		{"invalid utf8", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: "\xff"}, "UTF-8"},
+		{"command account env", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "claude login", Reason: "r", AccountEnv: map[string]string{"CLAUDE_CONFIG_DIR": "/h/.claude-work", "CODEX_HOME": "/h/.codex"}}, ""},
+		{"unknown account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: "r", AccountEnv: map[string]string{"LD_PRELOAD": "/x.so"}}, "not an account variable"},
+		{"relative account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: "r", AccountEnv: map[string]string{"CODEX_HOME": "codex"}}, "absolute path"},
+		{"account env on a channel ask", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Message: "m", Methods: []string{"GET"}, AccountEnv: map[string]string{"CODEX_HOME": "/h/.codex"}}, "only a command ask"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -117,7 +119,7 @@ func TestAskCreateValidation(t *testing.T) {
 
 func TestAskHookDedupeAndLimits(t *testing.T) {
 	s, clock, _ := newTestAskStore()
-	hook := AskInput{Type: AskCommand, TabID: "t1", Cwd: "/w", Command: "git push", Rule: "git-push"}
+	hook := AskInput{Type: AskCommand, TabID: "t1", Cwd: askCwd, Command: "git push", Rule: "git-push"}
 	first, err := s.Create(hook)
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +128,7 @@ func TestAskHookDedupeAndLimits(t *testing.T) {
 	if err != nil || again.ID != first.ID {
 		t.Fatalf("a repeated hook ask = %v, %v, want the first ask %s", again.ID, err, first.ID)
 	}
-	if other, _ := s.Create(AskInput{Type: AskCommand, TabID: "t2", Cwd: "/w", Command: "git push", Rule: "git-push"}); other.ID == first.ID {
+	if other, _ := s.Create(AskInput{Type: AskCommand, TabID: "t2", Cwd: askCwd, Command: "git push", Rule: "git-push"}); other.ID == first.ID {
 		t.Fatal("another tab's hook ask was folded into the first tab's")
 	}
 
@@ -161,7 +163,7 @@ func TestAskHookDedupeAndLimits(t *testing.T) {
 
 func TestAskWaitAnswered(t *testing.T) {
 	s, _, rec := newTestAskStore()
-	a, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"orders"}, Operations: []string{"select"}, Reason: "r"})
+	a, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"orders"}, Operations: []string{"select"}, Reason: "r"})
 	if err := s.AnswerChannel(a.ID, "ab12cd"); err == nil {
 		t.Fatal("answered a channel ask with no linked channel")
 	}
@@ -256,7 +258,7 @@ func TestAskWaiterWriteFailed(t *testing.T) {
 
 func TestAskCommandRun(t *testing.T) {
 	s, _, rec := newTestAskStore()
-	db, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: "/w", Tables: []string{"a"}, Operations: []string{"select"}, Reason: "r"})
+	db, _ := s.Create(AskInput{Type: AskDB, TabID: "t", Cwd: askCwd, Tables: []string{"a"}, Operations: []string{"select"}, Reason: "r"})
 	if _, err := s.Start(db.ID); err == nil {
 		t.Fatal("started a db ask")
 	}
@@ -356,3 +358,7 @@ func TestAskAccountEnv(t *testing.T) {
 		t.Fatalf("AskAccountEnv with none set = %v", env)
 	}
 }
+
+// askCwd is an absolute working directory on every OS: /w on Unix, \w on the temp dir's drive on Windows, where /w
+// is not absolute.
+var askCwd = filepath.Join(filepath.VolumeName(os.TempDir()), string(filepath.Separator), "w")

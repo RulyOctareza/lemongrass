@@ -26,6 +26,7 @@ func startStack(t *testing.T) (*gatekeeper.Client, *agent.Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { svc.Close() })
 	vaultSock := filepath.Join(t.TempDir(), "vault.sock")
 	vl, err := ipc.Listen(vaultSock)
 	if err != nil {

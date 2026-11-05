@@ -10,6 +10,7 @@ func TestNewBackendAttachesAuditStoreToBothGates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBackend: %v", err)
 	}
+	t.Cleanup(func() { b.Close() })
 	if b.DB.Audit == nil {
 		t.Error("DB.Audit is nil, want the shared audit store")
 	}
