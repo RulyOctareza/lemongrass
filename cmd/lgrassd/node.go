@@ -16,6 +16,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/config"
 	"github.com/faizalv/lemongrass/internal/node"
 	"github.com/faizalv/lemongrass/internal/nodesvc"
+	"github.com/faizalv/lemongrass/internal/privfs"
 )
 
 const nodeSyncInterval = 15 * time.Second
@@ -25,7 +26,7 @@ func cmdNode(args []string) {
 		fmt.Fprintln(os.Stderr, "usage: lgrassd node run")
 		os.Exit(1)
 	}
-	if err := os.MkdirAll(config.Dir(), 0o700); err != nil {
+	if err := privfs.MkdirAll(config.Dir()); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

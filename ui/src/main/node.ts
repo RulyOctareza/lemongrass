@@ -101,7 +101,24 @@ function saveConfig(cfg: NodeConfig): void {
   const tmp = CONFIG_FILE + '.tmp'
   writeFileSync(tmp, JSON.stringify(cfg, null, 2), { mode: 0o600 })
   chmodSync(tmp, 0o600)
-  renameSync(tmp, CONFIG_FILE)
+  renameReplacing(tmp, CONFIG_FILE)
+}
+
+// On Windows a rename over a file another process has open, such as the node daemon reading node.json, fails with a
+// sharing violation until that reader closes it, so the rename is retried for up to a second, as atomicfile does in Go.
+function renameReplacing(from: string, to: string): void {
+  const deadline = Date.now() + 1000
+  for (;;) {
+    try {
+      renameSync(from, to)
+      return
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      const transient = code === 'EPERM' || code === 'EBUSY' || code === 'EACCES'
+      if (process.platform !== 'win32' || !transient || Date.now() >= deadline) throw err
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20)
+    }
+  }
 }
 
 // A deleted project is left out, as the daemon's library leaves it out, so it cannot be shared again.

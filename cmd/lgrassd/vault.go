@@ -12,6 +12,7 @@ import (
 
 	"github.com/faizalv/lemongrass/internal/config"
 	"github.com/faizalv/lemongrass/internal/gatekeeper"
+	"github.com/faizalv/lemongrass/internal/privfs"
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
@@ -38,7 +39,7 @@ func cmdVault(args []string) {
 func cmdVaultRun() {
 	hardenProcess()
 
-	if err := os.MkdirAll(config.Dir(), 0o700); err != nil {
+	if err := privfs.MkdirAll(config.Dir()); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

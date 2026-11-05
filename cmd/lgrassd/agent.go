@@ -14,6 +14,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/bibliohistory"
 	"github.com/faizalv/lemongrass/internal/config"
 	"github.com/faizalv/lemongrass/internal/gatekeeper"
+	"github.com/faizalv/lemongrass/internal/privfs"
 	"github.com/faizalv/lemongrass/internal/project"
 	"github.com/faizalv/lemongrass/internal/session"
 	"github.com/faizalv/lemongrass/internal/threadsvc"
@@ -49,7 +50,7 @@ func cmdAgent(args []string) {
 }
 
 func cmdAgentRun() {
-	if err := os.MkdirAll(config.Dir(), 0o700); err != nil {
+	if err := privfs.MkdirAll(config.Dir()); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

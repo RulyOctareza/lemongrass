@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/faizalv/lemongrass/internal/agent"
+	"github.com/faizalv/lemongrass/internal/atomicfile"
 	"github.com/faizalv/lemongrass/internal/gatekeeper"
 )
 
@@ -165,7 +166,7 @@ func saveDownload(res gatekeeper.DownloadResult, target downloadTarget, confirm 
 	if err := tmp.Close(); err != nil {
 		return downloadResult{}, err
 	}
-	if err := os.Rename(tmpName, final); err != nil {
+	if err := atomicfile.Rename(tmpName, final); err != nil {
 		return downloadResult{}, fmt.Errorf("cannot move the download into place: %w", err)
 	}
 	keep = true
