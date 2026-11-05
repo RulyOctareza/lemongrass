@@ -30,23 +30,25 @@ func (a taskAge) day() string {
 	return a.t.Local().Format("2006-01-02")
 }
 
-// The biblio history keeps 90 days, so an older task falls back to the first date in its activity log.
+// ageOf takes the earlier of the task's first biblio history commit and the first date in its activity log. The
+// history's root commit imports whatever biblio held when recording began, and it keeps 90 days, so a task older than
+// it only dates right from its log; on the same day the history's moment is kept, being precise.
 func ageOf(env Env, slug string) taskAge {
+	var logged taskAge
+	if m := logDate.FindStringSubmatch(readText(filepath.Join(env.Root, "biblio", "scratchpad", slug, "activities.md"))); m != nil {
+		if t, err := time.ParseInLocation("2006-01-02", m[1], time.Local); err == nil {
+			logged = taskAge{t: t, known: true}
+		}
+	}
 	if env.TaskStarted != nil {
 		if t, ok := env.TaskStarted(slug); ok {
-			return taskAge{t: t, precise: true, known: true}
+			recorded := taskAge{t: t, precise: true, known: true}
+			if !logged.known || recorded.day() <= logged.day() {
+				return recorded
+			}
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(env.Root, "biblio", "scratchpad", slug, "activities.md"))
-	if err != nil {
-		return taskAge{}
-	}
-	if m := logDate.FindStringSubmatch(string(data)); m != nil {
-		if t, err := time.ParseInLocation("2006-01-02", m[1], time.Local); err == nil {
-			return taskAge{t: t, known: true}
-		}
-	}
-	return taskAge{}
+	return logged
 }
 
 // compareAge is 1 when a is newer than b, -1 when older, and 0 when either is unknown or both fall on the same day

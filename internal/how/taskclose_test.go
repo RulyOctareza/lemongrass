@@ -344,3 +344,56 @@ func TestCloseArgumentErrors(t *testing.T) {
 		}
 	}
 }
+
+// The history's root commit imports every task that existed when recording began, so an older activity log wins.
+func TestAgeIsTheEarlierOfHistoryAndLog(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "biblio/scratchpad/old/activities.md", "# Old\n\n- 2026-10-09: opened\n- 2026-10-20: more\n")
+	writeFile(t, root, "biblio/scratchpad/fresh/activities.md", "- 2026-11-05: opened\n")
+	imported := time.Date(2026, 10, 20, 10, 46, 0, 0, time.Local)
+	created := time.Date(2026, 11, 5, 14, 0, 0, 0, time.Local)
+	env := Env{Root: root, TaskStarted: func(slug string) (time.Time, bool) {
+		if slug == "old" {
+			return imported, true
+		}
+		return created, true
+	}}
+	if a := ageOf(env, "old"); a.precise || a.day() != "2026-10-09" {
+		t.Fatalf("old age = %+v", a)
+	}
+	if a := ageOf(env, "fresh"); !a.precise || !a.t.Equal(created) {
+		t.Fatalf("fresh age = %+v", a)
+	}
+}
+
+// Sessions that only did bookkeeping leave no code edit, and the files the documents name stand in.
+func TestFootprintFallsBackWhenEditsHoldNoCode(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "biblio/scratchpad/fix/prd.md", "Change internal/store/open.go.\n- [x] done")
+	writeFile(t, root, "internal/store/open.go", "package store")
+	env := Env{Root: root, EditsSince: func(time.Time) []Edit {
+		return []Edit{{"s1", filepath.Join(root, "biblio/scratchpad/fix/prd.md")}}
+	}}
+	out := renderEnv(t, env, "task", "close", "fix")
+	if !strings.Contains(out, "Files the task's documents name:") || !strings.Contains(out, "- `internal/store/open.go`") {
+		t.Fatalf("fallback footprint: %q", out)
+	}
+}
+
+// The edit log and the documents are listed apart, and a file both name is listed once, as edited.
+func TestFootprintListsEditedAndNamedApart(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "biblio/scratchpad/fix/prd.md", "Change internal/store/open.go and internal/store/close.go.\n- [x] done")
+	writeFile(t, root, "internal/store/open.go", "package store")
+	writeFile(t, root, "internal/store/close.go", "package store")
+	env := Env{Root: root, EditsSince: func(time.Time) []Edit {
+		return []Edit{{"s1", filepath.Join(root, "biblio/scratchpad/fix/prd.md")}, {"s1", filepath.Join(root, "internal/store/open.go")}}
+	}}
+	out := renderEnv(t, env, "task", "close", "fix")
+	edited := strings.Index(out, "Files edited by the sessions")
+	named := strings.Index(out, "Files the task's documents name:")
+	if edited < 0 || named < edited || strings.Count(out, "`internal/store/open.go`") != 1 ||
+		!strings.Contains(out[edited:named], "`internal/store/open.go`") || !strings.Contains(out[named:], "`internal/store/close.go`") {
+		t.Fatalf("footprint lists: %q", out)
+	}
+}

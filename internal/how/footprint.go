@@ -28,13 +28,13 @@ var namedPath = regexp.MustCompile(`[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)+`)
 type footFile struct {
 	path  string // relative to the project root, slash-separated
 	state string // "new", "uncommitted", "committed", or "" when git could not tell
+	// edited is true when a session that wrote the task's documents edited the file, false when the documents only
+	// name it.
+	edited bool
 }
 
 type footprint struct {
 	files []footFile
-	// fromEdits is true when the files come from the sessions' edit log, false when they are only named in the task's
-	// documents.
-	fromEdits bool
 }
 
 func (f footprint) newFiles() int {
@@ -55,30 +55,35 @@ func (f footprint) paths() []string {
 	return out
 }
 
-// taskFootprint is the code the task changed: every edit, outside biblio, by a session that also wrote the task's own
-// files since the task started. A session that worked several tasks brings their files too, which the close step
-// tells the model to sort out. Without an edit log it falls back to existing files the task's documents name.
+// taskFootprint is the code the task changed, from two witnesses. The edit log gives every edit, outside biblio, by a
+// session that also wrote the task's documents since the task started; a session that worked several tasks brings
+// their files too. The documents give the existing files they name, which is all there is for a task older than the
+// log or built through the shell. The close lists the two apart.
 func taskFootprint(env Env, slug string, age taskAge) footprint {
 	var fp footprint
-	var paths []string
-	if env.EditsSince != nil {
-		paths, fp.fromEdits = editedPaths(env, slug, age)
-	}
-	if !fp.fromEdits {
-		paths = namedPaths(env.Root, slug)
-	}
+	seen := map[string]bool{}
 	states := gitStates(env.Root, age)
-	for _, p := range paths {
-		state := states[p]
-		if state == "" && states != nil {
-			state = "committed"
+	add := func(paths []string, edited bool) {
+		for _, p := range paths {
+			if seen[p] {
+				continue
+			}
+			seen[p] = true
+			state := states[p]
+			if state == "" && states != nil {
+				state = "committed"
+			}
+			fp.files = append(fp.files, footFile{path: p, state: state, edited: edited})
 		}
-		fp.files = append(fp.files, footFile{path: p, state: state})
 	}
+	if env.EditsSince != nil {
+		add(editedPaths(env, slug, age), true)
+	}
+	add(namedPaths(env.Root, slug), false)
 	return fp
 }
 
-func editedPaths(env Env, slug string, age taskAge) ([]string, bool) {
+func editedPaths(env Env, slug string, age taskAge) []string {
 	// The biblio history records a task a moment after its first file is written, so the window opens earlier to keep
 	// the session that created it.
 	edits := env.EditsSince(age.t.Add(-time.Hour))
@@ -91,7 +96,7 @@ func editedPaths(env Env, slug string, age taskAge) ([]string, bool) {
 		}
 	}
 	if len(sessions) == 0 {
-		return nil, false
+		return nil
 	}
 	seen := map[string]bool{}
 	var paths []string
@@ -107,7 +112,7 @@ func editedPaths(env Env, slug string, age taskAge) ([]string, bool) {
 		paths = append(paths, rel)
 	}
 	sort.Strings(paths)
-	return paths, true
+	return paths
 }
 
 func absEdit(root, p string) string {

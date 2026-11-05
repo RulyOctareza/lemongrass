@@ -74,29 +74,30 @@ func taskClose(env Env, args []string) (string, error) {
 	for _, r := range facts.related {
 		relatedLines = append(relatedLines, r.String())
 	}
-	var fileLines []string
+	var editedLines, namedLines []string
 	for i, f := range facts.footprint.files {
 		if i == footprintListLimit {
-			fileLines = append(fileLines, fmt.Sprintf("and %d more", len(facts.footprint.files)-i))
+			namedLines = append(namedLines, fmt.Sprintf("and %d more", len(facts.footprint.files)-i))
 			break
 		}
 		line := "`" + f.path + "`"
 		if f.state != "" {
 			line += " " + f.state
 		}
-		fileLines = append(fileLines, line)
+		if f.edited {
+			editedLines = append(editedLines, line)
+		} else {
+			namedLines = append(namedLines, line)
+		}
 	}
-	filesLead := "Files the task's documents name:"
-	if facts.footprint.fromEdits {
-		filesLead = "Files edited by the sessions that wrote this task's documents. A session that also worked other tasks brings their files too; leave those out:"
-	}
+	edited := closeList{"Files edited by the sessions that wrote this task's documents. A session that also worked other tasks brings their files too; leave those out:", editedLines}
+	named := closeList{"Files the task's documents name:", namedLines}
 	var chapterLines []string
 	for _, c := range relatedChapters(root, facts.footprint.paths()) {
 		chapterLines = append(chapterLines, c.String())
 	}
 	docs := readText(filepath.Join(dir, "prd.md")) + "\n" + readText(filepath.Join(dir, "recon.md")) + "\n" + readText(filepath.Join(dir, "notes.md"))
 	questions := closeList{"Lines that may hold an unsettled question; settle each, or leave it when it is not one:", matchingLines(docs, questionLine)}
-	files := closeList{filesLead, fileLines}
 	chapters := closeList{"Chapters that name these files. Check each against the code and correct a now-false fact in place:", chapterLines}
 	stale := closeStep{"sweep.md", []closeList{
 		{"Other active tasks that mention this one or that it names. Timing only suggests how they relate: judge it, name a likely parent or child in the report, and repoint each link to the archived path:", relatedLines},
@@ -115,7 +116,7 @@ func taskClose(env Env, args []string) (string, error) {
 
 	var steps []closeStep
 	if full {
-		steps = append(steps, closeStep{doneFile, []closeList{questions}}, closeStep{"full-git.md", []closeList{files}})
+		steps = append(steps, closeStep{doneFile, []closeList{questions}}, closeStep{"full-git.md", []closeList{edited, named}})
 		steps = append(steps,
 			closeStep{"full-scope.md", []closeList{{"Written in the PRD:", matchingLines(readText(filepath.Join(dir, "prd.md")), scopeLine)}}},
 			closeStep{file: "full-docs.md"},
@@ -127,7 +128,7 @@ func taskClose(env Env, args []string) (string, error) {
 		}
 		steps = append(steps, stale, closeStep{file: "full-report.md"})
 	} else {
-		steps = []closeStep{{doneFile, []closeList{files, questions}}, {file: "light-log.md"}, books, {file: "archive.md"}, stale, {file: "light-report.md"}}
+		steps = []closeStep{{doneFile, []closeList{edited, named, questions}}, {file: "light-log.md"}, books, {file: "archive.md"}, stale, {file: "light-report.md"}}
 	}
 
 	signature := closeSignature(full, steps)
