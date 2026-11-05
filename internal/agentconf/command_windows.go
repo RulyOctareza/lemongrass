@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-const windowsSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-+@:,="
+// ~ is safe inside a Windows path, where it only appears in 8.3 short names such as RUNNER~1, never at the start.
+const windowsSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-+@:,=~"
 
 // quoteCommandPath writes the path with forward slashes, since Claude Code runs hook commands through Git Bash, where
 // an unquoted backslash is lost, or through cmd.exe, which reads both. A path with only safe characters stays

@@ -234,11 +234,11 @@ func TestWatcherHealsDriftWithoutAnyOtherProcess(t *testing.T) {
 
 	healthy := func() bool {
 		data, err := os.ReadFile(k.claudeSettingsPath())
-		return err == nil && strings.Contains(string(data), lgrass+" hook PreToolUse") && !strings.Contains(string(data), "Write|Edit")
+		return err == nil && strings.Contains(string(data), inFile(hookCmd(lgrass, "PreToolUse"))) && !strings.Contains(string(data), "Write|Edit")
 	}
 	w.waitFor(t, "initial registration", healthy)
 
-	drifted := `{"hooks":{"PreToolUse":[{"matcher":"Write|Edit","hooks":[{"type":"command","command":"` + lgrass + ` hook PreToolUse"}]}]}}`
+	drifted := `{"hooks":{"PreToolUse":[{"matcher":"Write|Edit","hooks":[{"type":"command","command":"` + inFile(lgrass+" hook PreToolUse") + `"}]}]}}`
 	if err := agentconf.WriteAtomic(k.claudeSettingsPath(), []byte(drifted), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestWatcherHealsDriftWithoutAnyOtherProcess(t *testing.T) {
 	})
 	w.waitFor(t, "Codex hooks registered", func() bool {
 		data, err := os.ReadFile(k.codexHooksPath())
-		return err == nil && strings.Contains(string(data), lgrass+" hook PreToolUse --vendor codex")
+		return err == nil && strings.Contains(string(data), inFile(hookCmd(lgrass, "PreToolUse", "--vendor", "codex")))
 	})
 }
 
@@ -271,11 +271,11 @@ func TestWatcherRegistersHooksWhenLgrassAppears(t *testing.T) {
 	}
 	w.waitFor(t, "hooks registered after binary appeared", func() bool {
 		data, err := os.ReadFile(k.claudeSettingsPath())
-		return err == nil && strings.Contains(string(data), lgrass+" hook SessionStart")
+		return err == nil && strings.Contains(string(data), inFile(hookCmd(lgrass, "SessionStart")))
 	})
 	w.waitFor(t, "Codex hooks registered after binary appeared", func() bool {
 		data, err := os.ReadFile(k.codexHooksPath())
-		return err == nil && strings.Contains(string(data), lgrass+" hook SessionStart --vendor codex")
+		return err == nil && strings.Contains(string(data), inFile(hookCmd(lgrass, "SessionStart", "--vendor", "codex")))
 	})
 }
 
@@ -297,7 +297,7 @@ func TestStatusLineChainedForPrimaryAndAccounts(t *testing.T) {
 		{accounts.SettingsPath("work"), "work"},
 	} {
 		data, _ := os.ReadFile(c.path)
-		if !strings.Contains(string(data), agentconf.StatusLineCommand(lgrass, c.account)) {
+		if !strings.Contains(string(data), inFile(agentconf.StatusLineCommand(lgrass, c.account))) {
 			t.Errorf("%s: statusline not chained: %s", c.account, data)
 		}
 	}
@@ -316,7 +316,7 @@ func TestStatusLineOffSwitchRestoresAndOnRetakes(t *testing.T) {
 	if err := k.reconcile(); err != nil {
 		t.Fatal(err)
 	}
-	ours := agentconf.StatusLineCommand(lgrass, "primary")
+	ours := inFile(agentconf.StatusLineCommand(lgrass, "primary"))
 
 	off := agentconf.StatusLineOffPath(k.home)
 	os.WriteFile(off, nil, 0o600)

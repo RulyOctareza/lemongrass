@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -28,26 +29,34 @@ func TestTrustCommandTargets(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(codex), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	has := func(path, text string) bool {
+	// A rooted path without a drive is not absolute on Windows, which trust refuses.
+	abs := func(p string) string {
+		if runtime.GOOS == "windows" {
+			return filepath.FromSlash("C:" + p)
+		}
+		return p
+	}
+	// Both .claude.json and config.toml escape a backslash in the path as two.
+	has := func(path, project string) bool {
 		data, _ := os.ReadFile(path)
-		return strings.Contains(string(data), text)
+		return strings.Contains(string(data), strings.ReplaceAll(project, `\`, `\\`))
 	}
 
-	if err := runTrust(accounts, codex, []string{"/p/one", "--target", "work"}); err != nil {
+	if err := runTrust(accounts, codex, []string{abs("/p/one"), "--target", "work"}); err != nil {
 		t.Fatal(err)
 	}
-	if !has(accounts.ClaudeJSONPath("work"), "/p/one") || has(accounts.ClaudeJSONPath(""), "/p/one") || has(codex, "/p/one") {
+	if !has(accounts.ClaudeJSONPath("work"), abs("/p/one")) || has(accounts.ClaudeJSONPath(""), abs("/p/one")) || has(codex, abs("/p/one")) {
 		t.Error("a single target must write only that target")
 	}
-	if err := runTrust(accounts, codex, []string{"/p/two"}); err != nil {
+	if err := runTrust(accounts, codex, []string{abs("/p/two")}); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{accounts.ClaudeJSONPath(""), accounts.ClaudeJSONPath("work"), codex} {
-		if !has(path, "/p/two") {
+		if !has(path, abs("/p/two")) {
 			t.Errorf("%s not trusted by the all-target call", path)
 		}
 	}
-	if err := runTrust(accounts, codex, []string{"/p/one", "--target", "ghost"}); err == nil {
+	if err := runTrust(accounts, codex, []string{abs("/p/one"), "--target", "ghost"}); err == nil {
 		t.Error("an unknown account must be refused")
 	}
 	for _, args := range [][]string{{"relative"}, {}, {"/p", "--target"}} {

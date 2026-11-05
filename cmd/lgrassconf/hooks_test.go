@@ -7,9 +7,22 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/faizalv/lemongrass/internal/agentconf"
 )
 
 const testLgrass = "/home/u/.lemongrass/bin/lgrassd"
+
+// hookCmd is the command the keeper registers for event, quoted the way this OS needs.
+func hookCmd(lgrassd, event string, extra ...string) string {
+	return agentconf.HookCommand(lgrassd, append([]string{"hook", event}, extra...)...)
+}
+
+// inFile is how s appears inside a JSON settings file, where quotes and backslashes are escaped.
+func inFile(s string) string {
+	encoded, _ := json.Marshal(s)
+	return string(encoded[1 : len(encoded)-1])
+}
 
 func groupsFor(t *testing.T, data []byte, event string) []map[string]any {
 	t.Helper()
