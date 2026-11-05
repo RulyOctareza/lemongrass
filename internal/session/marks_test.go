@@ -104,7 +104,10 @@ func TestMigrationAddsMemberColumnsToAnOlderTable(t *testing.T) {
 	if err != nil || len(members) != 1 || members[0].Prompt != "" || len(members[0].Skills) != 0 {
 		t.Errorf("members after migration = %+v, %v, want the old row with empty new columns", members, err)
 	}
-	if _, err := Open(dbPath, testProjectID); err != nil {
-		t.Errorf("a second open after migrating failed: %v", err)
+	again, err := Open(dbPath, testProjectID)
+	if err != nil {
+		t.Fatalf("a second open after migrating failed: %v", err)
 	}
+	// Windows cannot delete the temp home while the database is still open.
+	again.Close()
 }
