@@ -162,3 +162,29 @@ func TestTouchesClaudeMemoryThroughSymlinkedHome(t *testing.T) {
 		t.Errorf("a shell write from the resolved memory dir %s was not caught", realMem)
 	}
 }
+
+func TestClaudeMemoryDirReplacesSlashesWithDashes(t *testing.T) {
+	t.Setenv("HOME", "/home/faizal")
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	got, err := claudeMemoryDir("/mnt/data/Projects/lemongrass")
+	if err != nil {
+		t.Fatalf("claudeMemoryDir: %v", err)
+	}
+	want := "/home/faizal/.claude/projects/-mnt-data-Projects-lemongrass/memory/"
+	if got != want {
+		t.Errorf("claudeMemoryDir() = %q, want %q", got, want)
+	}
+}
+
+func TestClaudeMemoryDirFollowsTheConfigDirOfAnAccount(t *testing.T) {
+	t.Setenv("HOME", "/home/faizal")
+	t.Setenv("CLAUDE_CONFIG_DIR", "/home/faizal/.claude-work")
+	got, err := claudeMemoryDir("/mnt/data/Projects/lemongrass")
+	if err != nil {
+		t.Fatalf("claudeMemoryDir: %v", err)
+	}
+	want := "/home/faizal/.claude-work/projects/-mnt-data-Projects-lemongrass/memory/"
+	if got != want {
+		t.Errorf("claudeMemoryDir() = %q, want %q", got, want)
+	}
+}

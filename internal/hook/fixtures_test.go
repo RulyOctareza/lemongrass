@@ -7,12 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 func memoryGateFixture(t *testing.T) (home, projectPath string) {
 	t.Helper()
-	home = t.TempDir()
-	t.Setenv("HOME", home)
+	home = testenv.Home(t)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	projectPath = t.TempDir()
 	if err := os.MkdirAll(filepath.Join(projectPath, "biblio"), 0o755); err != nil {

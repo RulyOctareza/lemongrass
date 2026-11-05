@@ -92,6 +92,7 @@ func TestWindowsCommandName(t *testing.T) {
 		"Remove-Item":                         "remove-item",
 		".exe":                                ".exe",
 		"rm.exe.":                             "rm",
+		".":                                   ".",
 		`C:\tools\script.sh`:                  "script.sh",
 	}
 	for in, want := range cases {

@@ -12,6 +12,7 @@ import (
 	"github.com/faizalv/lemongrass/internal/guard"
 	"github.com/faizalv/lemongrass/internal/ipc"
 	"github.com/faizalv/lemongrass/internal/project"
+	"github.com/faizalv/lemongrass/internal/testenv"
 	"github.com/faizalv/lemongrass/internal/vault"
 )
 
@@ -53,7 +54,7 @@ func TestHookPolicyReadsTheVaultsPolicy(t *testing.T) {
 }
 
 func TestHookPolicyCombinesGlobalWithTheLaunchProject(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	root := t.TempDir()
 	proj, err := project.Register(root)
 	if err != nil {

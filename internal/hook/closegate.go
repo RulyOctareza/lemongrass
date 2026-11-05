@@ -59,14 +59,15 @@ func archivedTaskSlugs(command string) []string {
 		var paths []string
 		for _, f := range fields[1:] {
 			if !strings.HasPrefix(f, "-") {
-				paths = append(paths, strings.Trim(f, `"'`))
+				// filepath.ToSlash turns a Windows separator into / and leaves every other OS alone, so the checks below read one spelling.
+				paths = append(paths, filepath.ToSlash(strings.Trim(f, `"'`)))
 			}
 		}
 		if len(paths) < 2 || !isScratchpadArchive(paths[len(paths)-1]) {
 			continue
 		}
 		for _, src := range paths[:len(paths)-1] {
-			if strings.Contains(src, "scratchpad/") && !strings.Contains(filepath.Clean(src)+"/", "scratchpad/archive/") {
+			if strings.Contains(src, "scratchpad/") && !strings.Contains(filepath.ToSlash(filepath.Clean(src))+"/", "scratchpad/archive/") {
 				slugs = append(slugs, taskSlug(src))
 			}
 		}
@@ -75,7 +76,7 @@ func archivedTaskSlugs(command string) []string {
 }
 
 func isScratchpadArchive(p string) bool {
-	return strings.HasSuffix(filepath.Clean(p), "scratchpad/archive")
+	return strings.HasSuffix(filepath.ToSlash(filepath.Clean(p)), "scratchpad/archive")
 }
 
 func taskSlug(p string) string {

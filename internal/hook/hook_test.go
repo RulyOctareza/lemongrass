@@ -83,37 +83,10 @@ func TestEnterPlanModeAllowedWithoutBibliothek(t *testing.T) {
 	}
 }
 
-func TestClaudeMemoryDirReplacesSlashesWithDashes(t *testing.T) {
-	t.Setenv("HOME", "/home/faizal")
-	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	got, err := claudeMemoryDir("/mnt/data/Projects/lemongrass")
-	if err != nil {
-		t.Fatalf("claudeMemoryDir: %v", err)
-	}
-	want := "/home/faizal/.claude/projects/-mnt-data-Projects-lemongrass/memory/"
-	if got != want {
-		t.Errorf("claudeMemoryDir() = %q, want %q", got, want)
-	}
-}
-
-func TestClaudeMemoryDirFollowsTheConfigDirOfAnAccount(t *testing.T) {
-	t.Setenv("HOME", "/home/faizal")
-	t.Setenv("CLAUDE_CONFIG_DIR", "/home/faizal/.claude-work")
-	got, err := claudeMemoryDir("/mnt/data/Projects/lemongrass")
-	if err != nil {
-		t.Fatalf("claudeMemoryDir: %v", err)
-	}
-	want := "/home/faizal/.claude-work/projects/-mnt-data-Projects-lemongrass/memory/"
-	if got != want {
-		t.Errorf("claudeMemoryDir() = %q, want %q", got, want)
-	}
-}
-
 // The home is under the temp dir, so once the memory gate is signed the temp-write gate still denies the same Write; this test checks only the memory gate. CLAUDE_CONFIG_DIR is cleared so the memory dir does not come from the shell running the tests.
 func TestMemoryFeedbackDenyUntilSigned(t *testing.T) {
 	store := openHookTestStore(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.Home(t)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	projectPath := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(projectPath, "biblio"), 0o755); err != nil {
@@ -129,7 +102,7 @@ func TestMemoryFeedbackDenyUntilSigned(t *testing.T) {
 	payload := hookEvent{
 		SessionID:         "session-a",
 		ToolName:          "Write",
-		ToolInput:         json.RawMessage(`{"file_path":"` + memFile + `"}`),
+		ToolInput:         filePathInput(memFile),
 		EnforceBibliothek: true,
 	}
 	result := hookPreToolUse(store, payload, projectPath)
@@ -155,7 +128,7 @@ func TestMemoryFeedbackDenyUntilSigned(t *testing.T) {
 
 func TestMemoryFeedbackDenyIgnoresNonMemoryPaths(t *testing.T) {
 	store := openHookTestStore(t)
-	t.Setenv("HOME", t.TempDir())
+	testenv.Home(t)
 	projectPath := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(projectPath, "biblio"), 0o755); err != nil {
 		t.Fatal(err)
@@ -164,7 +137,7 @@ func TestMemoryFeedbackDenyIgnoresNonMemoryPaths(t *testing.T) {
 	payload := hookEvent{
 		SessionID:         "session-a",
 		ToolName:          "Write",
-		ToolInput:         json.RawMessage(`{"file_path":"` + filepath.Join(projectPath, "main.go") + `"}`),
+		ToolInput:         filePathInput(filepath.Join(projectPath, "main.go")),
 		EnforceBibliothek: true,
 	}
 	result := hookPreToolUse(store, payload, projectPath)
@@ -175,8 +148,7 @@ func TestMemoryFeedbackDenyIgnoresNonMemoryPaths(t *testing.T) {
 
 func TestMemoryFeedbackDenyRequiresBiblio(t *testing.T) {
 	store := openHookTestStore(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.Home(t)
 	projectPath := t.TempDir()
 
 	memDir, err := claudeMemoryDir(projectPath)
@@ -188,7 +160,7 @@ func TestMemoryFeedbackDenyRequiresBiblio(t *testing.T) {
 	payload := hookEvent{
 		SessionID:         "session-a",
 		ToolName:          "Write",
-		ToolInput:         json.RawMessage(`{"file_path":"` + memFile + `"}`),
+		ToolInput:         filePathInput(memFile),
 		EnforceBibliothek: true,
 	}
 	result := hookPreToolUse(store, payload, projectPath)
@@ -256,4 +228,10 @@ func TestSessionStartSkipsLawsAlreadyInThePrompt(t *testing.T) {
 			t.Errorf("source %s: laws delivered = %v, want %v", source, got, want)
 		}
 	}
+}
+
+// filePathInput is a file tool's input; built with json.Marshal so a Windows path's backslashes are escaped.
+func filePathInput(path string) json.RawMessage {
+	data, _ := json.Marshal(map[string]string{"file_path": path})
+	return data
 }

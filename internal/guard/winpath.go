@@ -184,7 +184,10 @@ func windowsCommandName(name string) string {
 	if i := strings.LastIndexByte(name, '/'); i >= 0 && i < len(name)-1 {
 		name = name[i+1:]
 	}
-	name = strings.TrimRight(strings.ToLower(name), ". ")
+	name = strings.ToLower(name)
+	if trimmed := strings.TrimRight(name, ". "); trimmed != "" {
+		name = trimmed
+	}
 	for _, ext := range []string{".exe", ".com", ".cmd", ".bat"} {
 		if strings.HasSuffix(name, ext) && len(name) > len(ext) {
 			return strings.TrimSuffix(name, ext)
