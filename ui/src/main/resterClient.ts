@@ -4,7 +4,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { createWriteStream, unlinkSync } from 'fs'
 import type { WriteStream } from 'fs'
-import * as net from 'net'
 import { homedir } from 'os'
 import { join } from 'path'
 import type {
@@ -23,7 +22,8 @@ import {
   loadRequests,
   saveRequests
 } from './resterClientStore'
-import { vaultCall, vaultSocketPath } from './vault'
+import { ipcConnect } from './ipcAddress'
+import { vaultCall } from './vault'
 
 const STORE_DIR = join(homedir(), '.lemongrass', 'rester-client')
 // Where the first build kept one list per project.
@@ -124,14 +124,14 @@ async function humanFlush(rester: string, environment: string, user: string): Pr
 // Streams a 2xx body to a file the human picks once the response has started, so the dialog can
 // offer the server's file name. The socket is paused while the dialog is open; the vault gives up
 // on a write after restergate.RequestTimeout, which bounds how long the dialog can stay open.
-function humanDownload(
+async function humanDownload(
   win: BrowserWindow | null,
   passphrase: string,
   call: ResterClientCall
 ): Promise<ResterClientDownload> {
+  const socket = await ipcConnect('vault')
   return new Promise((resolve, reject) => {
     const start = Date.now()
-    const socket = net.createConnection(vaultSocketPath())
     const decoder = new DownloadDecoder()
     const queued: DownloadEvent[] = []
     let file: WriteStream | null = null
@@ -228,14 +228,12 @@ function humanDownload(
       }
     }
 
-    socket.on('connect', () => {
-      socket.write(
-        JSON.stringify({
-          op: 'human_download',
-          payload: { root_secret: passphrase, call: wireCall(call) }
-        }) + '\n'
-      )
-    })
+    socket.write(
+      JSON.stringify({
+        op: 'human_download',
+        payload: { root_secret: passphrase, call: wireCall(call) }
+      }) + '\n'
+    )
     socket.on('data', (chunk: Buffer) => {
       try {
         for (const event of decoder.push(chunk)) handle(event)

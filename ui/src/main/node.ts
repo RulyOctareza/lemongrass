@@ -12,10 +12,9 @@ import {
   renameSync,
   writeFileSync
 } from 'fs'
-import * as net from 'net'
 import { homedir } from 'os'
 import { join } from 'path'
-import { nodeSocketPath } from './daemons'
+import { ipcConnect } from './ipcAddress'
 import type {
   NodeDoc,
   NodeGrantView,
@@ -127,14 +126,14 @@ interface DaemonStatus {
 }
 
 // One op per connection, answered once, the same shape as internal/nodesvc.
-function callDaemon(op: 'reload' | 'status'): Promise<DaemonStatus> {
+async function callDaemon(op: 'reload' | 'status'): Promise<DaemonStatus> {
+  const socket = await ipcConnect('node')
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection(nodeSocketPath())
     const chunks: Buffer[] = []
     socket.setTimeout(40_000, () =>
       socket.destroy(new Error('node: the node daemon did not answer'))
     )
-    socket.on('connect', () => socket.end(JSON.stringify({ op }) + '\n'))
+    socket.end(JSON.stringify({ op }) + '\n')
     socket.on('data', (chunk) => chunks.push(chunk))
     socket.on('error', reject)
     socket.on('close', () => {

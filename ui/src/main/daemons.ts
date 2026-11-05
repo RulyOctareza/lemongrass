@@ -3,36 +3,31 @@
 
 import { spawn, ChildProcess } from 'child_process'
 import { mkdirSync, openSync } from 'fs'
-import * as net from 'net'
 import { homedir } from 'os'
 import { join } from 'path'
+import { ipcConnect } from './ipcAddress'
 
-function vaultSocketPath(): string {
-  return join(homedir(), '.lemongrass', 'vault.sock')
-}
-
-function agentSocketPath(): string {
-  return join(homedir(), '.lemongrass', 'agent.sock')
-}
-
-export function nodeSocketPath(): string {
-  return join(homedir(), '.lemongrass', 'node.sock')
-}
-
-// True if something is already listening on sockPath -- a daemon started
-// manually, or left running by a previous launch. A short timeout stands in
-// for the ENOENT/ECONNREFUSED case (nothing there yet).
-function probe(sockPath: string): Promise<boolean> {
+// True if our daemon already listens under name -- one started manually, or
+// left running by a previous launch. A short timeout stands in for the
+// ENOENT/ECONNREFUSED case (nothing there yet). On Windows a pipe that does
+// not greet with our token is not ours: the daemon spawned next fails to take
+// the name and logs it.
+function probe(name: 'vault' | 'agent' | 'node'): Promise<boolean> {
   return new Promise((resolve) => {
-    const socket = net.createConnection(sockPath)
-    const finish = (ok: boolean): void => {
-      socket.removeAllListeners()
-      socket.destroy()
-      resolve(ok)
-    }
-    socket.setTimeout(300, () => finish(false))
-    socket.once('connect', () => finish(true))
-    socket.once('error', () => finish(false))
+    const timer = setTimeout(() => resolve(false), 300)
+    ipcConnect(name).then(
+      (socket) => {
+        clearTimeout(timer)
+        socket.destroy()
+        resolve(true)
+      },
+      (err) => {
+        clearTimeout(timer)
+        if ((err as NodeJS.ErrnoException)?.code === 'EIPCPEER')
+          console.error(`lgrassd ${name}:`, err)
+        resolve(false)
+      }
+    )
   })
 }
 
@@ -42,7 +37,10 @@ function spawnDaemon(lgrassdPath: string, subcommand: 'vault' | 'agent' | 'node'
   const logDir = join(homedir(), '.lemongrass', 'logs')
   mkdirSync(logDir, { recursive: true })
   const logFd = openSync(join(logDir, `${subcommand}.log`), 'a')
-  const proc = spawn(lgrassdPath, [subcommand, 'run'], { stdio: ['ignore', logFd, logFd] })
+  const proc = spawn(lgrassdPath, [subcommand, 'run'], {
+    stdio: ['ignore', logFd, logFd],
+    windowsHide: true
+  })
   proc.on('error', (err) => {
     console.error(`lgrassd ${subcommand}: failed to start:`, err)
   })
@@ -55,9 +53,9 @@ function spawnDaemon(lgrassdPath: string, subcommand: 'vault' | 'agent' | 'node'
 // just leaves the sockets missing, which the vault IPC calls already
 // surface as their own error.
 export async function ensureDaemonsRunning(lgrassdPath: string): Promise<void> {
-  if (!(await probe(vaultSocketPath()))) spawnDaemon(lgrassdPath, 'vault')
-  if (!(await probe(agentSocketPath()))) spawnDaemon(lgrassdPath, 'agent')
-  if (!(await probe(nodeSocketPath()))) spawnDaemon(lgrassdPath, 'node')
+  if (!(await probe('vault'))) spawnDaemon(lgrassdPath, 'vault')
+  if (!(await probe('agent'))) spawnDaemon(lgrassdPath, 'agent')
+  if (!(await probe('node'))) spawnDaemon(lgrassdPath, 'node')
 }
 
 // Kills only the daemons this session itself spawned -- one that was

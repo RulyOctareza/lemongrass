@@ -9,6 +9,7 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 import type { WorkgroupSpawnMember, WorkgroupSpawnResult } from '../preload/types'
 import { handleAskHint, startAsks, stopAsks } from './asks'
+import { ipcAddress } from './ipcAddress'
 import { handleConflictOp, isConflictOp, type ConflictOpRequest } from './conflictAgent'
 import { handleNudge } from './tabNudge'
 import { handleWebOp, registerWebHandlers } from './web'
@@ -120,10 +121,6 @@ function handleClaim(token: string): Reply {
 }
 const spawnWaiters = new Map<string, (result: WorkgroupSpawnResult) => void>()
 let dialogQueue: Promise<unknown> = Promise.resolve()
-
-export function workgroupSocketPath(): string {
-  return join(homedir(), '.lemongrass', 'app.sock')
-}
 
 function validate(p: Proposal): string | null {
   if (typeof p.project_path !== 'string' || !p.project_path) return 'no project path'
@@ -343,6 +340,8 @@ async function handleSpawn(
   return result.ok ? { ok: true } : { ok: false, error: result.error ?? 'the spawn failed' }
 }
 
+// Never writes before a whole request line has arrived. On Windows Node's pipe keeps the default DACL, which lets other
+// users open it read-only, and such a client cannot send a request, so it receives nothing.
 function serveConnection(conn: net.Socket, getWindow: () => BrowserWindow | undefined): void {
   let buffer = ''
   const gone = new AbortController()
@@ -415,23 +414,32 @@ export function startWorkgroupBridge(
     }
   )
 
-  const path = workgroupSocketPath()
   mkdirSync(join(homedir(), '.lemongrass'), { recursive: true, mode: 0o700 })
-  rmSync(path, { force: true })
-  server = net.createServer((conn) => serveConnection(conn, getWindow))
-  server.on('error', (err) => console.error('workgroup bridge:', err))
-  server.listen(path, () => {
-    try {
-      chmodSync(path, 0o600)
-    } catch (err) {
-      console.error('workgroup bridge: chmod failed:', err)
-    }
-  })
+  const listening = net.createServer((conn) => serveConnection(conn, getWindow))
+  server = listening
+  listening.on('error', (err) => console.error('workgroup bridge:', err))
+  void ipcAddress('app').then(
+    (address) => {
+      if (server !== listening) return
+      // A Windows pipe vanishes with its process, so only a unix socket file can be stale.
+      if (process.platform !== 'win32') rmSync(address, { force: true })
+      listening.listen(address, () => {
+        if (process.platform === 'win32') return
+        try {
+          chmodSync(address, 0o600)
+        } catch (err) {
+          console.error('workgroup bridge: chmod failed:', err)
+        }
+      })
+    },
+    (err) => console.error('workgroup bridge:', err)
+  )
 }
 
 export function stopWorkgroupBridge(): void {
   stopAsks()
   server?.close()
   server = undefined
-  rmSync(workgroupSocketPath(), { force: true })
+  if (process.platform !== 'win32')
+    void ipcAddress('app').then((address) => rmSync(address, { force: true }))
 }

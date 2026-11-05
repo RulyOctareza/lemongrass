@@ -2,18 +2,8 @@
 // Copyright (C) 2026 The Lemongrass Authors
 
 import { ipcMain } from 'electron'
-import * as net from 'net'
-import { homedir } from 'os'
-import { join } from 'path'
+import { ipcConnect } from './ipcAddress'
 import { listSSHHosts, resolveSSHHost } from './sshHosts'
-
-export function vaultSocketPath(): string {
-  return join(homedir(), '.lemongrass', 'vault.sock')
-}
-
-function agentSocketPath(): string {
-  return join(homedir(), '.lemongrass', 'agent.sock')
-}
 
 interface RPCResponse<T> {
   ok: boolean
@@ -23,13 +13,11 @@ interface RPCResponse<T> {
 
 // One request per connection, mirroring the Go side (gatekeeper/ipc.go, agent/ipc.go): write one
 // JSON line, then read until the peer closes -- both daemons answer exactly once per connection.
-function connectOnce<T>(socketPath: string, op: string, payload?: unknown): Promise<T> {
+async function connectOnce<T>(name: 'vault' | 'agent', op: string, payload?: unknown): Promise<T> {
+  const socket = await ipcConnect(name)
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection(socketPath)
     const chunks: Buffer[] = []
-    socket.on('connect', () => {
-      socket.end(JSON.stringify({ op, payload }) + '\n')
-    })
+    socket.end(JSON.stringify({ op, payload }) + '\n')
     socket.on('data', (chunk) => chunks.push(chunk))
     socket.on('error', reject)
     socket.on('close', () => {
@@ -65,28 +53,28 @@ function sleep(ms: number): Promise<void> {
 // or two yet. Any other failure, including an op-level error the daemon itself returned,
 // surfaces immediately rather than retrying.
 async function call<T>(
-  socketPath: string,
+  name: 'vault' | 'agent',
   op: string,
   payload?: unknown,
   deadline = Date.now() + 2000
 ): Promise<T> {
   try {
-    return await connectOnce<T>(socketPath, op, payload)
+    return await connectOnce<T>(name, op, payload)
   } catch (err) {
     if (!isConnectionRace(err) || Date.now() >= deadline) throw err
     await sleep(100)
-    return call<T>(socketPath, op, payload, deadline)
+    return call<T>(name, op, payload, deadline)
   }
 }
 
 // Exported because the web engine reads a channel's login fields through web_login_fields; the
 // reply must never be forwarded to a model.
 export function vaultCall<T>(op: string, payload?: unknown): Promise<T> {
-  return call<T>(vaultSocketPath(), op, payload)
+  return call<T>('vault', op, payload)
 }
 
 function agentCall<T>(op: string, payload?: unknown): Promise<T> {
-  return call<T>(agentSocketPath(), op, payload)
+  return call<T>('agent', op, payload)
 }
 
 export interface Scope {

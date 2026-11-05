@@ -4,7 +4,7 @@
 import { ipcMain, WebContents } from 'electron'
 import * as net from 'net'
 import type { AskTermAttach } from '../preload/types'
-import { vaultSocketPath } from './vault'
+import { ipcConnect } from './ipcAddress'
 
 // A command ask's terminal lives in the vault daemon (gatekeeper/askattach.go). attach_ask keeps
 // its connection open, unlike every other vault op: the first JSON line is the reply with the
@@ -34,9 +34,9 @@ function writeFrame(socket: net.Socket, frame: object): void {
   if (!socket.destroyed) socket.write(JSON.stringify(frame) + '\n')
 }
 
-function attach(sender: WebContents, passphrase: string, id: string): Promise<AskTermAttach> {
+async function attach(sender: WebContents, passphrase: string, id: string): Promise<AskTermAttach> {
+  const socket = await ipcConnect('vault')
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection(vaultSocketPath())
     const attachId = nextId++
     let buffered = ''
     let replied = false
@@ -78,11 +78,9 @@ function attach(sender: WebContents, passphrase: string, id: string): Promise<As
     sender.once('destroyed', onDestroyed)
 
     socket.setEncoding('utf-8')
-    socket.on('connect', () => {
-      socket.write(
-        JSON.stringify({ op: 'attach_ask', payload: { root_secret: passphrase, id } }) + '\n'
-      )
-    })
+    socket.write(
+      JSON.stringify({ op: 'attach_ask', payload: { root_secret: passphrase, id } }) + '\n'
+    )
     socket.on('data', (chunk: string) => {
       buffered += chunk
       let newline = buffered.indexOf('\n')
