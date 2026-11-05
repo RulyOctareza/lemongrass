@@ -954,13 +954,15 @@ export interface UsageReport {
 }
 
 // unsupported: this build cannot update itself (a source build, or not installed from the rpm), and
-// message says why. installing covers the polkit password prompt, which rpm cannot be told apart from.
+// message says why. authorizing waits on the polkit password prompt, and installing starts once it is
+// answered.
 export type UpdatePhase =
   | 'unsupported'
   | 'idle'
   | 'checking'
   | 'downloading'
   | 'verifying'
+  | 'authorizing'
   | 'installing'
   | 'installed'
   | 'failed'

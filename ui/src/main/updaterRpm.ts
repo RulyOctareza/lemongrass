@@ -3,7 +3,7 @@
 
 import { app } from 'electron'
 import { rpmAssetName } from './updateVersion'
-import { run } from './updateRun'
+import { run, runUntilExec } from './updateRun'
 import type { UpdatePlatform } from './updatePlatform'
 
 const RPM = '/usr/bin/rpm'
@@ -19,10 +19,15 @@ async function unsupportedReason(): Promise<string | null> {
   return null
 }
 
-// pkexec shows the desktop's polkit password prompt. It exits 126 when the prompt is dismissed.
-async function install(file: string): Promise<string | null> {
+// pkexec shows the desktop's polkit password prompt and then becomes rpm, which ends the authorizing
+// phase. It exits 126 when the prompt is dismissed.
+async function install(
+  file: string,
+  _version: string,
+  onInstalling: () => void
+): Promise<string | null> {
   try {
-    await run('pkexec', [RPM, '-U', file])
+    await runUntilExec('pkexec', [RPM, '-U', file], onInstalling)
   } catch (err) {
     if ((err as { code?: unknown }).code === 126) {
       throw new Error('updater: the password prompt was dismissed, nothing was installed')

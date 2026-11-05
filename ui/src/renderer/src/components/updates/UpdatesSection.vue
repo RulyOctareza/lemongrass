@@ -5,6 +5,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppButton from '../AppButton.vue'
 import AppConfirmButton from '../AppConfirmButton.vue'
+import AppProgressLine from '../AppProgressLine.vue'
 import type { UpdateState } from '../../../../preload/types'
 
 const state = ref<UpdateState | null>(null)
@@ -22,8 +23,25 @@ const install = (): Promise<void> => window.api.update.install()
 const restart = (): Promise<void> => window.api.update.restart()
 
 const working = computed(() =>
-  ['checking', 'downloading', 'verifying', 'installing'].includes(state.value?.phase ?? '')
+  ['checking', 'downloading', 'verifying', 'authorizing', 'installing'].includes(
+    state.value?.phase ?? ''
+  )
 )
+
+// The download fills the line by its fraction; verifying and installing have no measure and sweep.
+// The password wait shows none, since nothing moves until the prompt is answered.
+const line = computed((): { label: string; value: number | null } | null => {
+  switch (state.value?.phase) {
+    case 'downloading':
+      return { label: 'Downloading the update', value: state.value.progress ?? 0 }
+    case 'verifying':
+      return { label: 'Checking the download', value: null }
+    case 'installing':
+      return { label: 'Installing the update', value: null }
+    default:
+      return null
+  }
+})
 
 const canCheck = computed(
   () => !!state.value && !working.value && !['unsupported', 'installed'].includes(state.value.phase)
@@ -49,10 +67,12 @@ const status = computed((): { text: string; tone: '' | 'muted' | 'saved' | 'erro
       return { text: `Downloading ${s.latest}. ${Math.round((s.progress ?? 0) * 100)}%`, tone: '' }
     case 'verifying':
       return { text: 'Checking the download.', tone: '' }
+    case 'authorizing':
+      return { text: 'Waiting for your password.', tone: '' }
     // The platform's own message wins: on macOS installing only prepares the new app, and the
     // password, when one is needed, is asked on restart.
     case 'installing':
-      return { text: s.message ?? 'Waiting for your password, then installing.', tone: '' }
+      return { text: s.message ?? `Installing ${s.latest}.`, tone: '' }
     case 'installed':
       return {
         text:
@@ -86,6 +106,8 @@ const status = computed((): { text: string; tone: '' | 'muted' | 'saved' | 'erro
       <dt>Last checked</dt>
       <dd>{{ checkedAt }}</dd>
     </dl>
+
+    <AppProgressLine v-if="line" :label="line.label" :value="line.value" />
 
     <div class="settings-footer">
       <span class="settings-footer-status" :class="status.tone">{{ status.text }}</span>

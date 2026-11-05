@@ -55,7 +55,12 @@ async function detach(mount: string): Promise<void> {
 
 // Copies the app out of the verified dmg into the version's download folder. The dmg stays mounted only
 // for the copy.
-async function install(file: string, version: string): Promise<string | null> {
+async function install(
+  file: string,
+  version: string,
+  onInstalling: () => void
+): Promise<string | null> {
+  onInstalling()
   const dir = dirname(file)
   const mount = join(dir, 'mnt')
   const stageDir = join(dir, 'app')

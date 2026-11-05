@@ -2,22 +2,38 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-// An indeterminate progress line for work whose length is unknown, such as a running command. A
-// bright line with a soft glow grows from the left edge until it fills the muted track, then
-// shrinks toward the right edge, pulsing in brightness, so the state reads as alive at a glance.
-// Pure CSS: nothing runs in script while it shows.
-withDefaults(
+import { computed } from 'vue'
+// A progress line. Without a value it is indeterminate, for work whose length is unknown such as a
+// running command: a bright line with a soft glow grows from the left edge until it fills the muted
+// track, then shrinks toward the right edge. With a value from 0 to 1 it fills from the left to that
+// fraction instead. Both pulse in brightness, so the state reads as alive at a glance. Pure CSS:
+// nothing runs in script while it shows.
+const props = withDefaults(
   defineProps<{
     label: string
     tone?: 'jade' | 'amber'
+    value?: number | null
   }>(),
-  { tone: 'jade' }
+  { tone: 'jade', value: null }
+)
+
+const fill = computed(() =>
+  props.value === null ? null : `${(1 - Math.min(Math.max(props.value, 0), 1)) * 100}%`
 )
 </script>
 
 <template>
-  <div class="progress-line" :data-tone="tone" role="progressbar" :aria-label="label">
-    <span class="segment" />
+  <div
+    class="progress-line"
+    :data-tone="tone"
+    role="progressbar"
+    :aria-label="label"
+    :aria-valuemin="fill === null ? undefined : 0"
+    :aria-valuemax="fill === null ? undefined : 100"
+    :aria-valuenow="fill === null ? undefined : Math.round((value ?? 0) * 100)"
+  >
+    <span v-if="fill === null" class="segment" />
+    <span v-else class="segment determinate" :style="{ right: fill }" />
   </div>
 </template>
 
@@ -55,6 +71,12 @@ withDefaults(
     progress-pulse 1.2s ease-in-out infinite alternate;
 }
 
+/* Anchored at the left edge and eased toward each new fraction; only the brightness pulse runs. */
+.segment.determinate {
+  animation: progress-pulse 1.2s ease-in-out infinite alternate;
+  transition: right var(--duration-base) var(--ease-out);
+}
+
 /* Grow from the left edge, then let go of it toward the right; each half eases on its own, so the
    line slows into the full track and out of it instead of turning sharply. */
 @keyframes progress-sweep {
@@ -88,6 +110,10 @@ withDefaults(
   .segment {
     right: 0;
     animation: none;
+  }
+
+  .segment.determinate {
+    transition: none;
   }
 }
 </style>

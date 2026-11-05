@@ -9,7 +9,8 @@ export interface UpdatePlatform {
   // Shown while install runs, null for the view's default.
   installingMessage: string | null
   // Installs the verified file and returns a message for the installed state, null for the default.
-  install(file: string, version: string): Promise<string | null>
+  // onInstalling is called once the install itself runs, after any password prompt.
+  install(file: string, version: string, onInstalling: () => void): Promise<string | null>
   // The rpm is installed once install returns, so its download folder goes. The macOS app is only
   // staged there and is copied into place by restart.
   keepAfterInstall: boolean

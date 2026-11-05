@@ -82,6 +82,7 @@ function busy(): boolean {
     'checking',
     'downloading',
     'verifying',
+    'authorizing',
     'installing',
     'installed'
   ].includes(state.phase)
@@ -219,8 +220,11 @@ async function install(): Promise<void> {
   set({ message: null })
   try {
     const file = await download(rel)
-    set({ phase: 'installing', progress: null, message: platform.installingMessage })
-    const message = await platform.install(file, rel.version)
+    const target = platform
+    set({ phase: 'authorizing', progress: null })
+    const message = await target.install(file, rel.version, () =>
+      set({ phase: 'installing', message: target.installingMessage })
+    )
     if (!platform.keepAfterInstall) {
       rmSync(join(UPDATES_DIR, rel.version), { recursive: true, force: true })
     }
