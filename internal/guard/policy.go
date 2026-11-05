@@ -176,7 +176,12 @@ func (p Policy) Validate() error {
 		if pattern == "" || strings.ContainsRune(pattern, 0) {
 			return fmt.Errorf("%w: %q is not a path", ErrInvalidPolicy, pattern)
 		}
-		if pattern != "~" && !strings.HasPrefix(pattern, "~/") && !filepath.IsAbs(pattern) {
+		// A Windows pattern may be written C:\x, ~\x or %USERPROFILE%\x; it is checked in its normalized spelling and stored as written.
+		spelled, kind := spellPath(pattern, "")
+		if kind != spellingOK {
+			return fmt.Errorf("%w: path %q uses a variable or a form that cannot be resolved", ErrInvalidPolicy, pattern)
+		}
+		if spelled != "~" && !strings.HasPrefix(spelled, "~/") && !filepath.IsAbs(spelled) {
 			return fmt.Errorf("%w: path %q must be absolute or start with ~/", ErrInvalidPolicy, pattern)
 		}
 		if _, err := filepath.Match(pattern, ""); err != nil {
@@ -197,7 +202,8 @@ func (p Policy) blocksBinary(name string) bool {
 
 func (p Policy) blocksPath(resolved, home string) bool {
 	for _, pattern := range p.Paths {
-		pattern = expandHomePattern(pattern, home)
+		spelled, _ := spellPath(pattern, "")
+		pattern = foldText(filepath.FromSlash(expandHomePattern(spelled, home)))
 		for current := resolved; ; {
 			if ok, _ := filepath.Match(pattern, current); ok {
 				return true

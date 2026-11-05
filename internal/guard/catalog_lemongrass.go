@@ -16,6 +16,10 @@ var lemongrassRules = []rule{
 	{ID: "guard-config", Category: catLemongrass, Description: "changing the agent settings, hooks or the lgrass binaries", Mode: ModeDeny, Locked: true},
 	{ID: "dynamic-command", Category: catLemongrass, Description: "the command name is computed at runtime, so it cannot be checked", Mode: ModeDeny, Locked: true},
 	{ID: "unparseable-command", Category: catLemongrass, Description: "the shell command could not be parsed, so it cannot be checked", Mode: ModeDeny, Locked: true},
+	// cmd and PowerShell text is not POSIX shell, so what such a call runs cannot be checked, like a command the parser refuses.
+	{ID: "opaque-shell", Category: catLemongrass, Description: "running cmd, PowerShell or a script host, whose commands cannot be checked", Mode: ModeDeny, Locked: true, Forms: []form{
+		{Tools: []string{"cmd", "powershell", "pwsh", "powershell_ise", "cscript", "wscript", "mshta", "wsl", "rundll32", "regsvr32", "msiexec", "invoke-expression", "iex", "start-process", "invoke-command"}, Match: opaqueShell},
+	}},
 }
 
 var databaseRules = []rule{

@@ -4,7 +4,6 @@
 package guard
 
 import (
-	"path/filepath"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -28,7 +27,7 @@ func stmtCommand(stmt *syntax.Stmt) (string, []string, bool) {
 		text, _ := wordText(word)
 		args = append(args, text)
 	}
-	base := filepath.Base(name)
+	base := commandBase(name)
 	for depth := 0; depth < maxShellDepth; depth++ {
 		wrapper, ok := shellWrappers[base]
 		if !ok {
@@ -38,7 +37,7 @@ func stmtCommand(stmt *syntax.Stmt) (string, []string, bool) {
 		if len(inner) == 0 {
 			return base, args, true
 		}
-		base, args = filepath.Base(inner[0]), inner[1:]
+		base, args = commandBase(inner[0]), inner[1:]
 	}
 	return base, args, true
 }

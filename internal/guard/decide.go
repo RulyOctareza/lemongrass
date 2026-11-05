@@ -53,7 +53,8 @@ func (v Verdict) Message() string {
 
 var secretComponents = map[string]bool{".ssh": true, ".aws": true, ".gnupg": true, ".kube": true, ".lemongrass": true, ".netrc": true}
 
-var guardFragments = []string{".claude/settings", "/.local/bin/lgrass", "/usr/local/bin/lgrass", "lgrassconf.service", ".codex/hooks.json", ".codex/config.toml"}
+// Compared lowercased in slash spelling on Windows, where the keeper is the scheduled task \Lemongrass\lgrassconf and the app installs per user.
+var guardFragments = []string{".claude/settings", "/.local/bin/lgrass", "/usr/local/bin/lgrass", "lgrassconf.service", ".codex/hooks.json", ".codex/config.toml", "/windows/system32/tasks/lemongrass/", "/appdata/local/programs/lemongrass/"}
 
 var accountSettingsPattern = regexp.MustCompile(`\.claude-[a-z0-9-]+/settings`)
 
@@ -63,14 +64,30 @@ var readOnlyCommands = map[string]bool{
 	"which": true, "test": true, "[": true, "echo": true, "printf": true, "du": true, "md5sum": true, "sha256sum": true,
 }
 
-var downloaders = map[string]bool{"curl": true, "wget": true}
+var downloaders = map[string]bool{"curl": true, "wget": true, "iwr": true, "irm": true, "invoke-webrequest": true, "invoke-restmethod": true}
 
 var pipeTargets = map[string]bool{
 	"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "python": true, "python3": true,
 	"perl": true, "ruby": true, "node": true, "php": true, "deno": true, "bun": true, "source": true,
+	"iex": true, "invoke-expression": true, "powershell": true, "pwsh": true, "cmd": true,
 }
 
 var deviceRedirectPrefixes = []string{"/dev/sd", "/dev/nvme", "/dev/hd", "/dev/vd", "/dev/xvd", "/dev/mmcblk", "/dev/disk", "/dev/mapper", "/dev/dm-"}
+
+// windowsRawDevices are the device namespace paths of a disk or volume, such as \\.\PhysicalDrive0 or \\.\C:, read in their folded slash spelling. Git Bash's /dev/sdX names the same disks and is in the prefix lists.
+var windowsRawDevices = regexp.MustCompile(`^//\./(physicaldrive|harddisk|cdrom|tape)|^//\./[a-z]:`)
+
+// rawDeviceTarget reports a path naming a raw disk, by one of prefixes or as a Windows device path.
+func rawDeviceTarget(p string, prefixes []string) bool {
+	spelled, _ := spellPath(p, "")
+	text := filepath.ToSlash(foldText(spelled))
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(p, prefix) || strings.HasPrefix(text, prefix) {
+			return true
+		}
+	}
+	return windowsRawDevices.MatchString(text)
+}
 
 type checker struct {
 	in     Input
@@ -175,10 +192,8 @@ func (c checker) redirectVerdicts(script shellScript) []Verdict {
 			if !redirect.Write {
 				continue
 			}
-			for _, prefix := range deviceRedirectPrefixes {
-				if strings.HasPrefix(candidate, prefix) {
-					found = append(found, ruleVerdict("raw-device-write", "Matched: a redirect to "+candidate+"."))
-				}
+			if rawDeviceTarget(candidate, deviceRedirectPrefixes) {
+				found = append(found, ruleVerdict("raw-device-write", "Matched: a redirect to "+candidate+"."))
 			}
 		}
 	}
@@ -187,7 +202,13 @@ func (c checker) redirectVerdicts(script shellScript) []Verdict {
 
 func (c checker) pathChecks(candidate string, guardApplies bool) []Verdict {
 	var found []Verdict
-	resolved := ResolvePath(candidate, c.in.Cwd, c.home)
+	resolved, kind := resolvePath(candidate, c.in.Cwd, c.home)
+	if kind == spellingUnmappable {
+		found = append(found, ruleVerdict("unparseable-command", "Matched: '"+candidate+"' is a path form the guard cannot reduce to a drive path."))
+	}
+	// The raw text is compared in its normalized spelling too, so a Windows spelling of a secret or guard path is seen before it resolves.
+	spelled, _ := spellPath(candidate, c.in.Cwd)
+	candidate = foldText(spelled)
 	if hasSecretComponent(candidate) || hasSecretComponent(resolved) {
 		found = append(found, secretVerdict())
 	}
@@ -213,7 +234,7 @@ func (c checker) pathCandidates(arg string) []string {
 		if !strings.ContainsAny(candidate, "*?[") {
 			continue
 		}
-		if matches, err := filepath.Glob(ResolvePath(candidate, c.in.Cwd, c.home)); err == nil {
+		if matches, err := globPath(ResolvePath(candidate, c.in.Cwd, c.home)); err == nil {
 			expanded = append(expanded, matches...)
 		}
 	}
@@ -316,6 +337,12 @@ func downloadExecVerdicts(script shellScript) []Verdict {
 	return nil
 }
 
+// OpaqueShellVerdict is the deny for a shell call whose command text is not POSIX shell, such as a PowerShell tool call, which the gate cannot read.
+func OpaqueShellVerdict(detail string) *Verdict {
+	verdict := ruleVerdict("opaque-shell", detail)
+	return &verdict
+}
+
 func secretVerdict() Verdict {
 	return ruleVerdict("secret-path", "")
 }
@@ -332,7 +359,7 @@ func readOnlyCall(call shellCall) bool {
 }
 
 func hasSecretComponent(p string) bool {
-	clean := filepath.ToSlash(p)
+	clean := filepath.ToSlash(foldText(p))
 	if strings.Contains(clean, ".config/gcloud") {
 		return true
 	}
@@ -345,7 +372,7 @@ func hasSecretComponent(p string) bool {
 }
 
 func mentionsGuard(raw, resolved string) bool {
-	for _, text := range []string{filepath.ToSlash(raw), filepath.ToSlash(resolved)} {
+	for _, text := range []string{filepath.ToSlash(foldText(raw)), filepath.ToSlash(foldText(resolved))} {
 		for _, fragment := range guardFragments {
 			if strings.Contains(text, fragment) {
 				return true
@@ -360,9 +387,15 @@ func mentionsGuard(raw, resolved string) bool {
 
 // ResolvePath expands ~ and $HOME, anchors a relative path at cwd, and resolves symlinks in the parent directory, or in the whole path when it is written with a trailing slash.
 func ResolvePath(p, cwd, home string) string {
-	p = strings.TrimSpace(p)
+	resolved, _ := resolvePath(p, cwd, home)
+	return resolved
+}
+
+// resolvePath is ResolvePath that also says whether the written spelling could be normalized; see spellPath.
+func resolvePath(p, cwd, home string) (string, spellingKind) {
+	p, kind := spellPath(strings.TrimSpace(p), cwd)
 	// A trailing slash makes the OS follow the last component when it is a symlink, so rm -r link/ reaches what link points to.
-	follow := strings.HasSuffix(p, "/") && filepath.Clean(p) != "/"
+	follow := strings.HasSuffix(p, "/") && !isRootPath(filepath.Clean(p))
 	switch {
 	case p == "~" || strings.HasPrefix(p, "~/"):
 		p = filepath.Join(home, strings.TrimPrefix(p, "~"))
@@ -376,7 +409,27 @@ func ResolvePath(p, cwd, home string) string {
 	// Symlinks are resolved through the deepest existing ancestor, as ResolveDir resolves the home, so a path into a directory that does not exist yet is spelled the same way as the home it is compared with. Cleaning first drops a trailing slash, which would otherwise make the path its own parent and double its last component.
 	p = filepath.Clean(p)
 	if follow {
-		return resolveFully(p)
+		return resolveFully(p), kind
 	}
-	return filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p))
+	return locate(p), kind
+}
+
+// locate resolves symlinks in p's parent and keeps its last component as written, the location the OS acts on for a path without a trailing slash.
+func locate(p string) string {
+	return foldPath(filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p)))
+}
+
+// writtenAbs reports whether a path is absolute as written, in its normalized spelling.
+func writtenAbs(p string) bool {
+	spelled, _ := spellPath(p, "")
+	return filepath.IsAbs(spelled)
+}
+
+// isRootPath reports the root of the filesystem or of a Windows volume.
+func isRootPath(p string) bool {
+	if p == "/" {
+		return true
+	}
+	volume := filepath.VolumeName(p)
+	return volume != "" && (p == volume+`\` || p == volume+"/")
 }

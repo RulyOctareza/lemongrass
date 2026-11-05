@@ -148,7 +148,8 @@ func shellTouchesClaudeMemory(payload hookEvent, home, projectMemDir string) boo
 	if payload.Cwd != "" && isClaudeMemoryPath(filepath.Join(payload.Cwd, "x"), "", home, projectMemDir) {
 		return true
 	}
-	cmd := strings.ReplaceAll(command, "\\", "")
+	cmd := memoryCommandText(command)
+	projectMemDir = memoryDirText(projectMemDir)
 	if !namesClaudeMemory(cmd, projectMemDir) {
 		return false
 	}
@@ -157,7 +158,7 @@ func shellTouchesClaudeMemory(payload hookEvent, home, projectMemDir string) boo
 
 func namesClaudeMemory(cmd, projectMemDir string) bool {
 	return claudeProjectsInCommand.MatchString(cmd) && strings.Contains(cmd, "memory") ||
-		projectMemDir != "" && strings.Contains(cmd, strings.TrimSuffix(projectMemDir, string(filepath.Separator)))
+		projectMemDir != "" && strings.Contains(cmd, strings.TrimRight(projectMemDir, `/\`))
 }
 
 // memoryOnlyRead reports whether every segment that names a memory directory is a plain read with no write in it, so a cd, loop or variable assignment that carries the path into another segment never passes.
@@ -188,7 +189,7 @@ func isPlainReadSegment(seg string) bool {
 	return false
 }
 
-// claudeMemoryDir mirrors Claude Code's own project-slug algorithm: the resolved absolute project path with every path separator replaced by "-". projectPath must already be symlink-resolved, which project.Resolve guarantees.
+// claudeMemoryDir mirrors Claude Code's own project-slug algorithm: the resolved absolute project path with every path separator and a drive colon replaced by "-", so C:\a\b is C--a-b. projectPath must already be symlink-resolved, which project.Resolve guarantees.
 func claudeMemoryDir(projectPath string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -198,6 +199,6 @@ func claudeMemoryDir(projectPath string) (string, error) {
 	if configDir == "" {
 		configDir = filepath.Join(home, ".claude")
 	}
-	slug := strings.ReplaceAll(projectPath, string(filepath.Separator), "-")
+	slug := strings.NewReplacer(string(filepath.Separator), "-", "/", "-", ":", "-").Replace(projectPath)
 	return filepath.Join(configDir, "projects", slug, "memory") + string(filepath.Separator), nil
 }

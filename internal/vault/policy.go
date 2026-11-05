@@ -8,7 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"github.com/faizalv/lemongrass/internal/atomicfile"
 )
 
 // sealedPolicyEntryName is the policy as it was stored before it moved to policyFileName, read only to migrate it.
@@ -43,35 +44,11 @@ func (s *Service) savePoliciesLocked(file policyFile) error {
 	if err != nil {
 		return fmt.Errorf("vault: encoding policies: %w", err)
 	}
-	if err := writeFileAtomic(s.policyPath, data, 0o600); err != nil {
+	if err := atomicfile.Write(s.policyPath, data, 0o600); err != nil {
 		return fmt.Errorf("vault: writing %s: %w", policyFileName, err)
 	}
 	s.policy = file
 	return nil
-}
-
-func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".policy-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
 }
 
 func (s *Service) checkPolicyWriter(rootSecret string) error {

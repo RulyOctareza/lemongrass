@@ -13,6 +13,13 @@ var deletionRules = []rule{
 	}},
 	{ID: "shred", Category: catDeletion, Description: "overwriting files unrecoverably", Mode: ModeDeny, Forms: []form{{Tools: []string{"shred", "srm", "wipe"}}}},
 	{ID: "unlink", Category: catDeletion, Description: "unlinking a file", Mode: ModeDeny, Forms: []form{{Tools: []string{"unlink"}}}},
+	// cmd's del and rd and PowerShell's Remove-Item reach the gate inside a command it otherwise denies, or as a mangled parse; a recursive or forced one is denied here too, since no deletion scope applies to them.
+	{ID: "windows-delete", Category: catDeletion, Description: "a recursive or forced delete with del, rd or Remove-Item", Mode: ModeDeny, Forms: []form{
+		{Tools: []string{"del", "erase", "rd", "rmdir"}, Match: winOptionForm("s", "q", "f")},
+		{Tools: []string{"remove-item", "ri"}, Match: func(call shellCall, _ matchEnv) (string, bool) {
+			return matched(psParameter(call.Args, "recurse", 1) != "" || psParameter(call.Args, "force", 2) != "")
+		}},
+	}},
 	{ID: "dynamic-target", Category: catDeletion, Description: DynamicTargetDescription, Mode: ModeDeny, Forms: []form{
 		{Match: func(call shellCall, _ matchEnv) (string, bool) { return dynamicTarget(call) }},
 	}},

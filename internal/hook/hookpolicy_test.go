@@ -4,13 +4,13 @@
 package hook
 
 import (
-	"net"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/faizalv/lemongrass/internal/gatekeeper"
 	"github.com/faizalv/lemongrass/internal/guard"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"github.com/faizalv/lemongrass/internal/project"
 	"github.com/faizalv/lemongrass/internal/vault"
 )
@@ -22,7 +22,7 @@ func startVault(t *testing.T) *gatekeeper.Client {
 		t.Fatal(err)
 	}
 	sock := filepath.Join(t.TempDir(), "vault.sock")
-	l, err := net.Listen("unix", sock)
+	l, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
 	}

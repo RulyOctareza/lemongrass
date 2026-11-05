@@ -17,15 +17,33 @@ var systemRules = []rule{
 		}},
 		{Tools: []string{"efibootmgr"}, Flags: []string{"-c", "-b", "-B", "-o", "-n", "-N", "-a", "-A", "-O", "-t", "-T", "--create", "--delete-bootnum", "--bootorder", "--bootnext", "--active", "--inactive", "--timeout"}},
 		{Tools: []string{"bootctl"}, Subs: []string{"install", "update", "remove", "set-default", "set-oneshot", "set-timeout", "random-seed", "unlink", "cleanup"}},
+		{Tools: []string{"diskpart", "mountvol", "bcdboot"}},
+		{Tools: []string{"cipher"}, Match: winOptionForm("w")},
+		{Tools: []string{"vssadmin", "wbadmin"}, Match: firstWordIn("delete", "resize")},
+		{Tools: []string{"bcdedit"}, Match: winOptionForm("set", "delete", "deletevalue", "create", "import", "default", "bootsequence", "displayorder")},
+		{Tools: []string{"clear-disk", "initialize-disk", "remove-partition", "clear-recyclebin"}},
 	}},
-	{ID: "mkfs", Category: catSystem, Description: "creating a filesystem", Mode: ModeDeny, Forms: []form{{ToolPrefixes: []string{"mkfs"}}}},
-	{ID: "privilege", Category: catSystem, Description: "privilege escalation", Mode: ModeDeny, Forms: []form{{Tools: []string{"sudo", "su", "doas", "pkexec", "run0"}}}},
-	{ID: "power", Category: catSystem, Description: "shutting down or rebooting the machine", Mode: ModeDeny, Forms: []form{{Tools: []string{"shutdown", "reboot", "poweroff", "halt", "telinit"}}}},
-	{ID: "firewall", Category: catSystem, Description: "changing the firewall", Mode: ModeDeny, Forms: []form{{Tools: []string{"iptables", "ip6tables", "nft", "ufw", "firewall-cmd"}}}},
-	{ID: "kill-by-name", Category: catSystem, Description: "killing processes by name", Mode: ModeDeny, Forms: []form{{Tools: []string{"pkill", "killall"}}}},
+	{ID: "mkfs", Category: catSystem, Description: "creating a filesystem", Mode: ModeDeny, Forms: []form{{ToolPrefixes: []string{"mkfs"}}, {Tools: []string{"format", "format-volume"}}}},
+	{ID: "privilege", Category: catSystem, Description: "privilege escalation", Mode: ModeDeny, Forms: []form{{Tools: []string{"sudo", "su", "doas", "pkexec", "run0", "runas", "gsudo"}}}},
+	{ID: "power", Category: catSystem, Description: "shutting down or rebooting the machine", Mode: ModeDeny, Forms: []form{{Tools: []string{"shutdown", "reboot", "poweroff", "halt", "telinit", "stop-computer", "restart-computer", "logoff"}}}},
+	{ID: "firewall", Category: catSystem, Description: "changing the firewall", Mode: ModeDeny, Forms: []form{
+		{Tools: []string{"iptables", "ip6tables", "nft", "ufw", "firewall-cmd"}},
+		{Tools: []string{"netsh"}, Match: netshWrite("advfirewall", "firewall")},
+		{Tools: []string{"new-netfirewallrule", "set-netfirewallrule", "remove-netfirewallrule", "set-netfirewallprofile", "disable-netfirewallrule"}},
+	}},
+	{ID: "kill-by-name", Category: catSystem, Description: "killing processes by name", Mode: ModeDeny, Forms: []form{
+		{Tools: []string{"pkill", "killall"}},
+		{Tools: []string{"taskkill"}, Match: winOptionForm("im")},
+		{Tools: []string{"stop-process", "kill"}, Match: func(call shellCall, _ matchEnv) (string, bool) {
+			return matched(psParameter(call.Args, "name", 2) != "" || psParameter(call.Args, "processname", 2) != "")
+		}},
+	}},
 	{ID: "kill-all", Category: catSystem, Description: "killing every process", Mode: ModeDeny, Forms: []form{{Tools: []string{"kill"}, Args: []string{"-1"}}}},
 	{ID: "systemctl-stop", Category: catSystem, Description: "stopping, disabling or masking a service", Mode: ModeDeny, Forms: []form{
 		{Tools: []string{"systemctl"}, Subs: []string{"stop", "disable", "mask", "kill", "poweroff", "reboot", "halt", "suspend", "hibernate", "isolate"}},
+		{Tools: []string{"sc"}, Match: firstWordIn("stop", "delete", "config", "failure", "pause")},
+		{Tools: []string{"net"}, Match: firstWordIn("stop", "pause")},
+		{Tools: []string{"stop-service", "remove-service", "suspend-service", "set-service"}},
 	}},
 	{ID: "recursive-perms", Category: catSystem, Description: "recursive chmod or chown on a broad path", Mode: ModeDeny, Forms: []form{
 		{Tools: []string{"chmod", "chown", "chgrp"}, Flags: []string{"-R", "--recursive"}, Match: func(call shellCall, env matchEnv) (string, bool) {
@@ -38,6 +56,20 @@ var systemRules = []rule{
 		}},
 	}},
 	{ID: "at-jobs", Category: catSystem, Description: "scheduling jobs with at", Mode: ModeDeny, Forms: []form{{Tools: []string{"at", "batch"}}}},
+	// The keeper is itself a scheduled task on Windows, so changing scheduled tasks is denied like the crontab.
+	{ID: "scheduled-task", Category: catSystem, Description: "creating, changing or running a Windows scheduled task", Mode: ModeDeny, Forms: []form{
+		{Tools: []string{"schtasks"}, Match: winOptionForm("create", "delete", "change", "run", "end")},
+		{Tools: []string{"register-scheduledtask", "unregister-scheduledtask", "set-scheduledtask", "start-scheduledtask", "stop-scheduledtask", "disable-scheduledtask"}},
+	}},
+	{ID: "registry-write", Category: catSystem, Description: "changing the Windows registry", Mode: ModeDeny, Forms: []form{
+		{Tools: []string{"reg"}, Match: firstWordIn("add", "delete", "import", "restore", "load", "unload", "copy")},
+		{Tools: []string{"regedit", "regini"}},
+		{Tools: []string{"set-itemproperty", "new-itemproperty", "remove-itemproperty", "rename-itemproperty"}},
+	}},
+	{ID: "security-settings", Category: catSystem, Description: "changing Windows security settings or Defender", Mode: ModeDeny, Forms: []form{
+		{Tools: []string{"set-executionpolicy", "set-mppreference", "add-mppreference", "remove-mppreference", "unblock-file", "takeown"}},
+		{Tools: []string{"icacls"}, Match: winOptionForm("grant", "deny", "setowner", "reset", "remove", "restore", "setintegritylevel")},
+	}},
 	{ID: "raw-device-write", Category: catSystem, Description: "writing to a raw disk device", Mode: ModeDeny},
 
 	{ID: "service-control", Category: catSystem, Description: "starting, restarting, enabling or reconfiguring a service", Mode: ModeAsk, Forms: []form{
@@ -45,6 +77,14 @@ var systemRules = []rule{
 		{Tools: []string{"service"}, Subs: []string{"* start", "* stop", "* restart", "* reload", "* force-reload", "* condrestart", "* try-restart"}},
 		{Tools: []string{"launchctl"}, Subs: []string{"load", "unload", "bootstrap", "bootout", "kickstart", "stop", "start", "enable", "disable", "remove", "submit", "kill"}},
 		{Tools: []string{"systemd-run"}},
+		{Tools: []string{"sc"}, Match: firstWordIn("start", "create", "continue", "sdset", "privs", "sidtype", "triggerinfo")},
+		{Tools: []string{"net"}, Match: func(call shellCall, env matchEnv) (string, bool) {
+			if _, ok := firstWordIn("start", "continue")(call, env); !ok {
+				return "", false
+			}
+			return matched(len(positionals(call)) >= 2)
+		}},
+		{Tools: []string{"start-service", "restart-service", "new-service"}},
 		{Tools: []string{"loginctl"}, Subs: []string{"terminate-session", "terminate-user", "terminate-seat", "kill-session", "kill-user", "enable-linger", "disable-linger", "lock-sessions", "poweroff", "reboot"}},
 	}},
 	{ID: "kernel", Category: catSystem, Description: "loading kernel modules or changing kernel settings", Mode: ModeDeny, Forms: []form{
@@ -63,6 +103,13 @@ var systemRules = []rule{
 		{Tools: []string{"dmesg"}, Flags: []string{"-C", "-c", "--clear", "--read-clear"}},
 	}},
 	{ID: "user-admin", Category: catSystem, Description: "managing users, groups or passwords", Mode: ModeDeny, Forms: []form{
+		{Tools: []string{"net"}, Match: func(call shellCall, env matchEnv) (string, bool) {
+			if _, ok := firstWordIn("user", "localgroup", "group", "accounts")(call, env); !ok {
+				return "", false
+			}
+			return matched(len(positionals(call)) >= 3)
+		}},
+		{Tools: []string{"new-localuser", "remove-localuser", "set-localuser", "add-localgroupmember", "remove-localgroupmember", "enable-localuser"}},
 		{Tools: []string{"useradd", "userdel", "usermod", "adduser", "deluser", "groupadd", "groupdel", "groupmod", "passwd", "chpasswd", "chsh", "chfn", "chage", "visudo", "gpasswd", "newusers", "vipw", "vigr"}},
 	}},
 	{ID: "network-config", Category: catSystem, Description: "changing network, VPN, hostname or clock settings", Mode: ModeDeny, Forms: []form{
@@ -76,9 +123,13 @@ var systemRules = []rule{
 		{Tools: []string{"resolvectl"}, Subs: []string{"dns * *", "domain * *", "default-route * *", "llmnr * *", "mdns * *", "dnssec * *", "dnsovertls * *", "nta * *", "revert", "flush-caches", "reset-statistics", "reset-server-features"}},
 		{Tools: []string{"hostnamectl"}, Subs: []string{"set-hostname", "set-icon-name", "set-chassis", "set-deployment", "set-location", "hostname *", "icon-name *", "chassis *", "deployment *", "location *"}},
 		{Tools: []string{"timedatectl"}, Subs: []string{"set-time", "set-timezone", "set-local-rtc", "set-ntp"}},
+		{Tools: []string{"netsh"}, Match: netshWrite()},
+		{Tools: []string{"set-netipaddress", "new-netipaddress", "remove-netipaddress", "set-dnsclientserveraddress", "new-netroute", "remove-netroute", "disable-netadapter", "enable-netadapter", "rename-computer", "set-date", "set-timezone"}},
 	}},
 	{ID: "log-wipe", Category: catSystem, Description: "deleting or rotating the system journal", Mode: ModeDeny, Forms: []form{
 		{Tools: []string{"journalctl"}, Flags: []string{"--vacuum-size", "--vacuum-time", "--vacuum-files", "--rotate", "--flush", "--relinquish-var"}},
+		{Tools: []string{"wevtutil"}, Match: firstWordIn("cl", "clear-log", "sl", "set-log", "um", "uninstall-manifest")},
+		{Tools: []string{"clear-eventlog", "remove-eventlog", "limit-eventlog"}},
 	}},
 	{ID: "desktop-settings", Category: catSystem, Description: "changing desktop settings or default applications", Mode: ModeAsk, Forms: []form{
 		{Tools: []string{"gsettings"}, Subs: []string{"set", "reset", "reset-recursively"}},
@@ -138,4 +189,27 @@ func ipWrite(call shellCall, _ matchEnv) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+var netshWriteVerbs = map[string]bool{"add": true, "set": true, "delete": true, "del": true, "reset": true, "import": true, "install": true, "uninstall": true, "flush": true, "connect": true, "disconnect": true, "exec": true}
+
+// netshWrite matches a netsh command with a write verb, inside one of contexts when any are given and outside the firewall contexts otherwise, so firewall writes report under firewall.
+func netshWrite(contexts ...string) func(shellCall, matchEnv) (string, bool) {
+	return func(call shellCall, _ matchEnv) (string, bool) {
+		words := positionals(call)
+		if len(words) == 0 {
+			return "", false
+		}
+		context := strings.ToLower(words[0])
+		firewall := context == "advfirewall" || context == "firewall"
+		if len(contexts) > 0 != firewall {
+			return "", false
+		}
+		for _, word := range words[1:] {
+			if netshWriteVerbs[strings.ToLower(word)] {
+				return "Matched: netsh " + words[0] + " " + word + ".", true
+			}
+		}
+		return "", false
+	}
 }

@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 The Lemongrass Authors
 
+// These cases spell paths the Unix way; the Windows spellings are in the _windows_test.go files beside them.
+
+//go:build !windows
+
 package guard
 
 import "testing"
-
-func bashInput(t *testing.T, command string) Input {
-	t.Helper()
-	return Input{Tool: "Bash", Command: command, Cwd: t.TempDir(), Home: t.TempDir()}
-}
 
 func TestDangerDecisionBash(t *testing.T) {
 	cases := []struct {

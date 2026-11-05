@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 The Lemongrass Authors
 
+// These cases spell paths the Unix way; the Windows spellings are in the _windows_test.go files beside them.
+
+//go:build !windows
+
 package guard
 
 import (
@@ -12,13 +16,6 @@ import (
 func decideIn(t *testing.T, root, home, cwd, command string, policy Policy) *Verdict {
 	t.Helper()
 	return Decide(Input{Tool: "Bash", Command: command, Cwd: cwd, Home: home, ProjectRoot: root}, policy)
-}
-
-func ruleOf(verdict *Verdict) string {
-	if verdict == nil {
-		return ""
-	}
-	return verdict.RuleID
 }
 
 func TestInterpreterInlineCode(t *testing.T) {

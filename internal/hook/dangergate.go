@@ -20,12 +20,12 @@ func dangerDecision(payload hookEvent) *guard.Verdict {
 	}
 	launch := launchProject()
 	input := guard.Input{Tool: payload.ToolName, Cwd: payload.Cwd, Home: home, ProjectRoot: launch.Path}
-	if payload.ToolName == "Bash" {
-		var shell shellToolInput
-		if err := json.Unmarshal(payload.ToolInput, &shell); err != nil {
-			return nil
+	if command, verdict, isShell := shellToolCommand(payload); isShell {
+		if verdict != nil {
+			return verdict
 		}
-		input.Command = shell.Command
+		input.Tool = "Bash"
+		input.Command = command
 	} else {
 		input.Paths = dangerToolPaths(payload)
 		input.Writes = isMemoryWriteTool(payload.ToolName)

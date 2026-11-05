@@ -4,7 +4,6 @@
 package guard
 
 import (
-	"path/filepath"
 	"strings"
 )
 
@@ -358,11 +357,11 @@ func (c checker) literalPathReason(value, dir string, known bool) string {
 	if root == "" {
 		return "this session has no launch project, so every deletion needs the user."
 	}
-	if !known && !filepath.IsAbs(value) {
+	if !known && !writtenAbs(value) {
 		return "the working directory is unknown after a cd the guard cannot follow, so the relative path cannot be checked. Write it from the project root."
 	}
 	p := ResolvePath(value, dir, c.home)
-	location := filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p))
+	location := locate(p)
 	for _, candidate := range []string{location, resolveFully(p)} {
 		if reason := c.candidateCheck(value, candidate, dir, []string{dir}, false); reason != "" {
 			return reason

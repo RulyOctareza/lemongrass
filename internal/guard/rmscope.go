@@ -110,14 +110,14 @@ func (c checker) targetsCheck(targets, dirs []string, isFind bool) string {
 		for _, dir := range dirs {
 			resolved := []string{ResolvePath(target, dir, c.home)}
 			if strings.ContainsAny(target, "*?[") {
-				matches, err := filepath.Glob(resolved[0])
+				matches, err := globPath(resolved[0])
 				if err != nil {
 					return "'" + target + "' is not a valid pattern."
 				}
 				resolved = append(resolved, matches...)
 			}
 			for _, p := range resolved {
-				location := filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p))
+				location := locate(p)
 				for _, candidate := range []string{location, resolveFully(p)} {
 					if reason := c.candidateCheck(target, candidate, dir, dirs, isFind); reason != "" {
 						return reason
@@ -206,6 +206,10 @@ func findRoots(args []string) (roots []string, followsLinks bool) {
 }
 
 func literalTarget(target string) bool {
+	if !pathLiteral(target) {
+		return false
+	}
+	target, _ = spellPath(target, "")
 	if strings.HasPrefix(target, "~") && target != "~" && !strings.HasPrefix(target, "~/") {
 		return false
 	}
@@ -237,9 +241,11 @@ func protectedReason(p, root string) string {
 	return ""
 }
 
+// resolveFully resolves p through every symlink, falling back to its deepest existing ancestor. A Windows spelling such as a Git Bash cwd is normalized first; elsewhere spellPath is identity.
 func resolveFully(p string) string {
+	p, _ = spellPath(p, "")
 	if resolved, err := filepath.EvalSymlinks(p); err == nil {
-		return filepath.Clean(resolved)
+		return foldPath(filepath.Clean(resolved))
 	}
 	return resolveExisting(p)
 }
@@ -249,11 +255,11 @@ func resolveExisting(p string) string {
 	dir, rest := filepath.Clean(p), ""
 	for {
 		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-			return filepath.Join(resolved, rest)
+			return foldPath(filepath.Join(resolved, rest))
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return filepath.Clean(p)
+			return foldPath(filepath.Clean(p))
 		}
 		rest = filepath.Join(filepath.Base(dir), rest)
 		dir = parent

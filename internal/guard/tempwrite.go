@@ -5,7 +5,6 @@ package guard
 
 import (
 	"os"
-	"path/filepath"
 )
 
 const claudeTempDirEnv = "CLAUDE_CODE_TMPDIR"
@@ -42,7 +41,7 @@ func TempWrite(in Input, roots []string) string {
 }
 
 func landsInTemp(p string, roots []string, project string) bool {
-	location := filepath.Join(resolveExisting(filepath.Dir(p)), filepath.Base(p))
+	location := locate(p)
 	for _, candidate := range []string{location, resolveFully(p)} {
 		if project != "" && withinOrEqual(candidate, project) {
 			continue

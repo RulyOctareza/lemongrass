@@ -6,7 +6,6 @@ package guard
 import (
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -18,7 +17,7 @@ const maxScriptDepth = 4
 
 // scriptFileVerdicts reads a script file a command runs and judges its text: shell through the full catalog, other languages through the code scan. Every verdict except the locked lemongrass ones is re-labelled script-delete or script-command, so a project can switch script scanning off without touching the rule for the same command typed directly.
 func (c checker) scriptFileVerdicts(script shellScript, program shellProgram, dir string, known bool) []Verdict {
-	if script.Depth >= maxScriptDepth || (!known && !filepath.IsAbs(program.File)) {
+	if script.Depth >= maxScriptDepth || (!known && !writtenAbs(program.File)) {
 		return nil
 	}
 	path := ResolvePath(program.File, dir, c.home)
@@ -131,12 +130,12 @@ func shebangLanguage(text string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	base := filepath.Base(fields[0])
+	base := commandBase(fields[0])
 	if base == "env" {
 		base = ""
 		for _, field := range fields[1:] {
 			if !strings.HasPrefix(field, "-") && !strings.Contains(field, "=") {
-				base = filepath.Base(field)
+				base = commandBase(field)
 				break
 			}
 		}

@@ -3,7 +3,10 @@
 
 package guard
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // toolValueOptions are each tool's global options that take a separate value, so the value is not read as its subcommand. A missing option only makes a subcommand later in the arguments go unseen by Subs.
 var toolValueOptions = map[string]map[string]bool{
@@ -224,6 +227,8 @@ func writePathVerdicts(raw, resolved, home string) []Verdict {
 }
 
 func writePathMatches(pattern, raw, resolved, home string) bool {
+	// The patterns are written with /, so a Windows path is compared in its slash spelling.
+	raw, resolved, home = filepath.ToSlash(raw), filepath.ToSlash(resolved), filepath.ToSlash(home)
 	dir := strings.HasSuffix(pattern, "/")
 	if strings.HasPrefix(pattern, "~/") {
 		if home == "" {

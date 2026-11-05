@@ -5,7 +5,6 @@ package guard
 
 import (
 	"errors"
-	"path/filepath"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -133,7 +132,7 @@ func (s *shellScript) addCallExpr(call *syntax.CallExpr, depth int) error {
 }
 
 func (s *shellScript) addCall(name string, dynamic bool, args []string, argDynamic []bool, indirect bool, depth int) error {
-	base := filepath.Base(name)
+	base := commandBase(name)
 	s.Calls = append(s.Calls, shellCall{Name: base, Path: name, Dynamic: dynamic, Args: args, ArgDynamic: argDynamic, Indirect: indirect})
 	if dynamic {
 		return nil
@@ -171,7 +170,7 @@ func (s *shellScript) addCall(name string, dynamic bool, args []string, argDynam
 		}
 		return nil
 	}
-	if strings.Contains(name, "/") {
+	if namesPath(name) {
 		s.addProgram("", "", name, depth)
 	}
 	return nil
@@ -280,7 +279,7 @@ func pipelineNames(cmd *syntax.BinaryCmd) []string {
 			if dynamic {
 				name = ""
 			}
-			names = append(names, filepath.Base(name))
+			names = append(names, commandBase(name))
 		default:
 			names = append(names, "")
 		}
@@ -354,20 +353,24 @@ func sliceFlags(flags []bool, from, to int) []bool {
 
 func wordText(word *syntax.Word) (string, bool) {
 	var b strings.Builder
-	dynamic := writeWordParts(&b, word.Parts)
+	dynamic := writeWordParts(&b, word.Parts, false)
 	return b.String(), dynamic
 }
 
-func writeWordParts(b *strings.Builder, parts []syntax.WordPart) bool {
+func writeWordParts(b *strings.Builder, parts []syntax.WordPart, quoted bool) bool {
 	dynamic := false
 	for _, part := range parts {
 		switch p := part.(type) {
 		case *syntax.Lit:
-			b.WriteString(unescapeLiteral(p.Value))
+			if quoted {
+				b.WriteString(unescapeDoubleQuoted(p.Value))
+			} else {
+				b.WriteString(unescapeLiteral(p.Value))
+			}
 		case *syntax.SglQuoted:
 			b.WriteString(p.Value)
 		case *syntax.DblQuoted:
-			if writeWordParts(b, p.Parts) {
+			if writeWordParts(b, p.Parts, true) {
 				dynamic = true
 			}
 		case *syntax.ParamExp:

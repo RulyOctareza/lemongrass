@@ -16,6 +16,8 @@ import AppInput from '../AppInput.vue'
 import AppSwitcher from '../AppSwitcher.vue'
 import type { AppInputHandle } from '../appInput'
 import AppEmptyState from '../AppEmptyState.vue'
+import { isWindows } from '../../platform'
+import { policyPathError } from '../../policyPath'
 
 const props = defineProps<{
   projects: Project[]
@@ -285,8 +287,9 @@ function addPath(): void {
   const value = newPath.value.trim()
   pathError.value = ''
   if (!value) return
-  if (value !== '~' && !value.startsWith('~/') && !value.startsWith('/')) {
-    pathError.value = 'Start the path with / or ~/.'
+  const shapeError = policyPathError(value, isWindows)
+  if (shapeError) {
+    pathError.value = shapeError
     return
   }
   if (globalPaths.value.includes(value)) {
@@ -476,7 +479,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, { capture
           <AppInput
             v-model="newPath"
             type="text"
-            placeholder="e.g. ~/private"
+            :placeholder="isWindows ? 'e.g. ~\\private' : 'e.g. ~/private'"
             @keydown.enter="addPath"
           />
           <AppButton :disabled="!newPath.trim()" @click="addPath">Add</AppButton>

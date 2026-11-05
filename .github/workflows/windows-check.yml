@@ -1,0 +1,46 @@
+# Runs the Go vet and tests on a real Windows host. The Windows compile check already runs on Linux in make verify, but
+# path/filepath follows the host OS and Go cannot run Windows tests elsewhere, so path handling such as the danger
+# gate's Windows normalization is only tested here. Runs on pushes to ci/** branches and on Run workflow, never on main
+# or a tag, so a Windows change is tried on a ci/ branch before it merges.
+name: Windows check
+
+on:
+  push:
+    branches: ['ci/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-test:
+    name: go-test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Go sources are LF; without this, autocrlf would hand the embedded bibliothek files to the tests with CRLF.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Go vet on windows
+        run: go vet ./...
+
+      # vet and test are separate steps, so a failing test never hides a vet failure and the reverse.
+      - name: Go tests on windows
+        if: ${{ !cancelled() }}
+        run: go test ./...

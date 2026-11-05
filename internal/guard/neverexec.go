@@ -29,7 +29,15 @@ var resolvedSystemTopDirs = sync.OnceValue(func() map[string]bool {
 })
 
 func isSystemTopDir(p string) bool {
-	return systemTopDirs[p] || resolvedSystemTopDirs()[p]
+	if systemTopDirs[p] || resolvedSystemTopDirs()[p] {
+		return true
+	}
+	for _, dir := range platformSystemDirs() {
+		if p == dir {
+			return true
+		}
+	}
+	return false
 }
 
 var privilegeWrappers = map[string]bool{"sudo": true, "doas": true, "pkexec": true, "run0": true}
@@ -77,10 +85,8 @@ func NeverExecute(command, cwd, home string) (string, bool) {
 			continue
 		}
 		target := ResolvePath(redirect.Path, cwd, n.home)
-		for _, prefix := range neverExecDevicePrefixes {
-			if strings.HasPrefix(target, prefix) {
-				return "it writes to a raw disk device", true
-			}
+		if rawDeviceTarget(redirect.Path, neverExecDevicePrefixes) || rawDeviceTarget(target, neverExecDevicePrefixes) {
+			return "it writes to a raw disk device", true
 		}
 		if n.insideSSH(target) {
 			return "it writes into ~/.ssh", true
@@ -147,7 +153,7 @@ func privilegedCall(args []string) (shellCall, bool) {
 		if strings.Contains(arg, "=") && i == 0 {
 			continue
 		}
-		return shellCall{Name: filepath.Base(arg), Path: arg, Args: args[i+1:]}, true
+		return shellCall{Name: commandBase(arg), Path: arg, Args: args[i+1:]}, true
 	}
 	return shellCall{}, false
 }
@@ -206,7 +212,7 @@ func (n neverExec) recursivePermissions(call shellCall) string {
 
 // protectedTarget says why removing or moving target would be catastrophic: the root, a top-level system directory, the home directory, ~/.ssh, a glob over the root, or, for a recursive call, a path whose location is only known at run time.
 func (n neverExec) protectedTarget(target string, recursive bool) string {
-	if strings.Contains(target, "$") && !strings.HasPrefix(target, "$HOME") && !strings.HasPrefix(target, "${HOME}") {
+	if (strings.Contains(target, "$") && !strings.HasPrefix(target, "$HOME") && !strings.HasPrefix(target, "${HOME}")) || !pathLiteral(target) {
 		if recursive {
 			return "of a path built from a variable or substitution could land anywhere, " + target
 		}
@@ -216,12 +222,12 @@ func (n neverExec) protectedTarget(target string, recursive bool) string {
 		return "targets everything under /"
 	}
 	resolved := ResolvePath(target, n.cwd, n.home)
-	if strings.ContainsAny(target, "*?[") && (resolved == "/" || filepath.Dir(resolved) == "/") {
-		return "targets everything under /"
+	if strings.ContainsAny(target, "*?[") && (isRootPath(resolved) || isRootPath(filepath.Dir(resolved))) {
+		return "targets everything under " + filepath.Dir(resolved)
 	}
 	switch {
-	case resolved == "/":
-		return "targets /"
+	case isRootPath(resolved):
+		return "targets " + resolved
 	case isSystemTopDir(resolved):
 		return "targets the system directory " + resolved
 	case n.isHome(resolved):
@@ -239,7 +245,7 @@ func (n neverExec) insideSSH(resolved string) bool {
 		return false
 	}
 	ssh := filepath.Join(n.home, ".ssh")
-	return resolved == ssh || strings.HasPrefix(resolved, ssh+"/")
+	return resolved == ssh || strings.HasPrefix(resolved, ssh+string(filepath.Separator))
 }
 
 func operands(args []string) []string {
@@ -263,11 +269,8 @@ func ddToDevice(call shellCall) string {
 		if !strings.HasPrefix(arg, "of=") {
 			continue
 		}
-		target := strings.TrimPrefix(arg, "of=")
-		for _, prefix := range neverExecDevicePrefixes {
-			if strings.HasPrefix(target, prefix) {
-				return "dd writes to a raw disk device"
-			}
+		if rawDeviceTarget(strings.TrimPrefix(arg, "of="), neverExecDevicePrefixes) {
+			return "dd writes to a raw disk device"
 		}
 	}
 	return ""

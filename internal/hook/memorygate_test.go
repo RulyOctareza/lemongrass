@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 The Lemongrass Authors
 
+// These cases spell paths the Unix way; the Windows spellings are in the _windows_test.go files beside them.
+
+//go:build !windows
+
 package hook
 
 import (
@@ -9,18 +13,6 @@ import (
 	"path/filepath"
 	"testing"
 )
-
-func memoryGateFixture(t *testing.T) (home, projectPath string) {
-	t.Helper()
-	home = t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	projectPath = t.TempDir()
-	if err := os.MkdirAll(filepath.Join(projectPath, "biblio"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return home, projectPath
-}
 
 func TestTouchesClaudeMemoryAcrossRoutes(t *testing.T) {
 	home, projectPath := memoryGateFixture(t)

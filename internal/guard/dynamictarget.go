@@ -11,7 +11,8 @@ func dynamicTarget(call shellCall) (string, bool) {
 		return "", false
 	}
 	for _, i := range destructiveTargetIndexes(call) {
-		if !dynamicAt(call.ArgDynamic, i) || literalTarget(call.Args[i]) {
+		// A Windows path the gate cannot pin down, such as %VAR% or an unknown short name, counts as dynamic; off Windows pathLiteral is always true.
+		if (!dynamicAt(call.ArgDynamic, i) && pathLiteral(call.Args[i])) || literalTarget(call.Args[i]) {
 			continue
 		}
 		return "'" + call.Args[i] + "' is built from a variable or substitution, so where " + call.Name + " lands is unknown until it runs. Write the path out.", true

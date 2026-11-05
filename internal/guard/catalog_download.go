@@ -147,6 +147,8 @@ var downloadRules = []rule{
 	}},
 	{ID: "file-download", Category: catDownload, Description: "downloading files from the network", Mode: ModeAsk, Forms: []form{
 		{Tools: []string{"curl", "wget", "wget2", "aria2c", "axel", "http", "https", "xh", "xhs", "httpie", "lftp", "ftp", "tftp", "yt-dlp", "youtube-dl", "gallery-dl", "gdown", "megadl", "transmission-cli", "fetch", "lwp-download", "lwp-request", "w3m", "lynx", "links", "elinks", "grpcurl", "websocat", "wscat", "hurl"}},
+		{Tools: []string{"iwr", "irm", "invoke-webrequest", "invoke-restmethod", "start-bitstransfer", "bitsadmin"}},
+		{Tools: []string{"certutil"}, Match: winOptionForm("urlcache", "verifyctl")},
 		{Tools: []string{"gh"}, Subs: []string{"release download", "run download", "attestation download", "extension install"}},
 		{Tools: []string{"glab"}, Subs: []string{"release download", "job artifact", "ci artifact"}},
 		{Tools: []string{"svn"}, Subs: []string{"cat"}},
