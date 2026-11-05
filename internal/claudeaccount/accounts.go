@@ -178,7 +178,7 @@ func removeIfSymlink(path string) error {
 		}
 		return err
 	}
-	if info.Mode()&os.ModeSymlink == 0 {
+	if !isLink(info) {
 		return nil
 	}
 	return os.Remove(path)
@@ -240,12 +240,12 @@ func (a Accounts) linkShared(name, entry string) error {
 	if err != nil {
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	if isLink(info) {
 		target, err := os.Readlink(dst)
 		if err != nil {
 			return err
 		}
-		if target != src {
+		if !sameLinkTarget(target, src) {
 			return fmt.Errorf("claudeaccount: %s points to %s, not replaced", dst, target)
 		}
 		return nil
@@ -267,11 +267,11 @@ func (a Accounts) linkShared(name, entry string) error {
 
 // symlinkOnce creates the link, and counts a matching link made meanwhile by another process as success.
 func symlinkOnce(src, dst string) error {
-	err := os.Symlink(src, dst)
+	err := makeLink(src, dst)
 	if err == nil || !errors.Is(err, fs.ErrExist) {
 		return err
 	}
-	if target, readErr := os.Readlink(dst); readErr == nil && target == src {
+	if target, readErr := os.Readlink(dst); readErr == nil && sameLinkTarget(target, src) {
 		return nil
 	}
 	return err

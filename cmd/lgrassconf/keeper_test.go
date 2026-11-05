@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -76,7 +77,8 @@ func TestWritePreservesFileMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows keeps only the read-only bit of a mode.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v, want 0600", info.Mode().Perm())
 	}
 }

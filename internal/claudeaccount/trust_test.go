@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -59,7 +60,8 @@ func TestTrustAddsEntryAndKeepsTheRest(t *testing.T) {
 		t.Errorf("the project's other keys changed: %v", entry)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
+	// Windows keeps only the read-only bit of a mode; the owner-only DACL there comes from internal/privfs.
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Errorf("mode = %v, %v", info.Mode().Perm(), err)
 	}
 }

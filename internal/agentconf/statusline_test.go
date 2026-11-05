@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -153,7 +154,8 @@ func TestStatusLineStorePrune(t *testing.T) {
 		t.Error("live account dropped")
 	}
 	info, _ := os.Stat(store.Path)
-	if info.Mode().Perm() != 0o600 {
+	// Windows keeps only the read-only bit of a mode.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Errorf("mode %v, want 0600", info.Mode().Perm())
 	}
 }

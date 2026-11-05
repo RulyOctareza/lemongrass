@@ -6,6 +6,7 @@ package agentconf
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,8 @@ func TestTrustCodexProjectAppendsATable(t *testing.T) {
 	if string(data) != want {
 		t.Errorf("config =\n%s", data)
 	}
-	if info, _ := os.Stat(path); info.Mode().Perm() != 0o644 {
+	// Windows keeps only the read-only bit of a mode.
+	if info, _ := os.Stat(path); runtime.GOOS != "windows" && info.Mode().Perm() != 0o644 {
 		t.Errorf("mode = %v", info.Mode().Perm())
 	}
 }
