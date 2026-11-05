@@ -13,7 +13,7 @@ export function migrateStore(lgrassdPath: string): Promise<void> {
     execFile(
       lgrassdPath,
       ['migrate'],
-      { encoding: 'utf8', timeout: MIGRATE_TIMEOUT_MS },
+      { encoding: 'utf8', timeout: MIGRATE_TIMEOUT_MS, windowsHide: true },
       (failure, _stdout, stderr) => {
         if (failure) {
           const detail = stderr.trim() || failure.message

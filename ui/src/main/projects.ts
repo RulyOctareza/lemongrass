@@ -39,8 +39,16 @@ export function saveProjects(projects: Project[]): void {
   writeFileSync(STORE_FILE, JSON.stringify(projects, null, 2))
 }
 
-// Mirrors project.resolvePath on the lgrass CLI side, so a symlinked path registered from either converges on the same entry.
-function resolvePath(path: string): string {
+// The form two project paths are compared in. Mirrors project.samePath on the lgrass CLI side, so a symlinked path
+// registered from either converges on the same entry.
+// On Windows names are case-insensitive and Node's realpath keeps the case a path was given in, while Go's returns the
+// on-disk case, so the comparison form is lowercased there.
+function pathKey(path: string): string {
+  const real = realpathOrSame(path)
+  return process.platform === 'win32' ? real.toLowerCase() : real
+}
+
+function realpathOrSame(path: string): string {
   try {
     return realpathSync(path)
   } catch {
@@ -53,17 +61,17 @@ function listedProjects(): Project[] {
 }
 
 export function isTrustedProject(path: string): boolean {
-  const target = resolvePath(path)
-  return listedProjects().some((p) => p.trusted === true && resolvePath(p.path) === target)
+  const target = pathKey(path)
+  return listedProjects().some((p) => p.trusted === true && pathKey(p.path) === target)
 }
 
 // Counts the shells running at or under each project's folder, whatever their state, so a project is never deleted
 // with an agent still running for it.
 function liveShellsByProject(projects: Project[]): Record<string, number> {
-  const cwds = liveShellCwds().map(resolvePath)
+  const cwds = liveShellCwds().map(pathKey)
   const counts: Record<string, number> = {}
   for (const p of projects) {
-    const root = resolvePath(p.path)
+    const root = pathKey(p.path)
     const n = cwds.filter((cwd) => cwd === root || cwd.startsWith(root + sep)).length
     if (n > 0) counts[p.id] = n
   }
@@ -95,9 +103,9 @@ export function registerProjectHandlers(getWindow: () => BrowserWindow | undefin
       : await dialog.showOpenDialog({ properties: ['openDirectory'] })
     if (result.canceled || result.filePaths.length === 0) return null
 
-    const dirPath = resolvePath(result.filePaths[0])
+    const dirPath = realpathOrSame(result.filePaths[0])
     const projects = loadProjects()
-    const existing = projects.find((p) => resolvePath(p.path) === dirPath)
+    const existing = projects.find((p) => pathKey(p.path) === pathKey(dirPath))
     if (existing?.deletedAt) {
       delete existing.deletedAt
       saveProjects(projects)

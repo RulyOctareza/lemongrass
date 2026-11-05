@@ -113,7 +113,8 @@ import type {
 // Custom APIs for renderer -- raw PTY bytes only, never a control-signal
 // channel. PTY is display-only.
 const pty = {
-  spawn: (opts: PtySpawnOptions): Promise<{ id: string }> => ipcRenderer.invoke('pty:spawn', opts),
+  spawn: (opts: PtySpawnOptions): Promise<{ id: string } | { error: string }> =>
+    ipcRenderer.invoke('pty:spawn', opts),
   write: (id: string, data: string): void => ipcRenderer.send('pty:write', { id, data }),
   resize: (id: string, cols: number, rows: number): void =>
     ipcRenderer.send('pty:resize', { id, cols, rows }),

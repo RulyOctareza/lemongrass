@@ -26,6 +26,7 @@ import {
   imagePath,
   isSubsequence,
   isValidName,
+  isWindowsInvalidName,
   listDir,
   moveEntries,
   readProjectFile,
@@ -79,6 +80,26 @@ test('confinement refuses escapes, hidden folders and outside symlinks', () => {
   assert.equal(resolveEntry(root, 'link.txt'), join(root, 'link.txt'))
   assert.equal(resolveEntry(root, ''), null)
   assert.equal(readProjectFile(root, 'link.txt'), null)
+})
+
+test('names Windows refuses', () => {
+  for (const bad of [
+    'a:b',
+    'a?',
+    'a*',
+    'a|b',
+    'a"b',
+    'a<b',
+    'name.',
+    'name ',
+    'NUL',
+    'con.txt',
+    'Com1',
+    'lpt9.log'
+  ])
+    assert.equal(isWindowsInvalidName(bad), true, bad)
+  for (const good of ['a.ts', 'console.ts', 'nul2', '.env', 'com', 'a b.md'])
+    assert.equal(isWindowsInvalidName(good), false, good)
 })
 
 test('names', () => {

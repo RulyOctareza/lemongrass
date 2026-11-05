@@ -21,7 +21,7 @@ function composeNudge(lgrassdPath: string, cwd: string, tabId: string): Promise<
     execFile(
       lgrassdPath,
       ['nudge', tabId],
-      { cwd, encoding: 'utf8', timeout: LGRASS_TIMEOUT_MS },
+      { cwd, encoding: 'utf8', timeout: LGRASS_TIMEOUT_MS, windowsHide: true },
       (failure, stdout) => (failure ? reject(failure) : resolve(stdout))
     )
   })

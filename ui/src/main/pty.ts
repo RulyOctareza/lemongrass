@@ -15,10 +15,14 @@ import { startupTrimArgs, startupTrimEnv } from './startupTrim'
 import { classifyInput } from './humanInput'
 import { destroyInstance } from './web'
 import { resolveShellBinary } from './shellBinary'
+import { windowsLaunch, windowsShell, withPath, type Env, type Launch } from './winExec'
+import { freshWindowsPath } from './windowsPath'
 
 // Every shell spawns an agent binary directly, never a login shell. Codex
 // receives repeated Ctrl+C during a graceful tab or app shutdown, so it can
-// run its SessionEnd hook before the PTY is force-killed.
+// run its SessionEnd hook before the PTY is force-killed. On Windows Claude
+// does too, because killing a ConPTY terminates every process on its console
+// at once, while on Unix the hangup lets Claude end its session itself.
 
 interface SpawnOptions {
   /** The agent binary to spawn, e.g. "claude". Never a shell like bash/zsh. */
@@ -52,9 +56,9 @@ const shells = new Map<string, ManagedShell>()
 const stopping = new Map<string, Promise<void>>()
 let shuttingDown = false
 // Ctrl+C clears a draft, interrupts a running turn, and quits on a repeat press once the composer is idle.
-const CODEX_INTERRUPT = '\x03'
-const CODEX_INTERRUPT_INTERVAL_MS = 400
-const CODEX_EXIT_WAIT_MS = 3_000
+const INTERRUPT = '\x03'
+const INTERRUPT_INTERVAL_MS = 400
+const INTERRUPT_EXIT_WAIT_MS = 3_000
 
 // proc.onData/onExit fire on the child process's own timing, not the
 // window's. A shell can still be emitting output while the window is
@@ -69,6 +73,25 @@ function accountConfigDir(opts: SpawnOptions): string | undefined {
   if (opts.command !== 'claude' || !opts.account || !ACCOUNT_NAME.test(opts.account))
     return undefined
   return join(homedir(), `.claude-${opts.account}`)
+}
+
+function gracefulClose(command: string): boolean {
+  return command === 'codex' || (command === 'claude' && process.platform === 'win32')
+}
+
+// The program and argv for a tab. On Windows the PATH is reread from the registry for every tab, and a name is found
+// through PATHEXT, since ConPTY only appends .exe and an npm install is a .cmd shim.
+async function launchFor(
+  command: string,
+  args: string[],
+  env: Env
+): Promise<{ launch: Launch; env: Env }> {
+  if (process.platform !== 'win32')
+    return { launch: { file: resolveShellBinary(command), args }, env }
+  const winEnv = withPath(env, await freshWindowsPath())
+  const launch =
+    command === 'zsh' ? { file: windowsShell(winEnv), args } : windowsLaunch(command, args, winEnv)
+  return { launch, env: winEnv }
 }
 
 function trustTarget(opts: SpawnOptions): string | undefined {
@@ -95,18 +118,20 @@ export function registerPtyHandlers(getSender: () => WebContents | undefined): v
     if (opts.tabId && opts.cwd) await registerTab(opts.cwd, opts.tabId, opts.command)
     const target = trustTarget(opts)
     if (target && opts.cwd && isTrustedProject(opts.cwd)) await writeTrust(opts.cwd, target)
-    const proc = pty.spawn(resolveShellBinary(opts.command), args, {
+    const { launch, env } = await launchFor(opts.command, args, {
+      ...process.env,
+      ...startupTrimEnv(opts.command),
+      ...orientation.env,
+      ...(opts.tabId ? { LGRASS_TAB_ID: opts.tabId } : {}),
+      ...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {})
+    })
+    if ('error' in launch) return { error: launch.error }
+    const proc = pty.spawn(launch.file, launch.args, {
       name: 'xterm-256color',
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,
       cwd: opts.cwd ?? homedir(),
-      env: {
-        ...(process.env as Record<string, string>),
-        ...startupTrimEnv(opts.command),
-        ...orientation.env,
-        ...(opts.tabId ? { LGRASS_TAB_ID: opts.tabId } : {}),
-        ...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {})
-      }
+      env: env as Record<string, string>
     })
 
     proc.onData((data) => {
@@ -186,8 +211,8 @@ export function liveShellCwds(): string[] {
   return [...shells.values()].map((shell) => shell.cwd)
 }
 
-export function hasCodexShells(): boolean {
-  return [...shells.values()].some((shell) => shell.command === 'codex')
+export function hasGracefulShells(): boolean {
+  return [...shells.values()].some((shell) => gracefulClose(shell.command))
 }
 
 // A process exit during shutdown is not forwarded, because the renderer closes a tab on exit and would
@@ -196,14 +221,14 @@ export function beginShutdown(): void {
   shuttingDown = true
 }
 
-export async function stopCodexShells(): Promise<void> {
-  const codexIDs = [...shells].flatMap(([id, shell]) => (shell.command === 'codex' ? [id] : []))
-  await Promise.all(codexIDs.map(stopShell))
+export async function stopGracefulShells(): Promise<void> {
+  const ids = [...shells].flatMap(([id, shell]) => (gracefulClose(shell.command) ? [id] : []))
+  await Promise.all(ids.map(stopShell))
 }
 
 function closeShell(id: string): Promise<void> {
   const shell = shells.get(id)
-  if (shell && shell.command !== 'codex') {
+  if (shell && !gracefulClose(shell.command)) {
     shell.process.kill()
     shells.delete(id)
     return Promise.resolve()
@@ -217,7 +242,7 @@ function stopShell(id: string): Promise<void> {
   const shell = shells.get(id)
   if (!shell) return Promise.resolve()
   const stopped = new Promise<void>((resolve) => {
-    const deadline = Date.now() + CODEX_EXIT_WAIT_MS
+    const deadline = Date.now() + INTERRUPT_EXIT_WAIT_MS
     const interrupt = (): void => {
       const live = shells.get(id)
       if (!live) return resolve()
@@ -226,8 +251,8 @@ function stopShell(id: string): Promise<void> {
         shells.delete(id)
         return resolve()
       }
-      live.process.write(CODEX_INTERRUPT)
-      setTimeout(interrupt, CODEX_INTERRUPT_INTERVAL_MS)
+      live.process.write(INTERRUPT)
+      setTimeout(interrupt, INTERRUPT_INTERVAL_MS)
     }
     interrupt()
   }).finally(() => stopping.delete(id))

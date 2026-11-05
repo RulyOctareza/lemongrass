@@ -18,7 +18,7 @@ export function writeTrust(projectPath: string, target?: string): Promise<boolea
     execFile(
       lgrassdPath,
       ['trust', projectPath, ...(target ? ['--target', target] : [])],
-      { encoding: 'utf8', timeout: TRUST_TIMEOUT_MS },
+      { encoding: 'utf8', timeout: TRUST_TIMEOUT_MS, windowsHide: true },
       (failure, _stdout, stderr) => {
         if (failure) console.error('lgrassd trust failed:', stderr || failure)
         resolve(!failure)

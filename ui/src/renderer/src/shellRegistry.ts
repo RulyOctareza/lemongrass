@@ -232,7 +232,7 @@ async function start(session: ShellSession): Promise<void> {
   const args = spawnArgs(spec.command, spec.id, initial)
   if (resumeAttempts.delete(spec.id)) session.resumeDeadline = Date.now() + RESUME_FAILURE_WINDOW_MS
   const { cols, rows } = term
-  const { id } = await window.api.pty.spawn({
+  const spawned = await window.api.pty.spawn({
     command: spec.command,
     args,
     cwd: spec.cwd,
@@ -242,6 +242,13 @@ async function start(session: ShellSession): Promise<void> {
     cols,
     rows
   })
+  // Only Windows reports a launch it cannot make, such as an agent missing from PATH. The tab stays open with the
+  // reason in it instead of closing at once.
+  if ('error' in spawned) {
+    if (!session.disposed) term.write(`\r\n${spawned.error}\r\n`)
+    return
+  }
+  const { id } = spawned
   if (session.disposed) {
     window.api.pty.kill(id)
     return

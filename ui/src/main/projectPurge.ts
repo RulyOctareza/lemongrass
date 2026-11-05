@@ -15,7 +15,7 @@ function purgeGoData(lgrassdPath: string, id: string): Promise<void> {
     execFile(
       lgrassdPath,
       ['project', 'purge', id],
-      { encoding: 'utf8', timeout: LGRASSD_TIMEOUT_MS },
+      { encoding: 'utf8', timeout: LGRASSD_TIMEOUT_MS, windowsHide: true },
       (failure, _stdout, stderr) =>
         failure ? reject(new Error(stderr.trim() || failure.message)) : resolve()
     )

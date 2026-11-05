@@ -111,7 +111,7 @@ function noticeQueue(lgrassdPath: string | null): BranchNoticeQueue {
     execFile(
       lgrassdPath,
       ['branch', 'changed', notice.from, notice.to, notice.carry],
-      { cwd: projectPath, encoding: 'utf8', timeout: LGRASSD_TIMEOUT_MS },
+      { cwd: projectPath, encoding: 'utf8', timeout: LGRASSD_TIMEOUT_MS, windowsHide: true },
       (failure, _stdout, stderr) => {
         if (failure) console.error('lgrassd branch changed failed:', stderr.trim() || failure)
       }

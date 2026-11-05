@@ -26,7 +26,7 @@ function runCommand(lgrassPath: string, projectPath: string, args: string[]): Pr
     execFile(
       lgrassPath,
       args,
-      { cwd: projectPath, encoding: 'utf8', timeout: LGRASS_TIMEOUT_MS },
+      { cwd: projectPath, encoding: 'utf8', timeout: LGRASS_TIMEOUT_MS, windowsHide: true },
       (failure, stdout, stderr) =>
         failure ? reject(new Error(stderr.trim() || failure.message)) : resolve(stdout)
     )

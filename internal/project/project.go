@@ -93,7 +93,7 @@ func Register(dir string) (Project, error) {
 		return Project{}, err
 	}
 	for i, p := range projects {
-		if resolvePath(p.Path) != abs {
+		if !samePath(resolvePath(p.Path), abs) {
 			continue
 		}
 		if p.DeletedAt == "" {
@@ -145,7 +145,7 @@ func Resolve(dir string) (Project, error) {
 
 	for {
 		for i, p := range projects {
-			if resolvedPaths[i] == abs {
+			if samePath(resolvedPaths[i], abs) {
 				return p, nil
 			}
 		}

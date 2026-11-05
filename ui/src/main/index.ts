@@ -7,12 +7,13 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import {
   beginShutdown,
-  hasCodexShells,
+  hasGracefulShells,
   killAllShells,
   registerPtyHandlers,
-  stopCodexShells
+  stopGracefulShells
 } from './pty'
 import { loadLoginEnv } from './loginPath'
+import { loadWindowsPath } from './windowsPath'
 import { registerTabSessionHandlers } from './tabSessions'
 import { registerAccountHandlers } from './accounts'
 import { registerUsageHandlers } from './usage'
@@ -87,8 +88,8 @@ function createWindow(): void {
     event.preventDefault()
     closing = true
     beginShutdown()
-    if (hasCodexShells()) win.webContents.send('window:closing')
-    void stopCodexShells().finally(() => win.destroy())
+    if (hasGracefulShells()) win.webContents.send('window:closing')
+    void stopGracefulShells().finally(() => win.destroy())
   })
 
   // Otherwise mainWindow keeps pointing at a destroyed BrowserWindow after
@@ -121,8 +122,9 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window, { zoom: true })
   })
 
-  // Before anything spawns a child, so PTYs and tools see the login shell's PATH.
-  loadLoginEnv()
+  // Before anything spawns a child, so PTYs and tools see the login shell's PATH, or on Windows the registry's.
+  if (process.platform === 'win32') loadWindowsPath()
+  else loadLoginEnv()
 
   const lgrassPath = installLgrass()
   const lgrassdPath = installLgrassd()

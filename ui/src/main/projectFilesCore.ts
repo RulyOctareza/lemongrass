@@ -108,10 +108,24 @@ export function resolveEntry(root: string, relPath: string): string | null {
   return isConfined(root, target) && target !== root ? target : null
 }
 
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i
+
+// Names Windows refuses or silently changes: its reserved characters, a trailing dot or space, which it strips, and
+// device names such as NUL, with or without an extension.
+export function isWindowsInvalidName(name: string): boolean {
+  return (
+    /[<>:"|?*]/.test(name) ||
+    [...name].some((ch) => ch.charCodeAt(0) < 32) ||
+    /[. ]$/.test(name) ||
+    WINDOWS_RESERVED.test(name)
+  )
+}
+
 export function isValidName(name: string, atRoot: boolean): boolean {
   if (typeof name !== 'string' || name.trim() === '' || name === '.' || name === '..') return false
   if (name.includes('/') || name.includes('\0') || (sep === '\\' && name.includes('\\')))
     return false
+  if (sep === '\\' && isWindowsInvalidName(name)) return false
   return !(atRoot && HIDDEN_ROOT_NAMES.has(name.toLowerCase()))
 }
 

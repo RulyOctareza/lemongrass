@@ -12,7 +12,7 @@ function runLgrassd(lgrassdPath: string, projectPath: string, args: string[]): P
     execFile(
       lgrassdPath,
       ['tabs', ...args],
-      { cwd: projectPath, encoding: 'utf8', timeout: LGRASS_TIMEOUT_MS },
+      { cwd: projectPath, encoding: 'utf8', timeout: LGRASS_TIMEOUT_MS, windowsHide: true },
       (failure, stdout) => (failure ? reject(failure) : resolve(stdout))
     )
   })

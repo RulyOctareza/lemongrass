@@ -107,6 +107,15 @@ function unwatchTree(projectPath: string, dir: string): void {
   }
 }
 
+// On Windows an open watch handle on a folder makes renaming, moving or deleting any folder above it fail, so the
+// watches at and below each source are closed first. The parent's watch reports the change and the renderer lists
+// the folder again, which watches it anew.
+function releaseWatches(projectPath: string, paths: string[]): void {
+  if (process.platform !== 'win32') return
+  for (const path of paths)
+    if (typeof path === 'string' && path !== '') unwatchTree(projectPath, path)
+}
+
 export function closeProjectFileWatchers(): void {
   for (const [projectPath, dirs] of watches) {
     for (const dir of [...dirs.keys()]) stopWatch(projectPath, dir)
@@ -211,7 +220,9 @@ export function registerProjectFileHandlers(getSender: () => WebContents | undef
     'projectFiles:rename',
     (_event, projectPath: string, path: string, newName: string): ProjectOpResult => {
       const root = realRoot(projectPath)
-      return root ? renameEntry(root, path, newName) : noRoot
+      if (!root) return noRoot
+      releaseWatches(projectPath, [path])
+      return renameEntry(root, path, newName)
     }
   )
 
@@ -220,6 +231,7 @@ export function registerProjectFileHandlers(getSender: () => WebContents | undef
     (_event, projectPath: string, paths: string[], destDir: string): ProjectOpsResult => {
       const root = realRoot(projectPath)
       if (!root || !Array.isArray(paths)) return { ...noRoot, done: [] }
+      releaseWatches(projectPath, paths)
       return moveEntries(root, paths, destDir)
     }
   )
@@ -248,6 +260,7 @@ export function registerProjectFileHandlers(getSender: () => WebContents | undef
       if (!root || !Array.isArray(paths)) return { ...noRoot, done: [] }
       const resolved = resolveEntries(root, paths)
       if ('error' in resolved) return { error: resolved.error, done: [] }
+      releaseWatches(projectPath, paths)
       const done: string[] = []
       for (const target of resolved.targets) {
         try {
