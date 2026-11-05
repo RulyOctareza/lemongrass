@@ -1,0 +1,3 @@
+# Text is LF in every checkout, Windows included: embedded files (how content, orientation, skills, plugin) are parsed
+# expecting LF. Git detects binaries itself.
+* text=auto eol=lf

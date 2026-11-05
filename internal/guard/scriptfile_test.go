@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 )
 
@@ -51,9 +50,6 @@ func TestScriptFiles(t *testing.T) {
 	for name, text := range scripts {
 		writeScript(t, filepath.Join(root, name), text)
 	}
-	if err := syscall.Mkfifo(filepath.Join(root, "fifo.py"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	cases := []struct {
 		command string
 		want    string
@@ -82,7 +78,6 @@ func TestScriptFiles(t *testing.T) {
 		{"bash plain", "script-command"},
 		{"bash outer.sh", "script-command"},
 		{"python3 big.py", ""},
-		{"python3 fifo.py", ""},
 		{"python3 missing.py", ""},
 		{"./envshebang", "script-command"},
 		{"bash pushes.sh", "script-command"},

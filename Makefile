@@ -7,9 +7,9 @@ BINARIES := lgrass lgrassd lgrassconf
 # lgrassroot is the Linux root helper run through pkexec, so only the Linux packages carry it.
 LINUX_BINARIES := $(BINARIES) lgrassroot
 
-.PHONY: build-linux build-rpm build-mac dist dist-linux dist-darwin dev install verify clean submodules bibliothek-update license license-check
+.PHONY: build-linux build-rpm build-mac dist dist-linux dist-darwin dist-windows dev install verify clean submodules bibliothek-update license license-check
 
-dist: dist-linux dist-darwin
+dist: dist-linux dist-darwin dist-windows
 
 # bibliothek is a submodule embedded by internal/bibliothek, so no Go build works without it checked out.
 submodules:
@@ -19,13 +19,12 @@ submodules:
 bibliothek-update: submodules
 	git submodule update --remote internal/bibliothek/repo
 
-# Every binary for each target arch, written to dist/<os>-<arch>/ where ui/electron-builder.yml reads them. The old output of that os is removed first so a stale binary is never bundled.
+# Every binary for each target arch, written to dist/<os>-<arch>/ where ui/electron-builder.yml reads them. The old output of that os is removed first so a stale binary is never bundled. Builds other than macOS are x64 only.
 dist-linux: submodules
 	rm -rf $(DIST)/linux-amd64 $(DIST)/linux-arm64
-	mkdir -p $(DIST)/linux-amd64 $(DIST)/linux-arm64
+	mkdir -p $(DIST)/linux-amd64
 	for bin in $(LINUX_BINARIES); do \
 		GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/linux-amd64/$$bin ./cmd/$$bin || exit 1; \
-		GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(DIST)/linux-arm64/$$bin ./cmd/$$bin || exit 1; \
 	done
 
 dist-darwin: submodules
@@ -34,6 +33,13 @@ dist-darwin: submodules
 	for bin in $(BINARIES); do \
 		GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/darwin-amd64/$$bin ./cmd/$$bin || exit 1; \
 		GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(DIST)/darwin-arm64/$$bin ./cmd/$$bin || exit 1; \
+	done
+
+dist-windows: submodules
+	rm -rf $(DIST)/windows-amd64
+	mkdir -p $(DIST)/windows-amd64
+	for bin in $(BINARIES); do \
+		GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/windows-amd64/$$bin.exe ./cmd/$$bin || exit 1; \
 	done
 
 build-linux: dist-linux
@@ -71,8 +77,11 @@ dev:
 	./scripts/dev.sh
 
 # Compiles everything and discards the output, since a plain `go build` of a single main package writes its binary into the source directory.
+# The Windows check runs here on Linux so a Unix-only change fails at once; vet also compiles the test files.
 verify: submodules
 	go build -a -o /dev/null ./...
+	GOOS=windows GOARCH=amd64 go build -a -o /dev/null ./...
+	GOOS=windows GOARCH=amd64 go vet ./...
 
 license:
 	./scripts/license-headers.sh

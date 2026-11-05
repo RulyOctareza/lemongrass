@@ -14,6 +14,12 @@ import (
 //go:embed repo/skill/SKILL.md
 var Skill []byte
 
+// A Windows checkout with core.autocrlf gives the submodule CRLF line endings, which the repo's own .gitattributes does
+// not reach, and the parsing below matches LF.
+func init() {
+	Skill = bytes.ReplaceAll(Skill, []byte("\r\n"), []byte("\n"))
+}
+
 var (
 	triggerStart = []byte("Two things get checked every session")
 	triggerEnd   = []byte("**The laws summary.**")

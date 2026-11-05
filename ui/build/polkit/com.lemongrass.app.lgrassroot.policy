@@ -6,8 +6,8 @@
   SPDX-License-Identifier: AGPL-3.0-only
   Copyright (C) 2026 The Lemongrass Authors
 
-  One action per arch, since an action names one exact path and pkexec on any other path falls back to its generic
-  password prompt. The paths are where electron-builder's extraResources put the helper under the rpm's /opt prefix.
+  The action names one exact path, since pkexec on any other path falls back to its generic password prompt. The path
+  is where electron-builder's extraResources put the helper under the rpm's /opt prefix; Linux packages are x64 only.
 -->
 <policyconfig>
   <vendor>Lemongrass</vendor>
@@ -21,16 +21,5 @@
       <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/opt/Lemongrass/resources/bin/linux-amd64/lgrassroot</annotate>
-  </action>
-
-  <action id="com.lemongrass.app.lgrassroot.arm64">
-    <description>Install or update a tool lemongrass needs</description>
-    <message>Authentication is required to install or update a tool lemongrass needs</message>
-    <defaults>
-      <allow_any>no</allow_any>
-      <allow_inactive>no</allow_inactive>
-      <allow_active>auth_admin</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/opt/Lemongrass/resources/bin/linux-arm64/lgrassroot</annotate>
   </action>
 </policyconfig>

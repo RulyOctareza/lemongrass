@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -84,7 +83,7 @@ func Alive(s RunState) bool {
 	if s.PID <= 0 || (s.Status != StatusBuilding && s.Status != StatusStarted) {
 		return false
 	}
-	return syscall.Kill(s.PID, 0) == nil
+	return processAlive(s.PID)
 }
 
 // Spawn starts the supervisor detached from the calling shell, so the app keeps running and
@@ -107,7 +106,7 @@ func Spawn(self, project, serial string, args []string) error {
 	cmd.Dir = project
 	cmd.Stdout = log
 	cmd.Stderr = log
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.SysProcAttr = detachedProcAttr()
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("flutter: starting the run supervisor: %w", err)
 	}
@@ -126,7 +125,7 @@ func Wait(project string, timeout time.Duration) (RunState, error) {
 		if err == nil && s.Status != StatusBuilding {
 			return s, nil
 		}
-		if err == nil && s.PID > 0 && syscall.Kill(s.PID, 0) != nil {
+		if err == nil && s.PID > 0 && !processAlive(s.PID) {
 			s.Status = StatusFailed
 			s.Message = "the run supervisor exited"
 			return s, nil

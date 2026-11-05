@@ -32,6 +32,8 @@ function resourceDir(): string | null {
     default:
       return null
   }
+  // Linux packages carry only the x64 binaries; macOS carries both arches.
+  if (osName === 'linux' && arch !== 'amd64') return null
   return `${osName}-${arch}`
 }
 

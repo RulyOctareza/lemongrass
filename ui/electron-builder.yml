@@ -83,27 +83,17 @@ linux:
   maintainer: Faizal Alviansyah <faizal.alviansyah@gmail.com>
   category: Utility
   extraResources:
-    # Both arches bundled unconditionally rather than relying on
-    # electron-builder's ${arch} path templating across AppImage/deb/snap
-    # -- the main process picks the right one at install time via
-    # process.arch.
+    # Linux packages are x64 only. The arch stays in the path because the main process picks the bundled
+    # binary by process.arch, the same way it does for the two macOS arches.
     - from: "../dist/linux-amd64/lgrass"
       to: "bin/linux-amd64/lgrass"
     - from: "../dist/linux-amd64/lgrassd"
       to: "bin/linux-amd64/lgrassd"
-    - from: "../dist/linux-arm64/lgrass"
-      to: "bin/linux-arm64/lgrass"
-    - from: "../dist/linux-arm64/lgrassd"
-      to: "bin/linux-arm64/lgrassd"
     - from: "../dist/linux-amd64/lgrassconf"
       to: "bin/linux-amd64/lgrassconf"
-    - from: "../dist/linux-arm64/lgrassconf"
-      to: "bin/linux-arm64/lgrassconf"
     # The root helper. Its path is named by the polkit action in build/polkit, so it moves only together with that file.
     - from: "../dist/linux-amd64/lgrassroot"
       to: "bin/linux-amd64/lgrassroot"
-    - from: "../dist/linux-arm64/lgrassroot"
-      to: "bin/linux-arm64/lgrassroot"
 # git backs the biblio history in lgrassd. Passed to fpm rather than set as depends, which would replace
 # electron-builder's default dependency list instead of adding to it.
 deb:
