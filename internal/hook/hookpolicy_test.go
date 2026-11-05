@@ -22,6 +22,7 @@ func startVault(t *testing.T) *gatekeeper.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { svc.Close() })
 	sock := filepath.Join(t.TempDir(), "vault.sock")
 	l, err := ipc.Listen(sock)
 	if err != nil {
