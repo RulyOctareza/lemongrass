@@ -13,7 +13,7 @@ function runJson<T>(lgrassdPath: string, args: string[]): Promise<T | null> {
     execFile(
       lgrassdPath,
       args,
-      { encoding: 'utf8', timeout: LGRASSD_TIMEOUT_MS },
+      { encoding: 'utf8', timeout: LGRASSD_TIMEOUT_MS, windowsHide: true },
       (failure, stdout) => {
         if (failure) return resolve(null)
         try {

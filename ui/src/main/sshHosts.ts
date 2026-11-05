@@ -41,7 +41,10 @@ function globToRegExp(glob: string): RegExp {
 
 // Include paths are relative to the user's ssh directory and may glob in their last segment.
 function includePaths(arg: string, sshDir: string, home: string, files: ConfigFiles): string[] {
-  let path = arg.startsWith('~/') ? join(home, arg.slice(2)) : arg
+  // OpenSSH for Windows also writes the home prefix as ~\.
+  const homeRelative =
+    arg.startsWith('~/') || (process.platform === 'win32' && arg.startsWith('~\\'))
+  let path = homeRelative ? join(home, arg.slice(2)) : arg
   if (!isAbsolute(path)) path = join(sshDir, path)
   const name = basename(path)
   if (!/[*?]/.test(name)) return [path]
@@ -138,7 +141,7 @@ export function resolveSSHHost(alias: string): Promise<ResolvedSSHHost> {
     execFile(
       'ssh',
       ['-G', '--', alias],
-      { timeout: RESOLVE_TIMEOUT_MS, encoding: 'utf8' },
+      { timeout: RESOLVE_TIMEOUT_MS, encoding: 'utf8', windowsHide: true },
       (err, stdout, stderr) => {
         if (err) {
           reject(new Error(stderr.trim() || err.message))

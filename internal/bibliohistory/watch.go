@@ -5,9 +5,9 @@ package bibliohistory
 
 import (
 	"context"
-	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,6 +90,8 @@ func (w *Watcher) Run(ctx context.Context) error {
 		list, err := w.Projects()
 		if err != nil {
 			w.logf("bibliohistory: projects: %v", err)
+		} else {
+			dropGone(fw, projects, list)
 		}
 		for _, p := range list {
 			root := filepath.Join(p.Path, "biblio")
@@ -106,7 +108,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 				t = &tracked{project: p, root: root, repo: repo}
 				projects[p.ID] = t
 			}
-			addTree(fw, root)
+			watchRoot(fw, root)
 			snapshot(t)
 		}
 	}
@@ -146,7 +148,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 			}
 			if ev.Op.Has(fsnotify.Create) {
 				if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-					addTree(fw, ev.Name)
+					watchNew(fw, ev.Name)
 				}
 			}
 			id := t.project.ID
@@ -175,13 +177,20 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 }
 
-// fsnotify watches one folder at a time, so a tree is watched by adding each of its folders; adding one already
-// watched is harmless.
-func addTree(fw *fsnotify.Watcher, root string) {
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && d.IsDir() {
-			fw.Add(p)
+// dropGone stops watching projects that left the registry, so their folders, which purge removes, hold no watch.
+func dropGone(fw *fsnotify.Watcher, projects map[string]*tracked, list []project.Project) {
+	for id, t := range projects {
+		if slices.ContainsFunc(list, func(p project.Project) bool { return p.ID == id }) {
+			continue
 		}
-		return nil
-	})
+		if t.timer != nil {
+			t.timer.Stop()
+		}
+		for _, watched := range fw.WatchList() {
+			if watched == t.root || strings.HasPrefix(watched, t.root+string(filepath.Separator)) {
+				fw.Remove(watched)
+			}
+		}
+		delete(projects, id)
+	}
 }

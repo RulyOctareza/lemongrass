@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/faizalv/lemongrass/internal/atomicfile"
 	"github.com/faizalv/lemongrass/internal/config"
 )
 
@@ -27,7 +28,7 @@ func appendDeliveryLog(tabID string, rowIDs []int64, outcome string) {
 		return
 	}
 	if info, err := os.Stat(path); err == nil && info.Size() > deliveryLogLimit {
-		os.Rename(path, path+".1")
+		atomicfile.Rename(path, path+".1")
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
