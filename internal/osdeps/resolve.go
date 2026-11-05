@@ -5,13 +5,15 @@ package osdeps
 
 import (
 	"context"
-	"path/filepath"
+	"path"
 )
 
 const macGitStub = "/usr/bin/git"
 
 // candidates lists where a tool is installed besides PATH. An app started from a desktop launcher, macOS Finder above
 // all, gets a minimal PATH, and an agent's shell may not have Android platform-tools on its PATH.
+// Unix candidates are joined with path rather than path/filepath, which follows the host OS, so the probe of a
+// Unix machine gives the same answer when its tests run on Windows.
 func candidates(sys System, name string) []string {
 	if sys.GOOS == "windows" {
 		return windowsCandidates(sys, name)
@@ -20,12 +22,12 @@ func candidates(sys System, name string) []string {
 	if name == "adb" {
 		for _, env := range []string{"ANDROID_HOME", "ANDROID_SDK_ROOT"} {
 			if dir := sys.Getenv(env); dir != "" {
-				dirs = append(dirs, filepath.Join(dir, "platform-tools"))
+				dirs = append(dirs, path.Join(dir, "platform-tools"))
 			}
 		}
 		dirs = append(dirs,
-			filepath.Join(sys.Home, "Library", "Android", "sdk", "platform-tools"),
-			filepath.Join(sys.Home, "Android", "Sdk", "platform-tools"),
+			path.Join(sys.Home, "Library", "Android", "sdk", "platform-tools"),
+			path.Join(sys.Home, "Android", "Sdk", "platform-tools"),
 		)
 	}
 	if sys.GOOS == "darwin" {
@@ -35,7 +37,7 @@ func candidates(sys System, name string) []string {
 	}
 	paths := make([]string, len(dirs))
 	for i, dir := range dirs {
-		paths[i] = filepath.Join(dir, name)
+		paths[i] = path.Join(dir, name)
 	}
 	return paths
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -225,10 +226,14 @@ func TestSDKPrefersTheFVMPin(t *testing.T) {
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bin, "flutter"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+	name := "flutter"
+	if runtime.GOOS == "windows" {
+		name = "flutter.bat"
+	}
+	if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := SDK(root); err != nil || got != filepath.Join(bin, "flutter") {
+	if got, err := SDK(root); err != nil || got != filepath.Join(bin, name) {
 		t.Fatalf("SDK = %s %v", got, err)
 	}
 }
