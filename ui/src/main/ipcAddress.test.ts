@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync } from 'fs'
 import * as net from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { verifyGreeting } from './ipcAddress.ts'
+import { homeTag, verifyGreeting } from './ipcAddress.ts'
 
 // verifyGreeting runs only on Windows in the app; a unix socket stands in for the pipe here.
 function greetingServer(
@@ -63,4 +63,10 @@ test('a server that does not greet is dropped', async () => {
   const { path, server } = await greetingServer('{"ok":true}\n', '')
   await assert.rejects(verifyGreeting(await connect(path), 'vault', keys), { code: 'EIPCPEER' })
   server.close()
+})
+
+test('the profile home has no pipe tag, another home a tag of its lowercased dir', () => {
+  assert.equal(homeTag('C:\\Users\\a\\lg', 'C:\\Users\\a'), '')
+  assert.equal(homeTag('C:\\Users\\a\\lg', 'c:\\users\\A'), '')
+  assert.equal(homeTag('C:\\Tmp\\test-home\\lg', 'C:\\Users\\a'), '-h964c5174')
 })

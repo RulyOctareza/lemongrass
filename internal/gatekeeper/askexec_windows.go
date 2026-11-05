@@ -200,5 +200,8 @@ func (p *windowsAskProcess) exitCode(waitErr error) int {
 	return int(p.code)
 }
 
+// A ConPTY sends screen updates, not a stream of lines, so its tail is read off a screen of the terminal's size.
+func newAskTail(size askSize) askTail { return newScreenTail(askTailLines, size) }
+
 // Windows environment names compare without case: PATH and Path are one variable.
 func sameEnvName(a, b string) bool { return strings.EqualFold(a, b) }

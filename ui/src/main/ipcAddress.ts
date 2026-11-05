@@ -2,10 +2,11 @@
 // Copyright (C) 2026 The Lemongrass Authors
 
 import { execFile } from 'child_process'
+import { createHash } from 'crypto'
 import { readFile } from 'fs/promises'
 import * as net from 'net'
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir, userInfo } from 'os'
+import { join, win32 } from 'path'
 
 // Where the app reaches lgrassd's daemons and where it serves app.sock, mirroring internal/ipc: a unix socket under
 // ~/.lemongrass on Linux and macOS, and on Windows the named pipe \\.\pipe\lemongrass-<sid>-<name>, since Node has
@@ -35,7 +36,24 @@ function userSID(): Promise<string> {
 
 export async function ipcAddress(name: IpcName): Promise<string> {
   if (process.platform !== 'win32') return join(lemongrassDir(), `${name}.sock`)
-  return `\\\\.\\pipe\\lemongrass-${await userSID()}-${name}`
+  return `\\\\.\\pipe\\lemongrass-${await userSID()}${homeTag()}-${name}`
+}
+
+// Matches homeTag in internal/ipc: empty for the profile's own home, else a hash of the lemongrass dir, so an app run
+// with USERPROFILE pointed elsewhere, such as a smoke test, never takes the real daemons' pipe names. userInfo's home
+// comes from the account's profile, not from USERPROFILE.
+export function homeTag(dir = lemongrassDir(), profile = profileDir()): string {
+  if (profile && win32.dirname(dir).toLowerCase() === win32.resolve(profile).toLowerCase())
+    return ''
+  return '-h' + createHash('sha256').update(dir.toLowerCase()).digest('hex').slice(0, 8)
+}
+
+function profileDir(): string | undefined {
+  try {
+    return userInfo().homedir
+  } catch {
+    return undefined
+  }
 }
 
 // The Go daemons on Windows speak first with "\0lgipc <token>\n", the token also kept in an owner-only file. Any user

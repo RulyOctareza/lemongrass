@@ -61,6 +61,8 @@ func (p *unixAskProcess) exitCode(waitErr error) int {
 
 func sameEnvName(a, b string) bool { return a == b }
 
+func newAskTail(askSize) askTail { return newTailWriter(askTailLines, askTailLineBytes) }
+
 // The terminal start makes the command a session leader, which also gives it its own process group, so a stop or a timeout reaches everything it started. Setpgid is left off because it cannot be combined with a new session.
 func setAskProcAttr(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{}

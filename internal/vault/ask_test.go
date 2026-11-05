@@ -92,10 +92,10 @@ func TestAskCreateValidation(t *testing.T) {
 		{"command no reason", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls"}, "needs a reason"},
 		{"reason long", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: strings.Repeat("r", MaxAskReason+1)}, "cap"},
 		{"invalid utf8", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: "\xff"}, "UTF-8"},
-		{"command account env", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "claude login", Reason: "r", AccountEnv: map[string]string{"CLAUDE_CONFIG_DIR": "/h/.claude-work", "CODEX_HOME": "/h/.codex"}}, ""},
+		{"command account env", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "claude login", Reason: "r", AccountEnv: map[string]string{"CLAUDE_CONFIG_DIR": filepath.Join(askCwd, ".claude-work"), "CODEX_HOME": filepath.Join(askCwd, ".codex")}}, ""},
 		{"unknown account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: "r", AccountEnv: map[string]string{"LD_PRELOAD": "/x.so"}}, "not an account variable"},
 		{"relative account variable", AskInput{Type: AskCommand, TabID: "t", Cwd: askCwd, Command: "ls", Reason: "r", AccountEnv: map[string]string{"CODEX_HOME": "codex"}}, "absolute path"},
-		{"account env on a channel ask", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Message: "m", Methods: []string{"GET"}, AccountEnv: map[string]string{"CODEX_HOME": "/h/.codex"}}, "only a command ask"},
+		{"account env on a channel ask", AskInput{Type: AskRester, TabID: "t", Cwd: askCwd, Message: "m", Methods: []string{"GET"}, AccountEnv: map[string]string{"CODEX_HOME": filepath.Join(askCwd, ".codex")}}, "only a command ask"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

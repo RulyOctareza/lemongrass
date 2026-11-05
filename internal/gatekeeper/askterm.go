@@ -41,11 +41,13 @@ type askConsole interface {
 
 // askTerm is the pseudo-terminal of one running command: everything it prints goes to the tail for the model, to the replay and to the one attached viewer, and the viewer's keystrokes go back in.
 type askTerm struct {
-	mu     sync.Mutex
-	pty    askConsole
-	replay []byte
-	viewer *askViewer
-	ended  bool
+	mu  sync.Mutex
+	pty askConsole
+	// onResize tells the tail about a new terminal size, which a screen tail needs.
+	onResize func(rows, cols int)
+	replay   []byte
+	viewer   *askViewer
+	ended    bool
 }
 
 // askViewer receives a running command's output until out is closed; reason says why, and is set before the close.
@@ -148,7 +150,13 @@ func (t *askTerm) resize(v *askViewer, rows, cols int) error {
 	if !current {
 		return errors.New("gatekeeper: this view is no longer attached")
 	}
-	return t.pty.Resize(rows, cols)
+	if err := t.pty.Resize(rows, cols); err != nil {
+		return err
+	}
+	if t.onResize != nil {
+		t.onResize(rows, cols)
+	}
+	return nil
 }
 
 // end cuts off the viewer for good; later output is still recorded but reaches no one.

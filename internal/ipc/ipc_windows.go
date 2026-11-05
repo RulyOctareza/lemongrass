@@ -39,7 +39,24 @@ func Address(name string) string {
 	if err != nil {
 		sid = "unknown"
 	}
-	return pipePrefix + "lemongrass-" + sid + "-" + name
+	return pipePrefix + "lemongrass-" + sid + homeTag() + "-" + name
+}
+
+// homeTag keeps a lemongrass home other than the profile's own apart: pipe names are machine-wide, so a test or a
+// second app run with USERPROFILE pointed elsewhere would otherwise take the real daemons' names. It is empty for the
+// profile's own home, and ipcAddress.ts computes the same tag.
+func homeTag() string {
+	profile, _ := windows.GetCurrentProcessToken().GetUserProfileDirectory()
+	return homeTagFor(config.Dir(), profile)
+}
+
+func homeTagFor(dir, profile string) string {
+	dir = filepath.Clean(dir)
+	if profile != "" && strings.EqualFold(filepath.Dir(dir), filepath.Clean(profile)) {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(strings.ToLower(dir)))
+	return "-h" + hex.EncodeToString(sum[:])[:8]
 }
 
 // pipeName maps a filesystem path, as tests and the flutter supervisor pass, onto a pipe of its own.

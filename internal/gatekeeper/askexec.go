@@ -6,6 +6,7 @@ package gatekeeper
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"slices"
@@ -139,7 +140,7 @@ func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size askSize, run *
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	tail := newTailWriter(askTailLines, askTailLineBytes)
+	tail := newAskTail(size)
 	// Every command gets a terminal, so one that asks for a password, a confirmation or a login can be answered from the card.
 	proc, err := startAsk(a.Command, a.Cwd, askEnv(os.Environ(), a.Path, a.AccountEnv), size)
 	if err != nil {
@@ -147,6 +148,7 @@ func (b *Backend) runAsk(a vault.Ask, timeout time.Duration, size askSize, run *
 		return
 	}
 	term := newAskTerm(proc.console())
+	term.onResize = tail.resize
 	pumped := make(chan struct{})
 	go func() {
 		term.pump(tail)
@@ -227,6 +229,14 @@ func askEnv(base []string, path string, account map[string]string) []string {
 	return append(env, "TERM=xterm-256color")
 }
 
+// askTail keeps what the model and the card read of a command's output: a line tail for a pty, a screen tail for a
+// ConPTY (askexec_unix.go, askexec_windows.go).
+type askTail interface {
+	io.Writer
+	String() string
+	resize(rows, cols int)
+}
+
 // tailWriter keeps the last lines of a command's terminal output as plain text, each cut to a byte cap, so a chatty command cannot grow the daemon's memory. Escape sequences and control bytes are dropped, and a carriage return not followed by a newline restarts the line, so a progress bar leaves only its last state.
 type tailWriter struct {
 	mu       sync.Mutex
@@ -258,6 +268,9 @@ const (
 func newTailWriter(maxLines, lineCap int) *tailWriter {
 	return &tailWriter{max: maxLines, lineCap: lineCap}
 }
+
+// resize does nothing: a pty's output is a stream of lines, whatever the terminal's size.
+func (w *tailWriter) resize(rows, cols int) {}
 
 func (w *tailWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()

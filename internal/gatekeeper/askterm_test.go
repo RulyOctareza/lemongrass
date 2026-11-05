@@ -38,14 +38,16 @@ func TestTailWriterTerminalOutput(t *testing.T) {
 	}
 }
 
-func startTestTerm(t *testing.T, script string) (*askTerm, *tailWriter, chan struct{}) {
+func startTestTerm(t *testing.T, script string) (*askTerm, askTail, chan struct{}) {
 	t.Helper()
-	proc, err := startAsk(script, t.TempDir(), os.Environ(), askSize{rows: askTermRows, cols: askTermCols})
+	size := askSize{rows: askTermRows, cols: askTermCols}
+	proc, err := startAsk(script, t.TempDir(), os.Environ(), size)
 	if err != nil {
 		t.Fatal(err)
 	}
 	term := newAskTerm(proc.console())
-	tail := newTailWriter(askTailLines, askTailLineBytes)
+	tail := newAskTail(size)
+	term.onResize = tail.resize
 	pumped := make(chan struct{})
 	go func() {
 		term.pump(tail)

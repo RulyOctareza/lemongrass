@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/Microsoft/go-winio"
+
+	"github.com/faizalv/lemongrass/internal/testenv"
 )
 
 // A raw client, as Node is, reads the greeting first and finds the token the server wrote to disk.
@@ -72,5 +74,24 @@ func TestAddressNamesThePipeByUserAndName(t *testing.T) {
 	}
 	if want := filepath.Join(filepath.Dir(TokenPath(Address("vault"))), "vault.ipckey"); TokenPath(got) != want {
 		t.Fatalf("TokenPath = %q, want %q", TokenPath(got), want)
+	}
+}
+
+// A test home must never take the names of the real daemons, which may be running beside the test.
+func TestAnotherHomeGetsItsOwnPipeNames(t *testing.T) {
+	real := Address("vault")
+	testenv.Home(t)
+	if other := Address("vault"); other == real || !strings.HasSuffix(other, "-vault") {
+		t.Fatalf("Address under a test home = %q, real = %q", other, real)
+	}
+}
+
+// The same vectors as ipcAddress.test.ts, so the app and the daemons agree on a test home's pipe names.
+func TestHomeTagMatchesTheApp(t *testing.T) {
+	if got := homeTagFor(`C:\Users\a\lg`, `c:\users\A`); got != "" {
+		t.Fatalf("profile home tag = %q", got)
+	}
+	if got := homeTagFor(`C:\Tmp\test-home\lg`, `C:\Users\a`); got != "-h964c5174" {
+		t.Fatalf("other home tag = %q", got)
 	}
 }
