@@ -35,11 +35,15 @@ const greetingMagic = "\x00lgipc "
 // Address is the named pipe for name. The SID keeps users apart, though any user can still create any pipe name:
 // Dial checks the server's owner, and Node clients check the greeting token instead.
 func Address(name string) string {
+	return pipePrefix + "lemongrass-" + userSIDOrUnknown() + homeTag() + "-" + name
+}
+
+func userSIDOrUnknown() string {
 	sid, err := privfs.UserSID()
 	if err != nil {
-		sid = "unknown"
+		return "unknown"
 	}
-	return pipePrefix + "lemongrass-" + sid + homeTag() + "-" + name
+	return sid
 }
 
 // homeTag keeps a lemongrass home other than the profile's own apart: pipe names are machine-wide, so a test or a
@@ -68,7 +72,9 @@ func pipeName(addr string) string {
 		addr = abs
 	}
 	sum := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(addr))))
-	return Address("p" + hex.EncodeToString(sum[:])[:16])
+	// The path already makes the name unique, so it carries no home tag: a caller that changes HOME between listening
+	// and dialing still reaches the same pipe.
+	return pipePrefix + "lemongrass-" + userSIDOrUnknown() + "-p" + hex.EncodeToString(sum[:])[:16]
 }
 
 // TokenPath is the owner-only file holding the greeting token of the server at addr. A pipe from Address keeps it

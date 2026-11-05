@@ -95,3 +95,14 @@ func TestHomeTagMatchesTheApp(t *testing.T) {
 		t.Fatalf("other home tag = %q", got)
 	}
 }
+
+// A path address names the same pipe whatever the home, so a test that changes HOME between listen and dial still
+// connects.
+func TestPathAddressIgnoresTheHome(t *testing.T) {
+	addr := filepath.Join(t.TempDir(), "x.sock")
+	before := pipeName(addr)
+	testenv.Home(t)
+	if after := pipeName(addr); after != before {
+		t.Fatalf("pipe for %s moved from %q to %q with the home", addr, before, after)
+	}
+}
