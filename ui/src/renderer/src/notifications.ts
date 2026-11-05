@@ -13,6 +13,8 @@ import type {
 } from '../../preload/types'
 import * as tree from './layoutTree'
 import { askState, openAsk } from './asks'
+import { lastSegment, pathWithin } from './pathForm'
+import { isWindows } from './platform'
 import { askParts, askWhere } from './components/decisions/askOrigin'
 import { shellTitles } from './shellRegistry'
 import { cleanTitle, tabParts, type NamePart } from './tabNames'
@@ -72,13 +74,13 @@ function liveTitle(tabId: string): string {
 function projectOf(path: string | undefined): Project | undefined {
   if (!path) return undefined
   return center.projects
-    .filter((p) => path === p.path || path.startsWith(p.path.replace(/\/$/, '') + '/'))
+    .filter((p) => pathWithin(p.path, path, isWindows))
     .sort((a, b) => b.path.length - a.path.length)[0]
 }
 
 function projectName(path: string | undefined): string {
   if (!path) return 'a project'
-  return projectOf(path)?.name ?? path.split('/').filter(Boolean).pop() ?? path
+  return projectOf(path)?.name ?? lastSegment(path, isWindows)
 }
 
 function who(tabId: string | undefined, closedTitle?: string): NamePart[] {

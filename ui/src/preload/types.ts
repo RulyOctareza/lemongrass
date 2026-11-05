@@ -1111,8 +1111,12 @@ export interface CreditsResult {
 export type DepStatus = 'ok' | 'missing' | 'belowFloor' | 'unknownVersion'
 
 // unknown is reported on an OS family whose origin probe is not built yet.
+// manager is set on Windows only, naming where the tool came from.
 export type DepOrigin =
-  { kind: 'package'; package: string } | { kind: 'manual' } | { kind: 'none' } | { kind: 'unknown' }
+  | { kind: 'package'; package: string; manager?: 'winget' | 'scoop' | 'installer' | 'windows' }
+  | { kind: 'manual' }
+  | { kind: 'none' }
+  | { kind: 'unknown' }
 
 export interface DepOffer {
   action: 'install' | 'upgrade'

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 The Lemongrass Authors
 
 import { ipcMain, net, protocol, WebContents } from 'electron'
-import { pathToFileURL } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import {
   closeSync,
   existsSync,
@@ -82,6 +82,18 @@ function extractToc(children: BiblioNode[]): BiblioNode | null {
 
 const ARCHIVE_DIR = 'archive'
 
+// Paths cross IPC '/'-separated on every OS, since the renderer splits them on '/'. Main converts at the boundary.
+function toIpcPath(nativeRelative: string): string {
+  return nativeRelative.split(sep).join('/')
+}
+
+// A renderer path split on '/'. On Windows a backslash would be a second separator that resolve() honours and these
+// segment checks do not, so a path carrying one is refused there; on Unix it is an ordinary file name character.
+function ipcSegments(relativePath: string): string[] | null {
+  if (sep === '\\' && relativePath.includes('\\')) return null
+  return relativePath.split('/')
+}
+
 function createdMs(path: string): number {
   const stats = statSync(path)
   return stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.mtimeMs
@@ -115,7 +127,7 @@ function walk(dir: string, relativeTo: string): BiblioNode[] {
 
   return entries.map((entry) => {
     const fullPath = join(dir, entry.name)
-    const relPath = relative(relativeTo, fullPath)
+    const relPath = toIpcPath(relative(relativeTo, fullPath))
     const dated = inBooks ? times(fullPath) : {}
     if (entry.isDirectory()) {
       return {
@@ -195,8 +207,8 @@ const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 // True for scratchpad/ and everything under it except scratchpad/archive, which only a model may change.
 function isLiveScratchpadPath(relativePath: string): boolean {
-  const parts = relativePath.split(sep)
-  return parts[0] === 'scratchpad' && parts[1] !== 'archive'
+  const parts = ipcSegments(relativePath)
+  return parts !== null && parts[0] === 'scratchpad' && parts[1] !== 'archive'
 }
 
 // Starts a recursive watch on a project's biblio/ root the first time its
@@ -377,7 +389,7 @@ export function registerBiblioHandlers(getSender: () => WebContents | undefined)
         const taskDir = join(scratchpadRoot, slug)
         mkdirSync(taskDir, { recursive: true })
         writeFileSync(join(taskDir, 'notes.md'), content, 'utf-8')
-        return `scratchpad${sep}${slug}${sep}notes.md`
+        return `scratchpad/${slug}/notes.md`
       } catch {
         return null
       }
@@ -390,8 +402,9 @@ export function registerBiblioHandlers(getSender: () => WebContents | undefined)
   ipcMain.handle(
     'biblio:archiveScratchpad',
     (_event, projectPath: string, relativePath: string): boolean => {
-      const parts = relativePath.split(sep)
-      if (parts.length !== 2 || parts[0] !== 'scratchpad' || parts[1] === 'archive') return false
+      const parts = ipcSegments(relativePath)
+      if (!parts || parts.length !== 2 || parts[0] !== 'scratchpad' || parts[1] === 'archive')
+        return false
       const slug = parts[1]
 
       const biblioRoot = join(projectPath, 'biblio')
@@ -456,7 +469,7 @@ export function registerBiblioHandlers(getSender: () => WebContents | undefined)
         }
 
         writeFileSync(join(targetDir, filename), content, 'utf-8')
-        return `${folderRelativePath}${sep}${filename}`
+        return `${folderRelativePath}/${filename}`
       } catch {
         return null
       }
@@ -477,8 +490,13 @@ export function registerBiblioHandlers(getSender: () => WebContents | undefined)
       const extension = IMAGE_EXTENSIONS[mime]
       if (!extension) return { error: 'unsupported' }
       if (bytes.byteLength > MAX_IMAGE_BYTES) return { error: 'too-large' }
-      const noteParts = notePath.split(sep)
-      if (noteParts[0] !== 'scratchpad' || noteParts.length < 3 || noteParts[1] === 'archive')
+      const noteParts = ipcSegments(notePath)
+      if (
+        !noteParts ||
+        noteParts[0] !== 'scratchpad' ||
+        noteParts.length < 3 ||
+        noteParts[1] === 'archive'
+      )
         return { error: 'failed' }
       try {
         const root = realpathSync(join(projectPath, 'biblio'))
@@ -501,8 +519,14 @@ export function registerBiblioHandlers(getSender: () => WebContents | undefined)
     'biblio:readImageFile',
     (
       _event,
-      filePath: string
+      pathOrURL: string
     ): { bytes: Uint8Array; mime: string } | { error: 'too-large' | 'unsupported' | 'failed' } => {
+      let filePath: string
+      try {
+        filePath = pathOrURL.startsWith('file:') ? fileURLToPath(pathOrURL) : pathOrURL
+      } catch {
+        return { error: 'failed' }
+      }
       const mime = Object.keys(IMAGE_EXTENSIONS).find(
         (m) =>
           IMAGE_EXTENSIONS[m] === extname(filePath).toLowerCase() ||

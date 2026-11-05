@@ -10,6 +10,8 @@ import { Markdown } from 'tiptap-markdown'
 import { Find, findState, setFindQuery, stepFind } from '../editorFind'
 import AppInput from './AppInput.vue'
 import type { AppInputHandle } from './appInput'
+import { isAbsolutePath, lastSegment } from '../pathForm'
+import { isWindows } from '../platform'
 
 const props = defineProps<{
   modelValue: string
@@ -91,7 +93,7 @@ async function pathToFile(path: string): Promise<File | null> {
     showImageNotice(errorMessages[result.error])
     return null
   }
-  const name = path.split('/').pop() ?? 'image'
+  const name = lastSegment(path.startsWith('file:') ? decodeURIComponent(path) : path, isWindows)
   return new File([new Uint8Array(result.bytes)], name, { type: result.mime })
 }
 
@@ -144,9 +146,10 @@ function pastedImagePaths(data: DataTransfer | null): string[] {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith('#'))
+  // A file URL goes to main as is, which turns it into a path the host's own way (file:///C:/x.png on Windows).
   const paths = lines.map((line) => {
-    if (line.startsWith('file://')) return decodeURIComponent(new URL(line).pathname)
-    return line.startsWith('/') ? line : ''
+    if (line.startsWith('file://')) return line
+    return isAbsolutePath(line, isWindows) ? line : ''
   })
   return paths.length && paths.every((path) => IMAGE_PATH.test(path)) ? paths : []
 }

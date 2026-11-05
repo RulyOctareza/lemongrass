@@ -42,7 +42,8 @@ export function run(cwd: string, args: string[], options: RunOptions = {}): Prom
         encoding: 'utf8',
         timeout: options.timeout ?? READ_TIMEOUT_MS,
         maxBuffer: options.maxBuffer ?? MAX_OUTPUT_BYTES,
-        env: { ...process.env, ...options.env }
+        env: { ...process.env, ...options.env },
+        windowsHide: true
       },
       (failure: ExecFileException | null, stdout, stderr) => {
         if (!failure) return resolvePromise({ code: 0, stdout, stderr, overflow: false })
@@ -62,7 +63,12 @@ export function run(cwd: string, args: string[], options: RunOptions = {}): Prom
         })
       }
     )
-    if (options.input !== undefined) child.stdin?.end(options.input)
+    if (options.input !== undefined) {
+      // git can exit before reading its input (not a repository), and the broken pipe must not escape as an
+      // unhandled error; the exit code already carries the outcome.
+      child.stdin?.on('error', () => undefined)
+      child.stdin?.end(options.input)
+    }
   })
 }
 
@@ -75,8 +81,10 @@ export async function repoRoot(projectPath: string): Promise<string | null> {
   const cached = topLevelCache.get(projectPath)
   if (cached) return cached
   const result = await run(projectPath, ['rev-parse', '--show-toplevel'], { env: readEnv })
-  const root = result.code === 0 ? result.stdout.trim() : ''
-  if (!root) return null
+  const top = result.code === 0 ? result.stdout.trim() : ''
+  if (!top) return null
+  // Git for Windows prints C:/... with forward slashes, which isInside's resolve() would never match.
+  const root = resolve(top)
   topLevelCache.set(projectPath, root)
   return root
 }

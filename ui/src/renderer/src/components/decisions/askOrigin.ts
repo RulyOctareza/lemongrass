@@ -4,6 +4,8 @@
 import { reactive } from 'vue'
 import type { Ask, Project } from '../../../../preload/types'
 import { capitalizeParts, plainText, tabParts, type NamePart } from '../../tabNames'
+import { pathBelow, pathWithin } from '../../pathForm'
+import { isWindows } from '../../platform'
 
 // Who asked and where, in words a person reads without the ask id: the tab by its quoted title or its
 // workgroup role, and the project the ask's folder belongs to.
@@ -21,10 +23,10 @@ export function loadAskProjects(): void {
 export function askWhere(ask: Ask): string {
   const cwd = ask.cwd
   const owner = projects.list
-    .filter((p) => cwd === p.path || cwd.startsWith(p.path.replace(/\/$/, '') + '/'))
+    .filter((p) => pathWithin(p.path, cwd, isWindows))
     .sort((a, b) => b.path.length - a.path.length)[0]
   if (!owner) return cwd
-  const rest = cwd.slice(owner.path.replace(/\/$/, '').length).replace(/^\//, '')
+  const rest = pathBelow(owner.path, cwd, isWindows)
   return rest ? `the ${rest} folder of ${owner.name}` : owner.name
 }
 
