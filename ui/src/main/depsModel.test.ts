@@ -12,7 +12,10 @@ import {
   offerBlocked,
   parseReport,
   requiredRegressed,
-  successText
+  stopsAdbServer,
+  successText,
+  wingetArgs,
+  wingetExitText
 } from './depsModel.ts'
 
 // The documented shape of `lgrassd deps check --json`, one entry per status, origin and offer case.
@@ -128,18 +131,56 @@ test('parseReport refuses the whole report when one entry is unreadable', () => 
 
 test('installUnsupported names a source build and other systems', () => {
   assert.match(installUnsupported(false, 'linux', 'x64') ?? '', /source build/)
-  assert.match(installUnsupported(true, 'win32', 'x64') ?? '', /not supported/)
+  assert.equal(installUnsupported(true, 'win32', 'x64'), null)
+  assert.match(installUnsupported(false, 'win32', 'x64') ?? '', /source build/)
+  assert.match(installUnsupported(true, 'darwin', 'arm64') ?? '', /not supported/)
   assert.equal(installUnsupported(true, 'linux', 'x64'), null)
   assert.equal(installUnsupported(true, 'linux', 'arm64'), null)
   assert.match(installUnsupported(true, 'linux', 'ia32') ?? '', /not supported/)
 })
 
-test('offerBlocked lets only the helper route run', () => {
+test('offerBlocked lets each platform run only its own route', () => {
   const offer = { action: 'install' as const, package: 'android-tools', route: 'helper' as const }
-  assert.equal(offerBlocked(offer, null), null)
-  assert.match(offerBlocked(offer, 'source build') ?? '', /source build/)
-  assert.ok(offerBlocked({ ...offer, route: 'winget' }, null))
-  assert.ok(offerBlocked(null, null))
+  const winget = { ...offer, package: 'Google.PlatformTools', route: 'winget' as const }
+  assert.equal(offerBlocked(offer, null, 'linux'), null)
+  assert.match(offerBlocked(offer, 'source build', 'linux') ?? '', /source build/)
+  assert.ok(offerBlocked(winget, null, 'linux'))
+  assert.equal(offerBlocked(winget, null, 'win32'), null)
+  assert.ok(offerBlocked(offer, null, 'win32'))
+  assert.ok(offerBlocked({ ...offer, route: 'brew' }, null, 'darwin'))
+  assert.ok(offerBlocked(null, null, 'linux'))
+})
+
+test('parseReport keeps a known Windows manager and drops an unknown one', () => {
+  const winget = parseReport(
+    withGit({ origin: { kind: 'package', package: 'Git.Git', manager: 'installer' } })
+  )
+  assert.deepEqual(winget?.deps[0].origin, {
+    kind: 'package',
+    package: 'Git.Git',
+    manager: 'installer'
+  })
+  const odd = parseReport(withGit({ origin: { kind: 'package', package: 'x', manager: 'choco' } }))
+  assert.deepEqual(odd?.deps[0].origin, { kind: 'package', package: 'x' })
+})
+
+test('winget runs the offered id exactly, without prompts', () => {
+  const args = wingetArgs({ action: 'upgrade', package: 'Git.Git', route: 'winget' })
+  assert.deepEqual(args.slice(0, 4), ['upgrade', '--id', 'Git.Git', '--exact'])
+  assert.ok(args.includes('--accept-package-agreements'))
+  assert.ok(args.includes('--disable-interactivity'))
+  assert.ok(stopsAdbServer('adb') && stopsAdbServer('scrcpy') && !stopsAdbServer('git'))
+})
+
+test('wingetExitText words winget codes', () => {
+  assert.match(wingetExitText(0x8a15002b, 'git', ''), /no newer git/)
+  assert.match(wingetExitText(-1978335189, 'git', ''), /no newer git/)
+  assert.match(wingetExitText(0x8a150014, 'adb', ''), /could not find/)
+  assert.equal(
+    wingetExitText(0x8a150006, 'git', 'Installer failed'),
+    'winget ended with code 0x8A150006. Installer failed'
+  )
+  assert.match(wingetExitText(null, 'git', ''), /stopped/)
 })
 
 test('appendOutput splits on carriage returns and keeps the newest lines', () => {

@@ -11,6 +11,7 @@ import {
   originText,
   osText,
   routeBlocked,
+  routeNote,
   statusText,
   tone
 } from './depsView.ts'
@@ -64,5 +65,29 @@ test('tone and route', () => {
   assert.equal(tone(adb), 'muted')
   assert.equal(tone({ ...adb, status: 'ok' }), 'ok')
   assert.equal(routeBlocked(git.offer!), null)
-  assert.ok(routeBlocked({ ...git.offer!, route: 'winget' }))
+  assert.equal(routeBlocked({ ...git.offer!, route: 'winget' }), null)
+  assert.ok(routeBlocked({ ...git.offer!, route: 'brew' }))
+  assert.equal(routeNote(git.offer!), null)
+  assert.match(
+    routeNote({ ...git.offer!, package: 'Git.Git', route: 'winget' }) ?? '',
+    /license of Git\.Git/
+  )
+})
+
+test('a Windows origin names where the tool came from', () => {
+  const pkg = (manager: 'winget' | 'scoop' | 'installer' | 'windows', name: string): DepEntry => ({
+    ...git,
+    origin: { kind: 'package', package: name, manager }
+  })
+  assert.equal(
+    originText(pkg('winget', 'Google.PlatformTools')),
+    'from winget, Google.PlatformTools'
+  )
+  assert.equal(originText(pkg('scoop', 'adb')), 'from Scoop')
+  assert.equal(originText(pkg('installer', 'Git.Git')), 'from the Git for Windows installer')
+  assert.equal(originText(pkg('windows', 'OpenSSH.Client')), 'part of Windows')
+  assert.equal(
+    osText({ family: 'windows', id: 'windows', version: '11 (build 22631)' }),
+    'Windows 11 (build 22631)'
+  )
 })

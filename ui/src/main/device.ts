@@ -60,8 +60,12 @@ function knownAdb(): string | null {
 
 function run(file: string, args: string[]): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    execFile(file, args, { timeout: ADB_TIMEOUT_MS, encoding: 'utf8' }, (failure, stdout, stderr) =>
-      resolve({ ok: !failure, out: failure ? stderr || failure.message : stdout })
+    execFile(
+      file,
+      args,
+      { timeout: ADB_TIMEOUT_MS, encoding: 'utf8', windowsHide: true },
+      (failure, stdout, stderr) =>
+        resolve({ ok: !failure, out: failure ? stderr || failure.message : stdout })
     )
   })
 }
@@ -78,12 +82,18 @@ async function findScrcpyServer(): Promise<ScrcpyServer | MissingTool | string> 
   if (typeof scrcpy !== 'string') return scrcpy
   const version = /^scrcpy (\S+)/m.exec((await run(scrcpy, ['--version'])).out)?.[1]
   if (!version) return 'Could not read the scrcpy version.'
-  const candidates = [
-    process.env.SCRCPY_SERVER_PATH,
-    join(dirname(dirname(realpathSync(scrcpy))), 'share', 'scrcpy', 'scrcpy-server'),
-    '/usr/local/share/scrcpy/scrcpy-server',
-    '/usr/share/scrcpy/scrcpy-server'
-  ].filter((path): path is string => !!path)
+  const real = realpathSync(scrcpy)
+  // The Windows release keeps the server beside scrcpy.exe; Unix installs put it under share.
+  const candidates = (
+    process.platform === 'win32'
+      ? [process.env.SCRCPY_SERVER_PATH, join(dirname(real), 'scrcpy-server')]
+      : [
+          process.env.SCRCPY_SERVER_PATH,
+          join(dirname(dirname(real)), 'share', 'scrcpy', 'scrcpy-server'),
+          '/usr/local/share/scrcpy/scrcpy-server',
+          '/usr/share/scrcpy/scrcpy-server'
+        ]
+  ).filter((path): path is string => !!path)
   for (const path of candidates) {
     try {
       accessSync(path, constants.R_OK)
@@ -246,25 +256,29 @@ async function startSession(
   if (!forwarded.ok) return failed(forwarded.out.trim())
   session.port = port
 
-  const child = spawn(adb, [
-    '-s',
-    serial,
-    'shell',
-    `CLASSPATH=${remote}`,
-    'app_process',
-    '/',
-    'com.genymobile.scrcpy.Server',
-    server.version,
-    `scid=${scid}`,
-    'log_level=warn',
-    'tunnel_forward=true',
-    'audio=false',
-    'control=true',
-    'clipboard_autosync=false',
-    'video_codec=h264',
-    `max_size=${MAX_SIZE}`,
-    `video_bit_rate=${BIT_RATE}`
-  ])
+  const child = spawn(
+    adb,
+    [
+      '-s',
+      serial,
+      'shell',
+      `CLASSPATH=${remote}`,
+      'app_process',
+      '/',
+      'com.genymobile.scrcpy.Server',
+      server.version,
+      `scid=${scid}`,
+      'log_level=warn',
+      'tunnel_forward=true',
+      'audio=false',
+      'control=true',
+      'clipboard_autosync=false',
+      'video_codec=h264',
+      `max_size=${MAX_SIZE}`,
+      `video_bit_rate=${BIT_RATE}`
+    ],
+    { windowsHide: true }
+  )
   session.server = child
 
   let serverOutput = ''

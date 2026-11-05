@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -37,8 +36,10 @@ func (r *Recorder) lines() string {
 	return strings.Join(r.output, " ")
 }
 
-// StartRecording begins recording to path and returns once the first frame is in the file.
-func StartRecording(ctx context.Context, scrcpy, serial, path string) (*Recorder, error) {
+// StartRecording begins recording to path and returns once the first frame is in the file. adb is the one the
+// dependency check resolved, handed to scrcpy so it does not start its own bundled copy, whose server version would
+// fight the running one; "" leaves scrcpy to find adb itself.
+func StartRecording(ctx context.Context, scrcpy, adb, serial, path string) (*Recorder, error) {
 	cmd := exec.Command(scrcpy,
 		"--serial="+serial,
 		"--no-window",
@@ -49,6 +50,10 @@ func StartRecording(ctx context.Context, scrcpy, serial, path string) (*Recorder
 		"--video-codec-options=i-frame-interval:int=1",
 		"--record="+path,
 	)
+	if adb != "" {
+		cmd.Env = append(os.Environ(), "ADB="+adb)
+	}
+	recorderProcAttr(cmd)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -90,9 +95,10 @@ func StartRecording(ctx context.Context, scrcpy, serial, path string) (*Recorder
 	}
 }
 
-// Stop ends the recording; scrcpy finishes the mp4 on SIGINT.
+// Stop ends the recording; scrcpy finishes the mp4 on SIGINT, or Ctrl+C on Windows. Should that fail to reach
+// it, the wait below ends in a kill.
 func (r *Recorder) Stop() error {
-	_ = r.cmd.Process.Signal(syscall.SIGINT)
+	_ = interrupt(r.cmd.Process)
 	done := make(chan error, 1)
 	go func() { done <- r.cmd.Wait() }()
 	select {

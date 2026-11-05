@@ -18,11 +18,19 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+type Manager = NonNullable<Extract<DepOrigin, { kind: 'package' }>['manager']>
+const MANAGERS: string[] = ['winget', 'scoop', 'installer', 'windows'] satisfies Manager[]
+
 function parseOrigin(value: unknown): DepOrigin | null {
   if (!isRecord(value) || !ORIGINS.includes(text(value.kind))) return null
   if (value.kind !== 'package') return { kind: value.kind as 'manual' | 'none' | 'unknown' }
   const name = text(value.package)
-  return name ? { kind: 'package', package: name } : null
+  if (!name) return null
+  // Only Windows reports a manager; an unknown one is dropped rather than refusing the report.
+  const manager = text(value.manager)
+  return MANAGERS.includes(manager)
+    ? { kind: 'package', package: name, manager: manager as Manager }
+    : { kind: 'package', package: name }
 }
 
 function parseOffer(value: unknown): DepOffer | null | undefined {
@@ -83,26 +91,76 @@ export function helperArch(arch: string): string | null {
   return arch === 'x64' ? 'amd64' : arch === 'arm64' ? 'arm64' : null
 }
 
-// Why this build cannot install anything at all, or null. The root helper ships only in the Linux rpm.
+// Why this build cannot install anything at all, or null. The root helper ships only in the Linux rpm;
+// Windows installs run winget, which the system already has.
 export function installUnsupported(
   packaged: boolean,
   platform: string,
   arch: string
 ): string | null {
   if (!packaged) return 'This is a source build. Installs run only in the installed app.'
+  if (platform === 'win32') return null
   if (platform !== 'linux' || !helperArch(arch)) {
     return 'Installing from lemongrass is not supported on this system yet.'
   }
   return null
 }
 
-// Why one offer cannot run here, or null. Only the Linux helper route is built so far.
-export function offerBlocked(offer: DepOffer | null, unsupported: string | null): string | null {
+// The route each platform runs: the root helper on Linux, winget on Windows.
+const ROUTE_OF_PLATFORM: Record<string, DepOffer['route']> = { linux: 'helper', win32: 'winget' }
+
+// Why one offer cannot run here, or null.
+export function offerBlocked(
+  offer: DepOffer | null,
+  unsupported: string | null,
+  platform: string
+): string | null {
   if (!offer) return 'Lemongrass has nothing to install for this.'
   if (unsupported) return unsupported
-  if (offer.route !== 'helper')
+  if (ROUTE_OF_PLATFORM[platform] !== offer.route)
     return 'Installing from lemongrass is not supported on this system yet.'
   return null
+}
+
+// The winget run for an offer. winget asks to accept the source's and the package's agreements on first use
+// and cannot be answered without a terminal, so the accept flags stand in for that answer; the row says so
+// before the button is pressed. An installer that needs admin, such as Git for Windows, still raises its own
+// UAC prompt.
+export function wingetArgs(offer: DepOffer): string[] {
+  return [
+    offer.action,
+    '--id',
+    offer.package,
+    '--exact',
+    '--source',
+    'winget',
+    '--silent',
+    '--disable-interactivity',
+    '--accept-source-agreements',
+    '--accept-package-agreements'
+  ]
+}
+
+// A running adb.exe is locked and cannot be replaced, and scrcpy's folder carries its own adb, so updating
+// either stops the adb server first.
+export function stopsAdbServer(name: string): boolean {
+  return name === 'adb' || name === 'scrcpy'
+}
+
+// winget's codes are HRESULTs, which Node reports as unsigned numbers.
+const WINGET_NO_UPGRADE = 0x8a15002b
+const WINGET_NOT_FOUND = 0x8a150014
+
+// The sentence for a winget run that did not exit 0.
+export function wingetExitText(code: number | null, name: string, lastLine: string): string {
+  if (code === null) return 'The install was stopped before it finished.'
+  const unsigned = code >>> 0
+  if (unsigned === WINGET_NO_UPGRADE) return `winget has no newer ${name}.`
+  if (unsigned === WINGET_NOT_FOUND) return `winget could not find the package for ${name}.`
+  const hex = `0x${unsigned.toString(16).toUpperCase()}`
+  return lastLine
+    ? `winget ended with code ${hex}. ${lastLine}`
+    : `winget ended with code ${hex}. Its last output is shown above.`
 }
 
 // Adds a chunk of output to the kept lines. dnf redraws its progress bars with a carriage return, so
@@ -163,13 +221,19 @@ export function nextSeen(
 
 // The sentence for a helper run that exited 0. dnf also exits 0 with "Nothing to do" when the
 // repositories have no newer package, so the check that follows decides whether it fixed anything.
-export function successText(action: DepOffer['action'], after: DepEntry | undefined): DepOutcome {
+export function successText(
+  action: DepOffer['action'],
+  after: DepEntry | undefined,
+  route: DepOffer['route'] = 'helper'
+): DepOutcome {
   if (after && after.status !== 'ok') {
     return {
       ok: false,
       text:
         action === 'upgrade'
-          ? `Your repositories have no newer ${after.name}.`
+          ? route === 'winget'
+            ? `winget has no newer ${after.name}.`
+            : `Your repositories have no newer ${after.name}.`
           : `${after.name} is still not usable after the install.`
     }
   }

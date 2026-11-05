@@ -10,6 +10,7 @@ import {
   featuresText,
   originText,
   routeBlocked,
+  routeNote,
   statusText,
   tone
 } from '../../depsView'
@@ -35,6 +36,8 @@ const disabled = computed(
     !!props.state.installing ||
     props.state.phase === 'checking'
 )
+
+const note = computed(() => (props.dep.offer && !blocked.value ? routeNote(props.dep.offer) : null))
 
 const meta = computed(() => [props.dep.path, originText(props.dep)].filter(Boolean).join(', '))
 
@@ -65,6 +68,7 @@ function install(): void {
     <p v-if="dep.features.length" class="dep-text">{{ featuresText(dep.features) }}</p>
     <p v-if="dep.message" class="dep-text dep-message">{{ dep.message }}</p>
     <p v-if="blocked && weight" class="dep-text">{{ blocked }}</p>
+    <p v-if="note && weight && !installing" class="dep-text">{{ note }}</p>
     <div v-if="installing" class="dep-output">
       <p class="dep-text">
         {{ installing.action === 'upgrade' ? 'Updating' : 'Installing' }} {{ installing.package }}.

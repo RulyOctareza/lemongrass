@@ -152,7 +152,9 @@ func startTestRecording(ctx context.Context, serial, path string) (*flutter.Reco
 	if err != nil {
 		return nil, "not recorded: " + err.Error()
 	}
-	rec, err := flutter.StartRecording(ctx, scrcpy, serial, path)
+	// A missing adb is reported by the device step itself, so it only leaves scrcpy to find its own here.
+	adb, _ := android.FindTool("adb")
+	rec, err := flutter.StartRecording(ctx, scrcpy, adb, serial, path)
 	if err != nil {
 		return nil, "not recorded: " + err.Error()
 	}

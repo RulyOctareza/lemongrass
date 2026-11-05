@@ -41,6 +41,16 @@ export function statusText(dep: DepEntry): string {
 export function originText(dep: DepEntry): string {
   switch (dep.origin.kind) {
     case 'package':
+      switch (dep.origin.manager) {
+        case 'winget':
+          return `from winget, ${dep.origin.package}`
+        case 'scoop':
+          return 'from Scoop'
+        case 'installer':
+          return 'from the Git for Windows installer'
+        case 'windows':
+          return 'part of Windows'
+      }
       return `from ${dep.origin.package}`
     case 'manual':
       return 'installed by hand'
@@ -60,11 +70,20 @@ export function actionLabel(offer: DepOffer): string {
   return offer.action === 'upgrade' ? 'Update' : 'Install'
 }
 
-// Only the Linux helper route runs from the app so far.
+// The Linux helper and winget run from the app; Homebrew does not yet. Main also refuses a route that is
+// not this platform's own.
 export function routeBlocked(offer: DepOffer): string | null {
-  return offer.route === 'helper'
+  return offer.route === 'helper' || offer.route === 'winget'
     ? null
     : 'Installing this from lemongrass is not supported on this system yet.'
+}
+
+// Said under a winget button before it is pressed, since winget accepts the package's license on the
+// user's behalf.
+export function routeNote(offer: DepOffer): string | null {
+  return offer.route === 'winget'
+    ? `Installs through winget, which accepts the license of ${offer.package} for you.`
+    : null
 }
 
 export function tone(dep: DepEntry): 'ok' | 'warn' | 'muted' {

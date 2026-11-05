@@ -14,11 +14,15 @@ import {
   offerBlocked,
   parseReport,
   requiredRegressed,
+  stopsAdbServer,
   successText,
+  wingetArgs,
+  wingetExitText,
   type RequiredStatuses
 } from './depsModel'
 import { loadUiState, saveUiState } from './uiState'
 import { setGitPath } from './gitRun'
+import { stopAllDevices } from './device'
 
 // The check runs each tool's version command, and rpm -qf on a cold cache, so it gets more time than a plain lgrassd call.
 const CHECK_TIMEOUT_MS = 60_000
@@ -57,7 +61,7 @@ function runCheck(path: string, fresh: boolean): Promise<DepsReport> {
     execFile(
       path,
       args,
-      { encoding: 'utf8', timeout: CHECK_TIMEOUT_MS },
+      { encoding: 'utf8', timeout: CHECK_TIMEOUT_MS, windowsHide: true },
       (failure, stdout, stderr) => {
         if (failure) return reject(new Error(stderr.trim() || failure.message))
         const report = parseReport(stdout)
@@ -114,23 +118,29 @@ async function install(name: string): Promise<void> {
   if (state.installing || checking) return
   const dep = state.report?.deps.find((entry) => entry.name === name)
   const offer = dep?.offer ?? null
-  if (!dep || !offer || offerBlocked(offer, state.unsupported)) return
+  if (!dep || !offer || offerBlocked(offer, state.unsupported, process.platform)) return
 
   const outcomes = { ...state.outcomes }
   delete outcomes[name]
   set({ installing: { name, action: offer.action, package: offer.package, lines: [] }, outcomes })
 
+  const winget = offer.route === 'winget'
+  if (winget && stopsAdbServer(name)) await stopAdbServer()
+
   let partial = ''
   let lastError = ''
+  let lastLine = ''
   let errorPartial = ''
+  const [file, args] = winget
+    ? ['winget', wingetArgs(offer)]
+    : ['pkexec', [HELPER, offer.action, offer.package]]
   const code = await new Promise<number | null>((resolve) => {
-    const child = spawn('pkexec', [HELPER, offer.action, offer.package], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+    const child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
     const take = (chunk: Buffer): void => {
       if (!state.installing) return
       const [lines, rest] = appendOutput(state.installing.lines, partial, chunk.toString())
       partial = rest
+      if (lines.length > 0) lastLine = lines[lines.length - 1]
       set({ installing: { ...state.installing, lines } })
     }
     child.stdout.on('data', take)
@@ -141,7 +151,7 @@ async function install(name: string): Promise<void> {
       if (errors.length > 0) lastError = errors[errors.length - 1]
     })
     child.once('error', (err) => {
-      lastError = `deps: pkexec could not start: ${err.message}`
+      lastError = `deps: ${file} could not start: ${err.message}`
       resolve(-1)
     })
     child.once('close', (exitCode) => resolve(exitCode))
@@ -150,14 +160,30 @@ async function install(name: string): Promise<void> {
 
   set({ installing: null })
   // dnf exits 0 with nothing to do when the repositories have no newer package, so only the fresh
-  // check after the run says whether it fixed anything.
+  // check after the run says whether it fixed anything. On Windows that check finds a tool winget just
+  // put on PATH, since lgrassd reads PATH from the registry rather than from the app.
   await check(true)
   const after = state.report?.deps.find((entry) => entry.name === name)
+  const failure =
+    code === -1
+      ? lastError
+      : winget
+        ? wingetExitText(code, name, lastError || lastLine)
+        : helperExitText(code, lastError)
   const outcome =
-    code === 0
-      ? successText(offer.action, after)
-      : { ok: false, text: code === -1 ? lastError : helperExitText(code, lastError) }
+    code === 0 ? successText(offer.action, after, offer.route) : { ok: false, text: failure }
   set({ outcomes: { ...state.outcomes, [name]: outcome } })
+}
+
+// Ends the Device pane's mirrors and the adb server, so winget can replace adb.exe. A failure is ignored,
+// since no server running is the usual case and winget reports a file still in use itself.
+async function stopAdbServer(): Promise<void> {
+  stopAllDevices()
+  const adb = knownDep('adb')?.path
+  if (!adb) return
+  await new Promise<void>((resolve) =>
+    execFile(adb, ['kill-server'], { timeout: 10_000, windowsHide: true }, () => resolve())
+  )
 }
 
 function setupDone(): void {

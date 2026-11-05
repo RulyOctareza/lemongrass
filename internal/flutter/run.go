@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/faizalv/lemongrass/internal/ipc"
 )
 
 // Run states written to run.json.
@@ -50,7 +52,7 @@ func statePath(dir string) string { return filepath.Join(dir, "run.json") }
 func LogPath(dir string) string { return filepath.Join(dir, "run.log") }
 
 // SocketPath is the supervisor's control socket. It lives in the temp dir under a short name
-// because a unix socket path is capped near 104 bytes on macOS.
+// because a unix socket path is capped near 104 bytes on macOS; on Windows ipc maps it to a pipe.
 func SocketPath(project string) string {
 	sum := sha1.Sum([]byte(project))
 	return filepath.Join(os.TempDir(), "lgf-"+hex.EncodeToString(sum[:])[:10]+".sock")
@@ -148,7 +150,7 @@ func Wait(project string, timeout time.Duration) (RunState, error) {
 
 // Control sends reload, restart or stop to the supervisor and returns its answer.
 func Control(project, command string) (string, error) {
-	conn, err := net.DialTimeout("unix", SocketPath(project), 2*time.Second)
+	conn, err := ipc.Dial(SocketPath(project), 2*time.Second)
 	if err != nil {
 		return "", errors.New("flutter: no app is running from this project. Start one with lgrass flutter run")
 	}
@@ -238,8 +240,7 @@ func Serve(project, serial string, args []string, onStarted func(vmService strin
 	}
 
 	sock := SocketPath(project)
-	_ = os.Remove(sock)
-	listener, err := net.Listen("unix", sock)
+	listener, err := ipc.Listen(sock)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		sv.fail("control socket: " + err.Error())

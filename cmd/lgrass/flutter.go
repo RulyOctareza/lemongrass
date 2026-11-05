@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,6 +55,9 @@ func splitPassthrough(args []string) ([]string, []string) {
 func runFlutter(ctx context.Context, args []string) error {
 	if len(args) > 0 && args[0] == "_serve" {
 		return flutterServe(args[1:])
+	}
+	if len(args) > 0 && args[0] == "_interrupt" {
+		return flutterInterrupt(args[1:])
 	}
 	own, passthrough := splitPassthrough(args)
 	f, err := parseCLIFlags(own, "device", "flavor", "target", "wait", "name", "id", "limit")
@@ -204,4 +208,17 @@ func flutterServe(args []string) error {
 		return errors.New("usage: lgrass flutter _serve <project> <serial> -- <flutter run args>")
 	}
 	return flutter.Serve(own[0], own[1], passthrough, flutter.EnableHTTPProfiling)
+}
+
+// flutterInterrupt is the Windows helper a recording's Stop starts to send scrcpy its Ctrl+C; it is not meant to be
+// run by hand.
+func flutterInterrupt(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: lgrass flutter _interrupt <scrcpy pid>")
+	}
+	pid, err := strconv.Atoi(args[0])
+	if err != nil || pid <= 0 {
+		return errors.New("usage: lgrass flutter _interrupt <scrcpy pid>")
+	}
+	return flutter.Interrupt(pid)
 }
