@@ -27,15 +27,17 @@ const (
 
 // The full hook JSON carries more fields depending on hook_event_name; this is only the subset lgrass reads.
 type hookEvent struct {
-	SessionID            string          `json:"session_id"`
-	TranscriptPath       string          `json:"transcript_path"`
-	Cwd                  string          `json:"cwd"`
-	ToolName             string          `json:"tool_name"`
-	ToolInput            json.RawMessage `json:"tool_input"`
-	SessionSource        string          `json:"source"`
-	NotificationType     string          `json:"notification_type"`
-	Message              string          `json:"message"`
-	TabID                string
+	SessionID        string          `json:"session_id"`
+	TranscriptPath   string          `json:"transcript_path"`
+	Cwd              string          `json:"cwd"`
+	ToolName         string          `json:"tool_name"`
+	ToolInput        json.RawMessage `json:"tool_input"`
+	SessionSource    string          `json:"source"`
+	NotificationType string          `json:"notification_type"`
+	Message          string          `json:"message"`
+	TabID            string
+	// Vendor is the agent that sent the payload, "claude" or "codex", from hookVendor.
+	Vendor               string
 	EnforceBibliothek    bool
 	Raw                  []byte `json:"-"`
 	PreserveSessionState bool
@@ -52,25 +54,30 @@ type patchToolInput struct {
 // Every failure here fails soft so a hook-side problem never breaks the agent's own hook chain.
 func Run(args []string, tabID string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: lgrassd hook <SessionStart|SessionEnd|PreToolUse|PostToolUse|UserPromptSubmit|Notification|Stop|PermissionRequest|Interrupt>")
+		fmt.Fprintln(os.Stderr, "usage: lgrassd hook <SessionStart|SessionEnd|PreToolUse|PostToolUse|UserPromptSubmit|Notification|Stop|PermissionRequest|Interrupt> [--vendor codex]")
 		os.Exit(1)
 	}
 	event := args[0]
+	vendor := hookVendor(args[1:])
 
 	raw, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		os.Exit(0)
 	}
-	adapter := hookAdapterForEnvironment()
+	adapter := hookAdapterFor(vendor)
 	payload, err := adapter.decode(raw)
 	if err != nil {
 		os.Exit(0)
 	}
 
 	payload.TabID = tabID
+	payload.Vendor = vendor
+	if payload.Vendor == "" {
+		payload.Vendor = "claude"
+	}
 	payload.Raw = raw
 	if (event == "SessionStart" || event == "SessionEnd" || event == "PreToolUse") && os.Getenv(hookProbeEnv) != "" {
-		logHookProbe(event, os.Getenv("LGRASS_HOOK_VENDOR"), raw, payload)
+		logHookProbe(event, vendor, raw, payload)
 	}
 
 	proj, err := project.Resolve(payload.Cwd)
@@ -329,8 +336,20 @@ func notificationContext(store *session.Store, tab string) []string {
 	return []string{store.NotificationText(pending)}
 }
 
-func hookAdapterForEnvironment() hookAdapter {
-	if os.Getenv("LGRASS_HOOK_VENDOR") == "codex" {
+// hookVendor reads `--vendor <name>` after the event, which the keeper writes into Codex hook commands on every OS.
+// The LGRASS_HOOK_VENDOR environment prefix is the older form, still read for Codex sessions whose hook config
+// predates the change; it was POSIX shell syntax, which Windows hook runners do not read.
+func hookVendor(args []string) string {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--vendor" {
+			return args[i+1]
+		}
+	}
+	return os.Getenv("LGRASS_HOOK_VENDOR")
+}
+
+func hookAdapterFor(vendor string) hookAdapter {
+	if vendor == "codex" {
 		return codexHookAdapter{}
 	}
 	return claudeHookAdapter{}

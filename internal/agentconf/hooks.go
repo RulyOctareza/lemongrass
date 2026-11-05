@@ -40,14 +40,24 @@ func ownedByEvent(group json.RawMessage, event string) bool {
 	if json.Unmarshal(group, &g) != nil {
 		return false
 	}
-	suffix := " hook " + event
 	for _, h := range g.Hooks {
-		if strings.HasSuffix(h.Command, suffix) {
+		if OwnsHookCommand(h.Command, event) {
 			return true
 		}
 	}
 	return false
 }
+
+// OwnsHookCommand reports whether command is a lemongrass hook for event, whatever lgrassd path or quoting it was
+// written with: ` hook <event>` at the end, or followed by the vendor argument Codex hooks carry. The older Codex form,
+// with an LGRASS_HOOK_VENDOR=codex prefix, ends the same way, so reconcile replaces it in place.
+func OwnsHookCommand(command, event string) bool {
+	marker := " hook " + event
+	return strings.HasSuffix(command, marker) || strings.HasSuffix(command, marker+" "+VendorFlag+" codex")
+}
+
+// VendorFlag names the agent whose hook payload lgrassd reads; without it the payload is read as Claude's.
+const VendorFlag = "--vendor"
 
 func sameJSON(a, b []byte) bool {
 	var ca, cb bytes.Buffer
@@ -62,7 +72,7 @@ func ReconcileClaudeSettings(data []byte, lgrassdPath string) ([]byte, bool, err
 	for _, event := range ClaudeHookEvents {
 		registrations = append(registrations, HookRegistration{
 			Event:   event,
-			Handler: HookHandler{Type: "command", Command: lgrassdPath + " hook " + event},
+			Handler: HookHandler{Type: "command", Command: HookCommand(lgrassdPath, "hook", event)},
 		})
 	}
 	return ReconcileHookGroups(data, registrations)

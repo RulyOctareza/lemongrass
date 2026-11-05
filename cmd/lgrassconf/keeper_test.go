@@ -251,7 +251,7 @@ func TestWatcherHealsDriftWithoutAnyOtherProcess(t *testing.T) {
 	})
 	w.waitFor(t, "Codex hooks registered", func() bool {
 		data, err := os.ReadFile(k.codexHooksPath())
-		return err == nil && strings.Contains(string(data), "LGRASS_HOOK_VENDOR=codex "+lgrass+" hook PreToolUse")
+		return err == nil && strings.Contains(string(data), lgrass+" hook PreToolUse --vendor codex")
 	})
 }
 
@@ -273,7 +273,7 @@ func TestWatcherRegistersHooksWhenLgrassAppears(t *testing.T) {
 	})
 	w.waitFor(t, "Codex hooks registered after binary appeared", func() bool {
 		data, err := os.ReadFile(k.codexHooksPath())
-		return err == nil && strings.Contains(string(data), "LGRASS_HOOK_VENDOR=codex "+lgrass+" hook SessionStart")
+		return err == nil && strings.Contains(string(data), lgrass+" hook SessionStart --vendor codex")
 	})
 }
 

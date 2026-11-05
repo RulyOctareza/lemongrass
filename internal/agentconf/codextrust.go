@@ -34,7 +34,7 @@ func TrustCodexProject(configPath, projectPath string) error {
 	}
 	text := string(data)
 	quoted := `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(projectPath) + `"`
-	if strings.Contains(text, quoted) || strings.Contains(text, "'"+projectPath+"'") {
+	if pathTextHas(text, quoted) || pathTextHas(text, "'"+projectPath+"'") {
 		return nil
 	}
 	if inlineProjects.MatchString(text) {

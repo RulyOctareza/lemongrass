@@ -4,8 +4,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/faizalv/lemongrass/internal/agentconf"
 )
 
@@ -16,7 +14,7 @@ func reconcileCodexHooks(data []byte, lgrassdPath string) ([]byte, bool, error) 
 	for _, event := range codexHookEvents {
 		handler := agentconf.HookHandler{
 			Type:    "command",
-			Command: fmt.Sprintf("LGRASS_HOOK_VENDOR=codex %s hook %s", lgrassdPath, event),
+			Command: agentconf.HookCommand(lgrassdPath, "hook", event, agentconf.VendorFlag, "codex"),
 		}
 		matcher := ""
 		switch event {

@@ -20,7 +20,7 @@ import (
 const statusLineFragment = " statusline --account "
 
 func StatusLineCommand(lgrassdPath, account string) string {
-	return lgrassdPath + statusLineFragment + account
+	return HookCommand(lgrassdPath) + statusLineFragment + account
 }
 
 func ownedStatusLine(command string) bool {

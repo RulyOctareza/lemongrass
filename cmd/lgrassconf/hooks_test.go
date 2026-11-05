@@ -36,7 +36,7 @@ func TestReconcileCodexHooksRegistersAllEvents(t *testing.T) {
 			t.Fatalf("%s: %d groups, want 1", event, len(groups))
 		}
 		command, _ := groups[0]["hooks"].([]any)
-		if !strings.Contains(string(out), "LGRASS_HOOK_VENDOR=codex "+testLgrass+" hook "+event) {
+		if !strings.Contains(string(out), testLgrass+" hook "+event+" --vendor codex") {
 			t.Errorf("%s: Codex command missing", event)
 		}
 		if len(command) != 1 {
@@ -74,7 +74,7 @@ func TestReconcileCodexLifecycleHooksPreservesForeignHandlers(t *testing.T) {
 			handlers, _ := group["hooks"].([]any)
 			for _, raw := range handlers {
 				handler, _ := raw.(map[string]any)
-				if handler["command"] != "LGRASS_HOOK_VENDOR=codex "+testLgrass+" hook "+event {
+				if handler["command"] != testLgrass+" hook "+event+" --vendor codex" {
 					continue
 				}
 				owned++
@@ -94,5 +94,23 @@ func TestReconcileCodexLifecycleHooksPreservesForeignHandlers(t *testing.T) {
 		if !strings.Contains(string(out), command) {
 			t.Errorf("foreign handler %q was lost", command)
 		}
+	}
+}
+
+func TestReconcileCodexHooksMigratesEnvPrefixEntries(t *testing.T) {
+	old := `{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"LGRASS_HOOK_VENDOR=codex /old/lgrassd hook PreToolUse"}]}]}}`
+	out, changed, err := reconcileCodexHooks([]byte(old), testLgrass)
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	groups := groupsFor(t, out, "PreToolUse")
+	if len(groups) != 1 {
+		t.Fatalf("PreToolUse has %d groups, want the old entry replaced in place", len(groups))
+	}
+	if strings.Contains(string(out), "LGRASS_HOOK_VENDOR") {
+		t.Error("the env-prefix form survived the migration")
+	}
+	if !strings.Contains(string(out), testLgrass+" hook PreToolUse --vendor codex") {
+		t.Error("the vendor-argument form was not written")
 	}
 }
