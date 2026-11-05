@@ -8,11 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"path/filepath"
 	"time"
 
-	"github.com/faizalv/lemongrass/internal/config"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"github.com/faizalv/lemongrass/internal/session"
 )
 
@@ -74,7 +72,7 @@ type JoinGrant struct {
 
 // The socket the lemongrass app listens on for group requests.
 func AppSocketPath() string {
-	return filepath.Join(config.Dir(), "app.sock")
+	return ipc.Address("app")
 }
 
 // The human's answer to a proposal. Token is set only on approval. Reason is the optional text the human gave when declining, and Withdrawn means no human answered.
@@ -123,7 +121,7 @@ func Claim(socketPath, token string) (JoinGrant, error) {
 }
 
 func call(socketPath string, req Request, deadline time.Duration) (Response, error) {
-	conn, err := net.DialTimeout("unix", socketPath, dialTimeout)
+	conn, err := ipc.Dial(socketPath, dialTimeout)
 	if err != nil {
 		return Response{}, fmt.Errorf("workgroup: the lemongrass app is not reachable at %s, is it running: %w", socketPath, err)
 	}

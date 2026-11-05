@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"time"
 )
 
@@ -104,7 +104,7 @@ func Claim(socketPath, token string) (Grant, error) {
 }
 
 func call(socketPath string, req request) (response, error) {
-	conn, err := net.DialTimeout("unix", socketPath, dialTimeout)
+	conn, err := ipc.Dial(socketPath, dialTimeout)
 	if err != nil {
 		return response{}, fmt.Errorf("gitconflict: the lemongrass app is not reachable at %s, is it running: %w", socketPath, err)
 	}

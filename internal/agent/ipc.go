@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"net"
 	"time"
 
@@ -317,7 +318,7 @@ func (c *Client) call(op string, payload, out interface{}) error {
 }
 
 func (c *Client) callWithin(timeout time.Duration, op string, payload, out interface{}) error {
-	conn, err := net.DialTimeout("unix", c.SocketPath, timeout)
+	conn, err := ipc.Dial(c.SocketPath, timeout)
 	if err != nil {
 		return fmt.Errorf("agent: dialing %s: %w", c.SocketPath, err)
 	}
@@ -352,7 +353,7 @@ func (c *Client) callWithin(timeout time.Duration, op string, payload, out inter
 // RequestHTTPDownload asks the agent daemon for a download and returns its header, and for a 2xx response the open body, which the caller must close.
 func (c *Client) RequestHTTPDownload(shortID, user, method, path string, body []byte, contentType string, headers []vault.Header) (gatekeeper.DownloadResult, error) {
 	timeout := max(c.Timeout, restergate.RequestTimeout)
-	conn, err := net.DialTimeout("unix", c.SocketPath, timeout)
+	conn, err := ipc.Dial(c.SocketPath, timeout)
 	if err != nil {
 		return gatekeeper.DownloadResult{}, fmt.Errorf("agent: dialing %s: %w", c.SocketPath, err)
 	}

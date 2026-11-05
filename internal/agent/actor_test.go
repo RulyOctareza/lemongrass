@@ -5,7 +5,7 @@ package agent
 
 import (
 	"encoding/json"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"testing"
 
@@ -32,7 +32,7 @@ func TestRequestHTTPPayloadCarriesActor(t *testing.T) {
 // vault or gate, since neither consumes actor yet.
 func TestServiceRequestHTTPForwardsActorToVault(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "vault.sock")
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}

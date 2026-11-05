@@ -6,7 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,7 +65,7 @@ type appReply func(req map[string]any) map[string]any
 func fakeConflictApp(t *testing.T, reply appReply) (string, *[]map[string]any) {
 	t.Helper()
 	sock := filepath.Join(t.TempDir(), "app.sock")
-	l, err := net.Listen("unix", sock)
+	l, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}

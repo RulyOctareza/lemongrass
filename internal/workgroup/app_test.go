@@ -5,7 +5,7 @@ package workgroup
 
 import (
 	"encoding/json"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,7 +15,7 @@ import (
 func fakeApp(t *testing.T, answer func(Request) Response) (string, chan Request) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "app.sock")
-	l, err := net.Listen("unix", path)
+	l, err := ipc.Listen(path)
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
 	}

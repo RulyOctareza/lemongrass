@@ -9,16 +9,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/faizalv/lemongrass/internal/ipc"
+	"github.com/faizalv/lemongrass/internal/node"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/faizalv/lemongrass/internal/config"
-	"github.com/faizalv/lemongrass/internal/node"
 	"github.com/faizalv/lemongrass/internal/nodehttp"
 	"github.com/faizalv/lemongrass/internal/tunnel"
 )
@@ -26,7 +25,7 @@ import (
 const connectTimeout = 30 * time.Second
 
 func SocketPath() string {
-	return filepath.Join(config.Dir(), "node.sock")
+	return ipc.Address("node")
 }
 
 type request struct {

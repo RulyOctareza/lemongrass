@@ -7,12 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"net"
-	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/faizalv/lemongrass/internal/config"
 	"github.com/faizalv/lemongrass/internal/session"
 )
 
@@ -23,7 +22,7 @@ const (
 )
 
 func SocketPath() string {
-	return filepath.Join(config.Dir(), "threads.sock")
+	return ipc.Address("threads")
 }
 
 type request struct {
@@ -157,7 +156,7 @@ func Wake(socketPath string) error {
 }
 
 func call(socketPath string, req request, deadline time.Duration) (response, error) {
-	conn, err := net.DialTimeout("unix", socketPath, dialTimeout)
+	conn, err := ipc.Dial(socketPath, dialTimeout)
 	if err != nil {
 		return response{}, err
 	}

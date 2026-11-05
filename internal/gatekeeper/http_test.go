@@ -5,7 +5,7 @@ package gatekeeper
 
 import (
 	"encoding/json"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -63,7 +63,7 @@ func TestIPCRequestHTTPOutlivesConnDeadline(t *testing.T) {
 	t.Cleanup(func() { connDeadline = oldDeadline })
 
 	sockPath := filepath.Join(t.TempDir(), "vault.sock")
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}

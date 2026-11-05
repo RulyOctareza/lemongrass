@@ -6,8 +6,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -27,7 +27,7 @@ func startStack(t *testing.T) (*gatekeeper.Client, *agent.Client) {
 		t.Fatal(err)
 	}
 	vaultSock := filepath.Join(t.TempDir(), "vault.sock")
-	vl, err := net.Listen("unix", vaultSock)
+	vl, err := ipc.Listen(vaultSock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func startStack(t *testing.T) (*gatekeeper.Client, *agent.Client) {
 	vaultClient := &gatekeeper.Client{SocketPath: vaultSock}
 
 	agentSock := filepath.Join(t.TempDir(), "agent.sock")
-	al, err := net.Listen("unix", agentSock)
+	al, err := ipc.Listen(agentSock)
 	if err != nil {
 		t.Fatal(err)
 	}

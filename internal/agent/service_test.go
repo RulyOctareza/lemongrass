@@ -5,7 +5,7 @@ package agent
 
 import (
 	"errors"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,7 +34,7 @@ func startTestVault(t *testing.T) *gatekeeper.Client {
 		t.Fatalf("vault.NewService: %v", err)
 	}
 	sockPath := filepath.Join(t.TempDir(), "vault.sock")
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}

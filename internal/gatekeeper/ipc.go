@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"net"
 	"time"
 
@@ -869,7 +870,7 @@ func (c *Client) call(op string, payload, out interface{}) error {
 }
 
 func (c *Client) callWithin(timeout time.Duration, op string, payload, out interface{}) error {
-	conn, err := net.DialTimeout("unix", c.SocketPath, timeout)
+	conn, err := ipc.Dial(c.SocketPath, timeout)
 	if err != nil {
 		return fmt.Errorf("gatekeeper: dialing %s: %w", c.SocketPath, err)
 	}

@@ -4,7 +4,7 @@
 package agent
 
 import (
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"testing"
 	"time"
@@ -17,7 +17,7 @@ func startTestAgent(t *testing.T, vaultClient *gatekeeper.Client) *Client {
 	t.Helper()
 	svc := NewService(vaultClient)
 	sockPath := filepath.Join(t.TempDir(), "agent.sock")
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestIPCQueryLocksOutAfterRepeatedWrongShortID(t *testing.T) {
 	vaultClient := startTestVault(t)
 	svc := NewService(vaultClient)
 	sockPath := filepath.Join(t.TempDir(), "agent.sock")
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}

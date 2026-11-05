@@ -6,7 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -66,7 +66,7 @@ func appStack(t *testing.T, channelType string, reply restergate.AppLoginResult)
 	t.Helper()
 	dir := t.TempDir()
 	vaultSock := filepath.Join(dir, "vault.sock")
-	vl, err := net.Listen("unix", vaultSock)
+	vl, err := ipc.Listen(vaultSock)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}
@@ -109,7 +109,7 @@ func appStack(t *testing.T, channelType string, reply restergate.AppLoginResult)
 		t.Fatalf("RegisterChannel: %v", err)
 	}
 	agentSock := filepath.Join(dir, "agent.sock")
-	gl, err := net.Listen("unix", agentSock)
+	gl, err := ipc.Listen(agentSock)
 	if err != nil {
 		t.Fatalf("net.Listen agent: %v", err)
 	}

@@ -6,7 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,18 +31,12 @@ func cmdNode(args []string) {
 	}
 
 	sockPath := nodesvc.SocketPath()
-	os.Remove(sockPath) // a stale socket left behind by a previous, uncleanly-stopped run
-
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	defer l.Close()
-	if err := os.Chmod(sockPath, 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
 
 	svc := nodesvc.NewService(node.NewStore(node.ConfigPath()), node.NewLibrary(), nodesvc.DefaultProvider(version.Version))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

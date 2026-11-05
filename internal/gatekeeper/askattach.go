@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"net"
 	"time"
 
@@ -130,7 +131,7 @@ type AskAttachment struct {
 
 // AttachAsk opens a view of a running command ask's terminal.
 func (c *Client) AttachAsk(rootSecret, id string) (*AskAttachment, error) {
-	conn, err := net.DialTimeout("unix", c.SocketPath, c.timeout())
+	conn, err := ipc.Dial(c.SocketPath, c.timeout())
 	if err != nil {
 		return nil, fmt.Errorf("gatekeeper: dialing %s: %w", c.SocketPath, err)
 	}

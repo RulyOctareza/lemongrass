@@ -6,7 +6,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"os"
 	"sync"
 	"time"
@@ -62,7 +62,7 @@ func (h *askHinter) loop() {
 
 // sendAskHint writes {"op":"ask_hint"} to the app socket. An app that is not running misses nothing: it reads the count when it starts.
 func sendAskHint(socketPath string) error {
-	conn, err := net.DialTimeout("unix", socketPath, askHintTimeout)
+	conn, err := ipc.Dial(socketPath, askHintTimeout)
 	if err != nil {
 		return err
 	}

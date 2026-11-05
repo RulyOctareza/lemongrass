@@ -6,7 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"os"
 	"time"
 
@@ -55,18 +55,12 @@ func cmdAgentRun() {
 	}
 
 	sockPath := agent.SocketPath()
-	os.Remove(sockPath) // a stale socket left behind by a previous, uncleanly-stopped run
-
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	defer l.Close()
-	if err := os.Chmod(sockPath, 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
 
 	vaultClient := &gatekeeper.Client{SocketPath: gatekeeper.SocketPath()}
 	svc := agent.NewService(vaultClient)
@@ -90,16 +84,9 @@ func startThreadService() {
 		return
 	}
 	threadSock := threadsvc.SocketPath()
-	os.Remove(threadSock)
-	l, err := net.Listen("unix", threadSock)
+	l, err := ipc.Listen(threadSock)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "lgrassd agent: thread service not started: %v\n", err)
-		store.Close()
-		return
-	}
-	if err := os.Chmod(threadSock, 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "lgrassd agent: thread service not started: %v\n", err)
-		l.Close()
 		store.Close()
 		return
 	}

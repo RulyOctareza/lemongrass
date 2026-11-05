@@ -6,7 +6,7 @@ package agent
 import (
 	"encoding/json"
 	"errors"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,7 +24,7 @@ const webTestRealID = vault.ChannelID("real-web-channel-0123456789")
 func fakeInfoVault(t *testing.T, info restergate.HTTPChannelInfo, infoErr string) *gatekeeper.Client {
 	t.Helper()
 	sock := filepath.Join(t.TempDir(), "vault.sock")
-	l, err := net.Listen("unix", sock)
+	l, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}
@@ -54,7 +54,7 @@ func fakeInfoVault(t *testing.T, info restergate.HTTPChannelInfo, infoErr string
 func fakeApp(t *testing.T, reply map[string]any) <-chan web.Request {
 	t.Helper()
 	sock := filepath.Join(t.TempDir(), "app.sock")
-	l, err := net.Listen("unix", sock)
+	l, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestWebCommandOverTheAgentSocket(t *testing.T) {
 	fakeApp(t, map[string]any{"ok": true, "text": "snapshot text"})
 	svc, short := webService(fakeInfoVault(t, activeWeb(), ""))
 	sock := filepath.Join(t.TempDir(), "agent.sock")
-	l, err := net.Listen("unix", sock)
+	l, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}

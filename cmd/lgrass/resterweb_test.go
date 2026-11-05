@@ -6,7 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -96,7 +96,7 @@ func webStack(t *testing.T, channelType string, appReply map[string]any) (*agent
 	t.Setenv("HOME", dir)
 
 	vaultSock := filepath.Join(dir, "vault.sock")
-	vl, err := net.Listen("unix", vaultSock)
+	vl, err := ipc.Listen(vaultSock)
 	if err != nil {
 		t.Fatalf("net.Listen: %v", err)
 	}
@@ -122,7 +122,7 @@ func webStack(t *testing.T, channelType string, appReply map[string]any) (*agent
 	}()
 
 	os.MkdirAll(filepath.Join(dir, ".lemongrass"), 0o700)
-	al, err := net.Listen("unix", web.SocketPath())
+	al, err := ipc.Listen(web.SocketPath())
 	if err != nil {
 		t.Fatalf("net.Listen app: %v", err)
 	}
@@ -148,7 +148,7 @@ func webStack(t *testing.T, channelType string, appReply map[string]any) (*agent
 		t.Fatalf("RegisterChannel: %v", err)
 	}
 	agentSock := filepath.Join(dir, "agent.sock")
-	gl, err := net.Listen("unix", agentSock)
+	gl, err := ipc.Listen(agentSock)
 	if err != nil {
 		t.Fatalf("net.Listen agent: %v", err)
 	}

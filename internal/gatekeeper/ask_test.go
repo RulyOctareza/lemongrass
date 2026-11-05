@@ -5,7 +5,7 @@ package gatekeeper
 
 import (
 	"errors"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -201,7 +201,7 @@ func startAskServerWithTables(t *testing.T, tables map[string][]string) *Client 
 		return have, nil
 	}
 	sockPath := filepath.Join(t.TempDir(), "vault.sock")
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		t.Fatal(err)
 	}

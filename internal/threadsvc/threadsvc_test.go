@@ -6,7 +6,7 @@ package threadsvc
 import (
 	"context"
 	"errors"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -185,7 +185,7 @@ func TestDeliverPendingNudgesBothSupportedVendors(t *testing.T) {
 func startService(t *testing.T, store *session.Store, rec *recorder) (*Service, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "threads.sock")
-	l, err := net.Listen("unix", path)
+	l, err := ipc.Listen(path)
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
 	}

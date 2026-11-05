@@ -6,8 +6,8 @@ package gatekeeper
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"io"
-	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -52,7 +52,7 @@ func TestHumanDownloadOverIPCStreams(t *testing.T) {
 		w.Write(want)
 	})
 
-	conn, err := net.Dial("unix", c.SocketPath)
+	conn, err := ipc.Dial(c.SocketPath, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

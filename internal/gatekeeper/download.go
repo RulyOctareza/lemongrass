@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"io"
 	"net"
 	"time"
@@ -248,7 +249,7 @@ func downloadResult(dl restergate.Download) DownloadResult {
 // RequestHTTPDownload asks the vault daemon for a download and returns its header, and for a 2xx response the open body.
 func (c *Client) RequestHTTPDownload(id vault.ChannelID, user, method, path string, body []byte, contentType string, headers []vault.Header) (DownloadResult, error) {
 	timeout := max(c.Timeout, restergate.RequestTimeout)
-	conn, err := net.DialTimeout("unix", c.SocketPath, timeout)
+	conn, err := ipc.Dial(c.SocketPath, timeout)
 	if err != nil {
 		return DownloadResult{}, fmt.Errorf("gatekeeper: dialing %s: %w", c.SocketPath, err)
 	}

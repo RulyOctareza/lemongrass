@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"io"
 	"net"
 	"net/http"
@@ -51,7 +52,7 @@ func startDownloadStack(t *testing.T, handler http.HandlerFunc, methods ...strin
 	}
 
 	sock := filepath.Join(t.TempDir(), "vault.sock")
-	l, err := net.Listen("unix", sock)
+	l, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
 	}

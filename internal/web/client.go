@@ -8,11 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"path/filepath"
 	"time"
 
-	"github.com/faizalv/lemongrass/internal/config"
+	"github.com/faizalv/lemongrass/internal/ipc"
 )
 
 const opWeb = "web"
@@ -49,13 +47,13 @@ type Result struct {
 
 // SocketPath is the socket the lemongrass app listens on, the same one `lgrass workgroup` uses.
 func SocketPath() string {
-	return filepath.Join(config.Dir(), "app.sock")
+	return ipc.Address("app")
 }
 
 // Call sends one web command to the app at socketPath and waits up to Timeout for its reply.
 func Call(socketPath string, req Request) (Result, error) {
 	req.Op = opWeb
-	conn, err := net.DialTimeout("unix", socketPath, dialTimeout)
+	conn, err := ipc.Dial(socketPath, dialTimeout)
 	if err != nil {
 		return Result{}, fmt.Errorf("web: the lemongrass app is not reachable at %s, is it running: %w", socketPath, err)
 	}

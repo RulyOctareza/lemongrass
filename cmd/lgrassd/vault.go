@@ -5,7 +5,7 @@ package main
 
 import (
 	"fmt"
-	"net"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,18 +44,12 @@ func cmdVaultRun() {
 	}
 
 	sockPath := gatekeeper.SocketPath()
-	os.Remove(sockPath) // a stale socket left behind by a previous, uncleanly-stopped run
-
-	l, err := net.Listen("unix", sockPath)
+	l, err := ipc.Listen(sockPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	defer l.Close()
-	if err := os.Chmod(sockPath, 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
 
 	svc, err := gatekeeper.NewBackend(filepath.Join(config.Dir(), "vault"))
 	if err != nil {

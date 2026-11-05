@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/faizalv/lemongrass/internal/ipc"
 	"net"
 	"net/http"
 	"os"
@@ -115,14 +116,14 @@ func TestFailedOpenIsReportedAndNotRetriedUntilReload(t *testing.T) {
 func TestSocketOps(t *testing.T) {
 	svc, _, _ := setup(t, time.Now().Add(time.Hour), "fake")
 	sock := filepath.Join(t.TempDir(), "node.sock")
-	l, err := net.Listen("unix", sock)
+	l, err := ipc.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer l.Close()
 	go svc.Serve(l)
 	for _, op := range []string{"reload", "status"} {
-		conn, err := net.Dial("unix", sock)
+		conn, err := ipc.Dial(sock, 5*time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
