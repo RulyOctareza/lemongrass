@@ -4,6 +4,8 @@
 package how
 
 import (
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,7 +16,6 @@ import (
 var (
 	logDate   = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2})\b`)
 	splitFrom = regexp.MustCompile(`(?i)\bsplit\s+(from|out\s+of)\b`)
-	splitWord = regexp.MustCompile(`(?i)\bsplit\b`)
 )
 
 // taskAge is when a task started. The biblio history gives the moment; an activity log only gives the day, and only
@@ -66,50 +67,111 @@ func compareAge(a, b taskAge) int {
 	return strings.Compare(a.day(), b.day())
 }
 
-type childTask struct {
-	slug   string
-	reason string
+const (
+	relatedTasksLimit = 10
+	relatedHitsLimit  = 3
+)
+
+type relatedTask struct {
+	slug  string
+	label string
+	hits  []string
 }
 
-// findChildren decides direction by age so two tasks can never wait on each other: of two tasks whose PRDs link, the
-// newer is the child. Only a prd.md link counts, since a recon, notes or a brief citing a task is not a split. On a tie
-// the "split from" wording decides, and without it the pair is left unrelated rather than blocking either close.
-func findChildren(env Env, slug string, age taskAge) []childTask {
+// relatedTasks lists the other active tasks that mention this one, or that this one names, as advice: tasks link in
+// too many ways (splits, citations, origins, work moved out) for a link to prove a dependency, so no task waits on
+// another. Timing suggests the relationship, and a "split from" line is quoted as evidence; the model judges.
+func relatedTasks(env Env, slug string, age taskAge) []relatedTask {
 	scratchpad := filepath.Join(env.Root, "biblio", "scratchpad")
 	entries, err := os.ReadDir(scratchpad)
 	if err != nil {
 		return nil
 	}
-	own := readText(filepath.Join(scratchpad, slug, "prd.md"))
-	var children []childTask
+	mentions := slugWord(slug)
+	var related []relatedTask
 	for _, e := range entries {
 		other := e.Name()
 		if !e.IsDir() || other == slug || other == "archive" {
 			continue
 		}
-		ownLines := linesNaming(own, "scratchpad/"+other+"/")
-		theirLines := linesNaming(readText(filepath.Join(scratchpad, other, "prd.md")), "scratchpad/"+slug+"/")
-		if len(ownLines) == 0 && len(theirLines) == 0 {
+		theirs := mdLines(env.Root, filepath.Join(scratchpad, other), mentions)
+		ours := mdLines(env.Root, filepath.Join(scratchpad, slug), regexp.MustCompile(regexp.QuoteMeta("scratchpad/"+other+"/")))
+		if len(theirs) == 0 && len(ours) == 0 {
 			continue
 		}
-		link := "its PRD links here"
-		if len(theirLines) == 0 {
-			link = "this PRD links to it"
-		}
+		r := relatedTask{slug: other}
 		switch compareAge(ageOf(env, other), age) {
 		case 1:
-			children = append(children, childTask{other, "newer, " + link})
-		case 0:
-			switch {
-			case anyMatch(ownLines, splitFrom):
-			case anyMatch(theirLines, splitFrom):
-				children = append(children, childTask{other, "same age, its PRD says it was split from this one"})
-			case anyMatch(ownLines, splitWord):
-				children = append(children, childTask{other, "same age, this PRD says it was split off"})
+			r.label = "newer, could be a child"
+		case -1:
+			r.label = "older, could be a parent"
+		default:
+			r.label = "same age"
+		}
+		if anyMatch(hitTexts(theirs), splitFrom) {
+			r.label += "; it says it was split from this task"
+		}
+		if anyMatch(hitTexts(ours), splitFrom) {
+			r.label += "; this task says it was split from it"
+		}
+		for _, h := range append(theirs, ours...) {
+			if len(r.hits) == relatedHitsLimit {
+				r.hits = append(r.hits, fmt.Sprintf("and %d more", len(theirs)+len(ours)-relatedHitsLimit))
+				break
 			}
+			r.hits = append(r.hits, h.String())
+		}
+		related = append(related, r)
+		if len(related) == relatedTasksLimit {
+			break
 		}
 	}
-	return children
+	return related
+}
+
+func (r relatedTask) String() string {
+	return fmt.Sprintf("`%s` (%s):\n     - %s", r.slug, r.label, strings.Join(r.hits, "\n     - "))
+}
+
+type lineHit struct {
+	file string // relative to the project root
+	line int
+	text string
+}
+
+func (h lineHit) String() string {
+	return fmt.Sprintf("`%s:%d`: %s", h.file, h.line, clipRunes(h.text, 100))
+}
+
+func hitTexts(hits []lineHit) []string {
+	out := make([]string, len(hits))
+	for i, h := range hits {
+		out[i] = h.text
+	}
+	return out
+}
+
+// mdLines finds the lines matching re in the markdown files under dir.
+func mdLines(root, dir string, re *regexp.Regexp) []lineHit {
+	var hits []lineHit
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(p) != ".md" {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, p)
+		for i, line := range strings.Split(readText(p), "\n") {
+			if re.MatchString(line) {
+				hits = append(hits, lineHit{filepath.ToSlash(rel), i + 1, strings.TrimSpace(line)})
+			}
+		}
+		return nil
+	})
+	return hits
+}
+
+// slugWord matches the slug as a whole name, so `lgrass-rester` does not match `lgrass-rester-revamp`.
+func slugWord(slug string) *regexp.Regexp {
+	return regexp.MustCompile(`(^|[^A-Za-z0-9_-])` + regexp.QuoteMeta(slug) + `([^A-Za-z0-9_-]|$)`)
 }
 
 func readText(p string) string {
@@ -118,16 +180,6 @@ func readText(p string) string {
 		return ""
 	}
 	return string(data)
-}
-
-func linesNaming(text, ref string) []string {
-	var out []string
-	for _, line := range strings.Split(text, "\n") {
-		if strings.Contains(line, ref) {
-			out = append(out, line)
-		}
-	}
-	return out
 }
 
 func anyMatch(lines []string, re *regexp.Regexp) bool {

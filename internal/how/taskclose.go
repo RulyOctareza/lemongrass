@@ -4,11 +4,14 @@
 package how
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // A PRD above either limit sends its task to the full close.
@@ -27,7 +30,7 @@ type closeFacts struct {
 	kind        string // build, recon, debug or notes, from the reserved files the task holds
 	handover    string
 	age         taskAge
-	children    []childTask
+	related     []relatedTask
 	plans       int
 	words       int
 	open        []string
@@ -36,7 +39,7 @@ type closeFacts struct {
 }
 
 func (f closeFacts) full() bool {
-	return f.handover != "" || len(f.children) > 0 || f.plans > lightPlansLimit || f.words > lightWordsLimit ||
+	return f.handover != "" || f.plans > lightPlansLimit || f.words > lightWordsLimit ||
 		f.footprint.newFiles() > 0 || len(f.footprint.files) > lightFilesLimit
 }
 
@@ -67,9 +70,9 @@ func taskClose(env Env, args []string) (string, error) {
 	dir := filepath.Join(root, "biblio", "scratchpad", slug)
 	vars := map[string]string{"slug": slug, "handover": facts.handover}
 
-	var childLines []string
-	for _, c := range facts.children {
-		childLines = append(childLines, fmt.Sprintf("`%s` (%s)", c.slug, c.reason))
+	var relatedLines []string
+	for _, r := range facts.related {
+		relatedLines = append(relatedLines, r.String())
 	}
 	var fileLines []string
 	for i, f := range facts.footprint.files {
@@ -95,7 +98,10 @@ func taskClose(env Env, args []string) (string, error) {
 	questions := closeList{"Lines that may hold an unsettled question; settle each, or leave it when it is not one:", matchingLines(docs, questionLine)}
 	files := closeList{filesLead, fileLines}
 	chapters := closeList{"Chapters that name these files. Check each against the code and correct a now-false fact in place:", chapterLines}
-	stale := closeStep{"sweep.md", []closeList{{"References found before the archive; fix each to point at the archived path or drop it:", staleRefs(root, slug, facts.handover)}}}
+	stale := closeStep{"sweep.md", []closeList{
+		{"Other active tasks that mention this one or that it names. Timing only suggests how they relate: judge it, name a likely parent or child in the report, and repoint each link to the archived path:", relatedLines},
+		{"Other references found before the archive; fix each to point at the archived path or drop it:", staleRefs(root, slug, facts.handover)},
+	}}
 
 	full := facts.full()
 	doneFile, booksFile := facts.kind+"-done.md", facts.kind+"-books.md"
@@ -110,9 +116,6 @@ func taskClose(env Env, args []string) (string, error) {
 	var steps []closeStep
 	if full {
 		steps = append(steps, closeStep{doneFile, []closeList{questions}}, closeStep{"full-git.md", []closeList{files}})
-		if len(facts.children) > 0 {
-			steps = append(steps, closeStep{"full-children.md", []closeList{{"", childLines}}})
-		}
 		steps = append(steps,
 			closeStep{"full-scope.md", []closeList{{"Written in the PRD:", matchingLines(readText(filepath.Join(dir, "prd.md")), scopeLine)}}},
 			closeStep{file: "full-docs.md"},
@@ -127,13 +130,32 @@ func taskClose(env Env, args []string) (string, error) {
 		steps = []closeStep{{doneFile, []closeList{files, questions}}, {file: "light-log.md"}, books, {file: "archive.md"}, stale, {file: "light-report.md"}}
 	}
 
+	signature := closeSignature(full, steps)
+	short := false
+	if env.LastClose != nil {
+		if at, ok := env.LastClose(slug, signature); ok && time.Since(at) < repeatWindow {
+			short = true
+		}
+	}
+	if env.RecordClose != nil {
+		env.RecordClose(slug, signature)
+	}
+
 	var b strings.Builder
 	b.WriteString(closeHeadline(facts, full))
 	b.WriteString("\n\n")
-	b.WriteString(fragment("task/close/bar.md", vars))
-	b.WriteString("\n\n## Steps\n\n")
+	if short {
+		b.WriteString("The steps are the same as in your last close of this task, a few minutes ago: follow them as printed then. Only the titles and the freshly gathered lists are shown.\n\n## Steps\n\n")
+	} else {
+		b.WriteString(fragment("task/close/bar.md", vars))
+		b.WriteString("\n\n## Steps\n\n")
+	}
 	for i, step := range steps {
-		fmt.Fprintf(&b, "%d. %s\n", i+1, fragment("task/close/"+step.file, vars))
+		text := fragment("task/close/"+step.file, vars)
+		if short {
+			text = stepTitle.FindString(text)
+		}
+		fmt.Fprintf(&b, "%d. %s\n", i+1, text)
 		for _, list := range step.sections {
 			if len(list.items) == 0 {
 				continue
@@ -146,10 +168,27 @@ func taskClose(env Env, args []string) (string, error) {
 			}
 		}
 	}
-	b.WriteString("\n## Books\n\n")
-	b.WriteString(fragment("book/rules.md", vars))
-	b.WriteString("\n")
+	if !short {
+		b.WriteString("\n## Books\n\n")
+		b.WriteString(fragment("book/rules.md", vars))
+		b.WriteString("\n")
+	}
 	return b.String(), nil
+}
+
+// A repeat call inside this window, with the same steps, prints only their titles.
+const repeatWindow = 5 * time.Minute
+
+var stepTitle = regexp.MustCompile(`^\*\*[^*]+\*\*`)
+
+// closeSignature names the instructions a close prints, so a repeat call can tell whether they changed.
+func closeSignature(full bool, steps []closeStep) string {
+	h := sha256.New()
+	fmt.Fprint(h, full)
+	for _, st := range steps {
+		fmt.Fprint(h, ",", st.file)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
 // parseSlug accepts a task slug or a path to its directory.
@@ -172,7 +211,7 @@ func inspectTask(env Env, slug string) (closeFacts, error) {
 	}
 	facts := closeFacts{slug: slug, kind: taskKind(dir), handover: findHandover(env.Root, slug)}
 	facts.age = ageOf(env, slug)
-	facts.children = findChildren(env, slug, facts.age)
+	facts.related = relatedTasks(env, slug, facts.age)
 	facts.plans, facts.words, facts.open = readPRD(filepath.Join(dir, "prd.md"))
 	if debug := filepath.Join(dir, "debug.md"); exists(debug) && !rootCause.MatchString(readText(debug)) {
 		facts.noRootCause = true
@@ -233,10 +272,10 @@ func closeHeadline(f closeFacts, full bool) string {
 	} else {
 		reasons = append(reasons, "no handover")
 	}
-	if len(f.children) > 0 {
-		reasons = append(reasons, fmt.Sprintf("%d child task(s)", len(f.children)))
+	if len(f.related) > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d related task(s)", len(f.related)))
 	} else {
-		reasons = append(reasons, "no child task")
+		reasons = append(reasons, "no related task")
 	}
 	reasons = append(reasons, fmt.Sprintf("%d PRD words", f.words), fmt.Sprintf("%d Plans item(s)", f.plans))
 	switch {

@@ -25,18 +25,19 @@ var (
 	rootCause      = regexp.MustCompile(`(?i)root\s+cause`)
 )
 
-// staleRefs finds references to the slug outside the task itself, before the archive moves it. The task's own
-// handover and the whiteboard are left out when the handover step already rewrites them.
+// staleRefs finds references to the slug in books, laws, handovers and the project's markdown, before the archive
+// moves the task. Other tasks are left to relatedTasks. The task's own handover and the whiteboard are left out when
+// the handover step already rewrites them.
 func staleRefs(root, slug, handover string) []string {
-	word := regexp.MustCompile(`(^|[^A-Za-z0-9_-])` + regexp.QuoteMeta(slug) + `([^A-Za-z0-9_-]|$)`)
+	word := slugWord(slug)
 	biblio := filepath.Join(root, "biblio")
-	skip := map[string]bool{filepath.Join(biblio, "scratchpad", slug): true}
+	skip := map[string]bool{}
 	if handover != "" {
 		skip[filepath.Join(biblio, "handover", handover)] = true
 		skip[filepath.Join(biblio, "handover", "whiteboard.md")] = true
 	}
 	var files []string
-	for _, dir := range []string{"books", "laws", "handover", "scratchpad"} {
+	for _, dir := range []string{"books", "laws", "handover"} {
 		top := filepath.Join(biblio, dir)
 		filepath.WalkDir(top, func(p string, d fs.DirEntry, err error) error {
 			if err != nil || skip[p] {

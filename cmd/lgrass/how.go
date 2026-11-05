@@ -25,30 +25,50 @@ func cmdHow(args []string) {
 }
 
 // The sources open lazily, so an action that never asks pays nothing, and a source that fails to open reads as
-// unavailable rather than failing the command.
+// unavailable rather than failing the command. The close record needs a tab, and a store a Codex sandbox cannot
+// write records nothing, which leaves every call printing the full steps.
 func howEnv(proj project.Project) how.Env {
 	repo := bibliohistory.New(bibliohistory.GitDir(proj.ID), filepath.Join(proj.Path, "biblio"))
-	return how.Env{
+	withStore := func(fn func(*session.Store)) {
+		store, err := session.Open(session.DBPath(), proj.ID)
+		if err != nil {
+			return
+		}
+		defer store.Close()
+		fn(store)
+	}
+	env := how.Env{
 		Root: proj.Path,
 		TaskStarted: func(slug string) (time.Time, bool) {
 			t, ok, err := repo.FirstTime("scratchpad/" + slug)
 			return t, ok && err == nil
 		},
 		EditsSince: func(since time.Time) []how.Edit {
-			store, err := session.Open(session.DBPath(), proj.ID)
-			if err != nil {
-				return nil
-			}
-			defer store.Close()
-			touches, err := store.FileActivitySince(since)
-			if err != nil {
-				return nil
-			}
-			edits := make([]how.Edit, len(touches))
-			for i, t := range touches {
-				edits[i] = how.Edit{Session: t.SessionID, Path: t.FilePath}
-			}
+			var edits []how.Edit
+			withStore(func(store *session.Store) {
+				touches, err := store.FileActivitySince(since)
+				if err != nil {
+					return
+				}
+				for _, t := range touches {
+					edits = append(edits, how.Edit{Session: t.SessionID, Path: t.FilePath})
+				}
+			})
 			return edits
 		},
 	}
+	if tabID != "" {
+		env.LastClose = func(slug, signature string) (at time.Time, ok bool) {
+			withStore(func(store *session.Store) {
+				at, ok, _ = store.MarkedAt(tabID, session.TaskCloseStepsMark(slug, signature))
+			})
+			return at, ok
+		}
+		env.RecordClose = func(slug, signature string) {
+			withStore(func(store *session.Store) {
+				store.MarkReady(tabID, session.TaskCloseStepsMark(slug, signature))
+			})
+		}
+	}
+	return env
 }

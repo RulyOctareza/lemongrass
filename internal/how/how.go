@@ -30,6 +30,11 @@ type Env struct {
 	TaskStarted func(slug string) (time.Time, bool)
 	// EditsSince lists the file edits agent sessions logged in this project after since, oldest first.
 	EditsSince func(since time.Time) []Edit
+	// LastClose reports when this tab was last printed the close steps with this signature for slug, within its
+	// current context: the record clears at every session start, compaction included.
+	LastClose func(slug, signature string) (time.Time, bool)
+	// RecordClose records that this tab was printed the close steps with this signature for slug.
+	RecordClose func(slug, signature string)
 }
 
 // Edit is one file edit an agent session made, with the path as the agent's tool was given it.

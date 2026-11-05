@@ -111,3 +111,23 @@ func TestMigrationAddsMemberColumnsToAnOlderTable(t *testing.T) {
 	// Windows cannot delete the temp home while the database is still open.
 	again.Close()
 }
+
+func TestMarkedAt(t *testing.T) {
+	store := openTestStore(t)
+	kind := TaskCloseStepsMark("demo-task", "abc123")
+	if _, ok, err := store.MarkedAt(tabA, kind); ok || err != nil {
+		t.Fatalf("unmarked: ok=%v err=%v", ok, err)
+	}
+	store.MarkReady(tabA, kind)
+	at, ok, err := store.MarkedAt(tabA, kind)
+	if err != nil || !ok || time.Since(at) > time.Minute {
+		t.Fatalf("marked: at=%v ok=%v err=%v", at, ok, err)
+	}
+	if _, ok, _ := store.MarkedAt(tabB, kind); ok {
+		t.Fatal("another tab sees the mark")
+	}
+	store.ClearMarks(tabA)
+	if _, ok, _ := store.MarkedAt(tabA, kind); ok {
+		t.Fatal("mark survived a clear")
+	}
+}

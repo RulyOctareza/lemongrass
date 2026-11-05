@@ -57,7 +57,7 @@ func TestLightCloseForSmallTask(t *testing.T) {
 	root := t.TempDir()
 	task(t, root, "fix-x", "- [x] patch it")
 	out := render(t, root, "task", "close", "fix-x")
-	if !strings.HasPrefix(out, "Light close for fix-x, a build task: no handover, no child task, ") {
+	if !strings.HasPrefix(out, "Light close for fix-x, a build task: no handover, no related task, ") {
 		t.Fatalf("headline = %q", strings.SplitN(out, "\n", 2)[0])
 	}
 	if !strings.Contains(out, "mv biblio/scratchpad/fix-x biblio/scratchpad/archive/") {
@@ -117,43 +117,92 @@ func renderEnv(t *testing.T, env Env, args ...string) string {
 	return out
 }
 
-// The split pair from the field: the parent's Plans point at the child and the child says it was split from the
-// parent. Only the parent waits; the child closes freely.
-func TestChildrenByAge(t *testing.T) {
+// No task waits on another: the split pair from the field, where the parent's Plans point at the child and the child
+// says it was split from the parent, closes in either order, and each side is named as advice with its timing.
+func TestRelatedTasksAreAdvice(t *testing.T) {
 	root := t.TempDir()
 	task(t, root, "parent", "- [x] phase 7 split into its own task, biblio/scratchpad/kid/prd.md")
 	writeFile(t, root, "biblio/scratchpad/kid/prd.md", "Split from biblio/scratchpad/parent/prd.md, Plans.\n- [x] done")
-	writeFile(t, root, "biblio/scratchpad/brief/notes.md", "See biblio/scratchpad/parent/ for context.")
-	writeFile(t, root, "biblio/scratchpad/later/prd.md", "Builds on biblio/scratchpad/kid/prd.md.\n- [x] done")
-	env := started(root, "parent", "kid", "brief", "later")
+	writeFile(t, root, "biblio/scratchpad/brief/notes.md", "See the parent task for context.")
+	writeFile(t, root, "biblio/scratchpad/parent-two/notes.md", "A different slug that starts the same.")
+	writeFile(t, root, "biblio/books/b/c.md", "Built by biblio/scratchpad/parent/prd.md.")
+	env := started(root, "brief", "parent", "kid", "parent-two")
 
 	out := renderEnv(t, env, "task", "close", "parent")
-	if !strings.Contains(out, "1 child task(s)") || !strings.Contains(out, "- `kid` (newer, its PRD links here)") {
-		t.Fatalf("parent children: %q", out)
+	for _, want := range []string{
+		"Light close for parent, a build task: no handover, 2 related task(s),",
+		"   - `kid` (newer, could be a child; it says it was split from this task):\n     - `biblio/scratchpad/kid/prd.md:1`: Split from",
+		"     - `biblio/scratchpad/parent/prd.md:5`: - [x] phase 7 split into its own task",
+		"   - `brief` (older, could be a parent):\n     - `biblio/scratchpad/brief/notes.md:1`: See the parent task for context.",
+		"   - `biblio/books/b/c.md:1`: Built by biblio/scratchpad/parent/prd.md.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in %q", want, out)
+		}
 	}
-	if strings.Contains(out, "`brief` (") {
-		t.Fatal("a notes mention counted as a child")
+	if strings.Contains(out, "parent-two") || strings.Contains(out, "Children") {
+		t.Fatalf("over-matched or blocked: %q", out)
 	}
 	out = renderEnv(t, env, "task", "close", "kid")
-	if strings.Contains(out, "`parent` (") || !strings.Contains(out, "- `later` (newer, its PRD links here)") {
-		t.Fatalf("kid children: %q", out)
+	if !strings.Contains(out, "   - `parent` (older, could be a parent; this task says it was split from it):") || !strings.Contains(out, "## Steps") {
+		t.Fatalf("kid close: %q", out)
 	}
 }
 
-func TestChildrenOnSameDayFallBackToWording(t *testing.T) {
+func TestRelatedTasksOnTheSameDay(t *testing.T) {
 	root := t.TempDir()
-	task(t, root, "parent", "- [x] split into biblio/scratchpad/kid/prd.md")
-	writeFile(t, root, "biblio/scratchpad/kid/prd.md", "Split out of biblio/scratchpad/parent/prd.md.\n- [x] done")
-	task(t, root, "peer", "- [x] see biblio/scratchpad/parent/prd.md")
-	for _, slug := range []string{"parent", "kid", "peer"} {
+	task(t, root, "a", "- [x] done")
+	task(t, root, "b", "- [x] see biblio/scratchpad/a/prd.md")
+	for _, slug := range []string{"a", "b"} {
 		writeFile(t, root, "biblio/scratchpad/"+slug+"/activities.md", "- 2026-11-05: started\n")
 	}
-	out := render(t, root, "task", "close", "parent")
-	if !strings.Contains(out, "- `kid` (same age, its PRD says it was split from this one)") || strings.Contains(out, "`peer` (") {
-		t.Fatalf("parent children: %q", out)
+	if out := render(t, root, "task", "close", "a"); !strings.Contains(out, "   - `b` (same age):") {
+		t.Fatalf("same-day label: %q", out)
 	}
-	if out := render(t, root, "task", "close", "kid"); strings.Contains(out, "Children") {
-		t.Fatalf("kid lists its parent: %q", out)
+}
+
+// memory stands in for the session store's per-tab close record.
+func memory(env Env, now *time.Time) Env {
+	seen := map[string]time.Time{}
+	env.LastClose = func(slug, sig string) (time.Time, bool) {
+		at, ok := seen[slug+":"+sig]
+		return at, ok
+	}
+	env.RecordClose = func(slug, sig string) { seen[slug+":"+sig] = *now }
+	return env
+}
+
+func TestRepeatCallPrintsTitlesOnly(t *testing.T) {
+	root := t.TempDir()
+	task(t, root, "fix", "- [x] patch")
+	writeFile(t, root, "biblio/books/b/c.md", "Mentions fix here.")
+	now := time.Now()
+	env := memory(Env{Root: root}, &now)
+
+	first := renderEnv(t, env, "task", "close", "fix")
+	if !strings.Contains(first, "Git is read-only") || !strings.Contains(first, "## Books") {
+		t.Fatalf("first call is not full: %q", first)
+	}
+	second := renderEnv(t, env, "task", "close", "fix")
+	for _, want := range []string{"Light close for fix", "same as in your last close", "1. **Done.**\n", "   - `biblio/books/b/c.md:1`: Mentions fix here."} {
+		if !strings.Contains(second, want) {
+			t.Errorf("repeat lacks %q: %q", want, second)
+		}
+	}
+	if strings.Contains(second, "Git is read-only") || strings.Contains(second, "## Books") || strings.Contains(second, "Every Plans item") {
+		t.Fatalf("repeat carries the instructions: %q", second)
+	}
+
+	now = time.Now().Add(-6 * time.Minute)
+	renderEnv(t, env, "task", "close", "fix")
+	if out := renderEnv(t, env, "task", "close", "fix"); !strings.Contains(out, "Git is read-only") {
+		t.Fatalf("a call after the window is not full: %q", out)
+	}
+
+	now = time.Now()
+	writeFile(t, root, "biblio/handover/fix.md", "# fix")
+	if out := renderEnv(t, env, "task", "close", "fix"); !strings.HasPrefix(out, "Full close") || !strings.Contains(out, "Git is read-only") {
+		t.Fatalf("changed steps did not print in full: %q", out)
 	}
 }
 
