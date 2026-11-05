@@ -17,11 +17,30 @@ asarUnpack:
   - resources/**
 win:
   executableName: lemongrass
+  # Windows ships x64 only; Windows on arm64 runs it under emulation.
+  target:
+    - target: nsis
+      arch:
+        - x64
+  extraResources:
+    - from: "../dist/windows-amd64/lgrass.exe"
+      to: "bin/windows-amd64/lgrass.exe"
+    - from: "../dist/windows-amd64/lgrassd.exe"
+      to: "bin/windows-amd64/lgrassd.exe"
+    - from: "../dist/windows-amd64/lgrassconf.exe"
+      to: "bin/windows-amd64/lgrassconf.exe"
+# A per-user one-click installer into %LOCALAPPDATA%\Programs, with no admin rights. It only copies files: the PATH
+# entry and the keeper's logon task are written by `lgrassconf install`, which the app runs on every launch. The
+# in-app updater looks the asset up by this name (winAssetName in ui/src/main/updateVersion.ts) and runs it with /S.
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
+  oneClick: true
+  perMachine: false
+  allowElevation: false
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  include: build/installer.nsh
 mac:
   category: public.app-category.developer-tools
   target:

@@ -7,7 +7,7 @@ BINARIES := lgrass lgrassd lgrassconf
 # lgrassroot is the Linux root helper run through pkexec, so only the Linux packages carry it.
 LINUX_BINARIES := $(BINARIES) lgrassroot
 
-.PHONY: build-linux build-rpm build-mac dist dist-linux dist-darwin dist-windows dev install verify clean submodules bibliothek-update license license-check
+.PHONY: build-linux build-rpm build-mac build-windows dist dist-linux dist-darwin dist-windows dev install verify clean submodules bibliothek-update license license-check
 
 dist: dist-linux dist-darwin dist-windows
 
@@ -53,6 +53,12 @@ build-rpm: dist-linux
 
 build-mac: dist-darwin
 	npm --prefix ui run build:mac
+
+# The per-user NSIS setup.exe, built on Linux. The node-pty package already carries its win32-x64 prebuilds, so nothing
+# native is compiled for it. electron-builder runs the installer once under the system wine to extract the uninstaller,
+# so wine with 32-bit support must be installed; the exe's icon and version are written without it.
+build-windows: dist-windows
+	npm --prefix ui run build:win
 
 # Host-arch build for local dev iteration. lgrass goes to ~/.local/bin, lgrassd to ~/.lemongrass/bin, and lgrassconf beside lgrass with its service unit registered. Every binary is built beside its destination first and only renamed into place once all of them built, so a failed install leaves the previous set untouched and `make dev` keeps running on it. A running executable cannot be overwritten in place, which the rename also avoids. The submodule update runs inside the same guarded block so a failure there is just as loud.
 install:
