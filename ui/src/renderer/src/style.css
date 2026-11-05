@@ -143,6 +143,24 @@
   --color-icon-folder-tooling:  var(--color-violet);
   --color-icon-folder-scripts:  var(--color-jade-dim);
 
+  /* Syntax colors in the code reader. Amber stays out: it marks focus and comments on code. */
+  --color-syntax-keyword:     var(--color-violet);
+  --color-syntax-string:      var(--color-jade);
+  --color-syntax-regexp:      var(--color-fuchsia);
+  --color-syntax-constant:    var(--color-orange);
+  --color-syntax-comment:     var(--color-fg-muted);
+  --color-syntax-function:    var(--color-sapphire);
+  --color-syntax-type:        var(--color-teal);
+  --color-syntax-tag:         var(--color-coral);
+  --color-syntax-attribute:   var(--color-teal-dim);
+  --color-syntax-property:    var(--color-gray-100);
+  --color-syntax-punctuation: var(--color-fg-secondary);
+  --color-syntax-meta:        var(--color-fg-muted);
+  --color-syntax-heading:     var(--color-sapphire);
+  --color-syntax-link:        var(--color-teal);
+  --color-syntax-inserted:    var(--color-success);
+  --color-syntax-deleted:     var(--color-error);
+
   /* Shadows */
   --shadow-sm:         0 1px 2px rgba(0,0,0,0.4);
   --shadow-md:         0 4px 12px rgba(0,0,0,0.5);

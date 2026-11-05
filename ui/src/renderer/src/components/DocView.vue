@@ -60,6 +60,7 @@ function edit(value: string): void {
     <ReadOnlyFile
       v-else-if="doc.kind !== 'markdown'"
       :entry="doc"
+      :path="tab.path"
       :image-src="imageSrc"
       :alt="tab.path"
     />

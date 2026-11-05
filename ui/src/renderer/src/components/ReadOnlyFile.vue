@@ -2,29 +2,23 @@
 <!-- Copyright (C) 2026 The Lemongrass Authors -->
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import AppEmptyState from './AppEmptyState.vue'
+import CodeReader from './CodeReader.vue'
 import type { DocEntry } from '../workspace'
 
-// A file shown read-only by its kind: text with a line-number gutter, an image, or a one-line
-// message for binary and too-large files. A biblio doc and a project file tab both render this.
-const props = defineProps<{
+// A file shown read-only by its kind: syntax-colored text with a line-number gutter, an image, or
+// a one-line message for binary and too-large files. A biblio doc and a project file tab both
+// render this; `path` picks the grammar.
+defineProps<{
   entry: DocEntry
+  path: string
   imageSrc: string
   alt: string
 }>()
-
-const lineNumbers = computed(() => {
-  const count = props.entry.kind === 'text' ? props.entry.content.split('\n').length : 0
-  return Array.from({ length: count }, (_, i) => i + 1).join('\n')
-})
 </script>
 
 <template>
-  <div v-if="entry.kind === 'text'" class="file-text">
-    <pre class="gutter" aria-hidden="true">{{ lineNumbers }}</pre>
-    <pre class="code">{{ entry.content }}</pre>
-  </div>
+  <CodeReader v-if="entry.kind === 'text'" :content="entry.content" :path="path" />
   <div v-else-if="entry.kind === 'image'" class="file-image">
     <img :src="imageSrc" :alt="alt" />
   </div>
@@ -41,40 +35,6 @@ const lineNumbers = computed(() => {
 </template>
 
 <style scoped>
-.file-text {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-}
-
-.file-text pre {
-  margin: 0;
-  padding: var(--space-4) var(--space-3);
-  font: inherit;
-  white-space: pre;
-  tab-size: 4;
-}
-
-.gutter {
-  position: sticky;
-  left: 0;
-  flex: none;
-  text-align: right;
-  user-select: none;
-  color: var(--color-fg-muted);
-  background: var(--color-surface-1);
-  border-right: 1px solid var(--color-border-subtle);
-}
-
-.code {
-  flex: 1;
-  color: var(--color-fg-primary);
-}
-
 .file-image {
   flex: 1;
   min-height: 0;

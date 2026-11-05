@@ -45,7 +45,7 @@ onMounted(() => void loadProjectFile(props.project, props.tab.path, true))
       title="This file no longer exists."
       detail="Close the tab to remove it."
     />
-    <ReadOnlyFile v-else :entry="entry" :image-src="imageSrc" :alt="tab.path" />
+    <ReadOnlyFile v-else :entry="entry" :path="tab.path" :image-src="imageSrc" :alt="tab.path" />
   </div>
 </template>
 
