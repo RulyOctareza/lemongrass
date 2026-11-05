@@ -35,12 +35,15 @@ dist-darwin: submodules
 		GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(DIST)/darwin-arm64/$$bin ./cmd/$$bin || exit 1; \
 	done
 
+# lgrassconf is linked as a GUI program so its logon task opens no console window; it attaches to the parent's console
+# when run from a terminal (cmd/lgrassconf/console_windows.go). lgrass and lgrassd stay console programs.
 dist-windows: submodules
 	rm -rf $(DIST)/windows-amd64
 	mkdir -p $(DIST)/windows-amd64
-	for bin in $(BINARIES); do \
+	for bin in lgrass lgrassd; do \
 		GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/windows-amd64/$$bin.exe ./cmd/$$bin || exit 1; \
 	done
+	GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/faizalv/lemongrass/cmd/lgrass/version.Version=$(VERSION) -H=windowsgui" -o $(DIST)/windows-amd64/lgrassconf.exe ./cmd/lgrassconf
 
 build-linux: dist-linux
 	npm --prefix ui run build:linux

@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -18,7 +19,8 @@ func usage() {
 
   run      Watches the config and repairs drift until stopped
   check    Runs one repair pass and exits
-  install  Installs the background keeper (systemd user unit on Linux, LaunchAgent on macOS)
+  install  Installs the background keeper (systemd user unit on Linux, LaunchAgent on macOS, a logon task and
+           the PATH entry on Windows)
   uninstall  Removes what Lemongrass put on this account: the keeper, its hooks and status line in the
              Claude and Codex config, its skills, and the lgrass, lgrassconf and lgrassd binaries.
              Lemongrass data, Claude account folders and project trust stay.
@@ -27,6 +29,7 @@ func usage() {
 }
 
 func main() {
+	attachParentConsole()
 	if len(os.Args) < 2 {
 		usage()
 	}
@@ -40,6 +43,15 @@ func main() {
 	case "run":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		ctx, err := keeperInstance(ctx, home)
+		if errors.Is(err, errKeeperRunning) {
+			fmt.Fprintf(os.Stderr, "lgrassconf: %v\n", err)
+			return
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "lgrassconf: %v\n", err)
+			os.Exit(1)
+		}
 		if err := newKeeper(home).run(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "lgrassconf: %v\n", err)
 			os.Exit(1)

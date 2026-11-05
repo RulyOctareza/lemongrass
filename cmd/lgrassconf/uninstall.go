@@ -93,6 +93,11 @@ func (k *keeper) uninstall(out io.Writer, removeService func(home string) error,
 			binaries = append(binaries, filepath.Join(dir, name))
 		}
 	}
+	// On Windows the app renames a running binary aside to <name>.old-* before copying a new one in.
+	for _, path := range append([]string{}, binaries...) {
+		aside, _ := filepath.Glob(path + ".old-*")
+		binaries = append(binaries, aside...)
+	}
 	for _, path := range binaries {
 		if !exists(path) {
 			continue
