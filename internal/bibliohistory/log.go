@@ -194,3 +194,30 @@ func biblioRoots(projectPath string) []string {
 	}
 	return roots
 }
+
+// FirstTime is when path, relative to the work tree, first appeared in the history. It does not follow moves, so it
+// answers for a path that has kept its name, such as an active scratchpad task.
+func (r *Repo) FirstTime(path string) (time.Time, bool, error) {
+	if _, err := GitPath(); err != nil {
+		return time.Time{}, false, err
+	}
+	if !r.Exists() {
+		return time.Time{}, false, ErrNoHistory
+	}
+	if _, ok := r.head(); !ok {
+		return time.Time{}, false, nil
+	}
+	out, err := r.run(nil, nil, "log", "--reverse", "--format=%ct", "--", path)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	if first == "" {
+		return time.Time{}, false, nil
+	}
+	sec, err := strconv.ParseInt(first, 10, 64)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("bibliohistory: git log: %w", err)
+	}
+	return time.Unix(sec, 0), true, nil
+}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 //go:embed content
@@ -17,6 +18,24 @@ var content embed.FS
 type action struct {
 	summary string
 	run     func(root string, args []string) (string, error)
+	// runEnv replaces run for an action that reads beyond the project's files.
+	runEnv func(env Env, args []string) (string, error)
+}
+
+// Env is what an action may read: the project root, and sources outside the project's files. A nil source is
+// unavailable, and the facts that depend on it fall back to what the files say.
+type Env struct {
+	Root string
+	// TaskStarted reports when biblio/scratchpad/<slug> first appeared in the biblio history.
+	TaskStarted func(slug string) (time.Time, bool)
+	// EditsSince lists the file edits agent sessions logged in this project after since, oldest first.
+	EditsSince func(since time.Time) []Edit
+}
+
+// Edit is one file edit an agent session made, with the path as the agent's tool was given it.
+type Edit struct {
+	Session string
+	Path    string
 }
 
 var domains = map[string]map[string]action{
@@ -43,7 +62,7 @@ var domains = map[string]map[string]action{
 		"write": {summary: "Write a law the user approved: `lgrass how laws write`", run: static("laws/write.md")},
 	},
 	"task": {
-		"close":    {summary: "Close a finished scratchpad task: `lgrass how task close <slug>`", run: taskClose},
+		"close":    {summary: "Close a finished scratchpad task: `lgrass how task close <slug>`", runEnv: taskClose},
 		"handover": {summary: "Pause or hand over a task: `lgrass how task handover <slug>`", run: taskHandover},
 	},
 	"work": {
@@ -73,6 +92,11 @@ func static(paths ...string) func(root string, args []string) (string, error) {
 
 // Render resolves args to a domain listing, an action listing, or an action's instructions for the project at root.
 func Render(root string, args []string) (string, error) {
+	return RenderEnv(Env{Root: root}, args)
+}
+
+// RenderEnv is Render with the sources outside the project's files that some actions use.
+func RenderEnv(env Env, args []string) (string, error) {
 	if len(args) == 0 {
 		return listDomains(), nil
 	}
@@ -87,7 +111,10 @@ func Render(root string, args []string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("how: unknown action %q in %s\n\n%s", args[1], args[0], listActions(args[0], actions))
 	}
-	return act.run(root, args[2:])
+	if act.runEnv != nil {
+		return act.runEnv(env, args[2:])
+	}
+	return act.run(env.Root, args[2:])
 }
 
 // Known reports whether domain and action name an existing action, without running it.

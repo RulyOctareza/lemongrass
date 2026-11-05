@@ -1,1 +1,1 @@
-**Children.** Close these child tasks first, each with `lgrass how task close <child>`: {children}. This task closes only once all of them are archived.
+**Children.** These newer tasks are linked to this one, so they close first, each with `lgrass how task close <child>`. This task closes only once all of them are archived. A task listed here that was never split from this one is not a child: say so in the report and go on.

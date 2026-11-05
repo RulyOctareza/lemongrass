@@ -1,0 +1,1 @@
+**Books.** A recon graduates into a chapter: write its findings with `lgrass how book write`, unless it concluded the subject is not worth pursuing, which archives with no chapter. Say which in the report.

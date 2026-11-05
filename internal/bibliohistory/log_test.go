@@ -196,3 +196,25 @@ func TestRelPath(t *testing.T) {
 		}
 	}
 }
+
+func TestFirstTime(t *testing.T) {
+	r, work := newTestRepo(t)
+	if _, ok, err := r.FirstTime("scratchpad/task"); ok || err != nil {
+		t.Fatalf("empty history: ok=%v err=%v", ok, err)
+	}
+	writeFile(t, work, "scratchpad/task/prd.md", "plan\n")
+	mustSnapshot(t, r, nil)
+	writeFile(t, work, "scratchpad/task/prd.md", "plan 2\n")
+	mustSnapshot(t, r, nil)
+	first, ok, err := r.FirstTime("scratchpad/task")
+	if err != nil || !ok || time.Since(first) > time.Minute {
+		t.Fatalf("first = %v ok=%v err=%v", first, ok, err)
+	}
+	if _, ok, err := r.FirstTime("scratchpad/other"); ok || err != nil {
+		t.Fatalf("missing path: ok=%v err=%v", ok, err)
+	}
+	none := New(filepath.Join(t.TempDir(), "none.git"), t.TempDir())
+	if _, _, err := none.FirstTime("a"); !errors.Is(err, ErrNoHistory) {
+		t.Fatalf("no history err = %v", err)
+	}
+}

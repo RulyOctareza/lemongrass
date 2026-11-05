@@ -1,0 +1,1 @@
+**Books.** A fix that restores intended behavior gets no chapter; its root cause stays in the archived `debug.md`. Write or correct a chapter only when the root cause showed a design the books describe wrongly or not at all.
