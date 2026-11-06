@@ -134,15 +134,36 @@ Claude tabs learn these from their orientation, and no lemongrass skill is insta
 
 On Fedora and other rpm distributions, install the rpm from the [latest release](https://github.com/faizalv/lemongrass/releases). The app updates itself from then on.
 
-On macOS, run:
+### macOS
+
+The macOS app is free and needs no Apple account. It is signed ad hoc, not with a paid Apple Developer ID, and is not notarized by Apple, so macOS warns about it once when it comes from a browser download. Either way below gets you past that.
+
+**Option 1: one command (recommended).** Open Terminal and run:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/faizalv/lemongrass/main/scripts/install-mac.sh | bash
 ```
 
-It downloads the dmg for your Mac's chip from the newest release, checks it against the release's `SHA256SUMS`, quits a running Lemongrass, puts the app in `/Applications` and opens it. `LEMONGRASS_VERSION=v0.4.0-rc.1` before `bash` installs a given tag. From 0.4.0 the app updates itself from Settings, Updates, the same as the rpm, as long as it runs from a folder such as `/Applications` and not from the dmg.
+It downloads the dmg for your Mac's chip from the newest release, checks it against the release's `SHA256SUMS`, quits a running Lemongrass, puts the app in `/Applications` and opens it, with no warning. Run it again at any time to update. `LEMONGRASS_VERSION=v0.4.0-rc.1` before `bash` installs a given tag.
 
-The app is signed ad hoc, not with an Apple Developer ID, and is not notarized, so a dmg downloaded with a browser opens to "Apple could not verify Lemongrass is free of malware". The installer avoids that. With the dmg, click Done, then either open System Settings > Privacy & Security and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Lemongrass.app`. The dmg carries a text file with the same steps. Either is needed once per version. An update the app installs itself does not need it.
+**Option 2: the dmg from the release page.**
+
+1. Find your chip under Apple menu > About This Mac. Download `lemongrass-<version>-arm64.dmg` for Apple silicon (M1 and later) or `lemongrass-<version>-x64.dmg` for Intel from the [latest release](https://github.com/faizalv/lemongrass/releases/latest).
+2. Open the dmg and drag Lemongrass onto Applications.
+3. Open Lemongrass from Applications. macOS says "Lemongrass" Not Opened, Apple could not verify it is free of malware. Click **Done**. Do not click Move to Trash, which deletes the app.
+4. Open System Settings > Privacy & Security and scroll down to Security. Next to "Lemongrass was blocked to protect your Mac", click **Open Anyway**.
+5. Confirm with your password or Touch ID, then click **Open Anyway** once more. Lemongrass opens, and opens normally from then on.
+
+Instead of steps 4 and 5 you can run `xattr -dr com.apple.quarantine /Applications/Lemongrass.app` in Terminal and open the app again. The dmg window shows the same steps and carries a text file with the command to copy.
+
+If something goes wrong:
+
+- There is no Open Anyway button: it appears only after you try to open the app (step 3), and for about an hour. Open Lemongrass again, click Done, and go back to Privacy & Security.
+- You clicked Move to Trash: open the Trash, right-click Lemongrass and choose Put Back, or drag it to Applications again from the dmg, and start over at step 3.
+- macOS says the app "is damaged and can't be opened": run the `xattr` command above. The download is not damaged, macOS shows this message for some apps that are not notarized.
+- The warning comes back with the next version: a dmg downloaded with a browser needs these steps once per version. Updating from inside the app (below) or with the one command does not.
+
+From 0.4.0 the app updates itself from Settings, Updates, the same as the rpm, as long as it runs from a folder such as `/Applications` and not from the dmg.
 
 To be offered release candidates as well as stable releases, start the app with `LEMONGRASS_UPDATE_PRERELEASE=1` in its environment, on macOS with `LEMONGRASS_UPDATE_PRERELEASE=1 /Applications/Lemongrass.app/Contents/MacOS/Lemongrass`.
 
